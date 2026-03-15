@@ -138,7 +138,7 @@ async def analyze_image_v2(image_id: int):
             'px_per_um': float(px_per_um)
         }
 
-        # 更新数据库
+        # 更新数据库（修改curvature说明为平均曲率）
         cursor.execute("""
             UPDATE images
             SET diameter = ?, density = ?, alignment = ?, curvature = ?, processed = 1
