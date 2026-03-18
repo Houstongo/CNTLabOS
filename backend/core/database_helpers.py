@@ -9,6 +9,7 @@ SORT_FIELD_MAP = {
     'fe_thickness': 'fe_thickness',
     'fe_power': 'fe_power',
     'ar_flow': 'ar_flow',
+    'catalyst_weight': 'catalyst_weight',
     'h2_flow': 'h2_flow',
     'c2h4_flow': 'c2h4_flow',
     'anneal_temp': 'anneal_temp',

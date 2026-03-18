@@ -46,7 +46,10 @@ def populate(clear=False):
                             data['anneal_time'] = convert_time_to_h(str(data['anneal_time']))
                             data['growth_time'] = convert_time_to_h(str(data['growth_time']))
                     elif source == 'XR':
-                        data = parser.parse_xr_filename(file)
+                        data = parser.parse_xr_filename(
+                            file,
+                            folder_name=os.path.basename(root),
+                        )
                     
                     if data:
                         data['file_path'] = file_path

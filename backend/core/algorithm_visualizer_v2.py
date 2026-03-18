@@ -1,5 +1,5 @@
 """
-算法可视化模块（改进版：直接找最长骨架）
+算法可视化模块（改进版：分水岭分割确保CNT独立性）
 生成特征提取过程的中间步骤结果
 """
 import cv2
@@ -43,7 +43,7 @@ class AlgorithmVisualizer:
             "自适应直方图均衡化，增强对比度。原理：将图像分成小块，对每块进行直方图均衡化，同时限制对比度增强幅度。")
 
         # 步骤3：高斯模糊（轻度）
-        smoothed = cv2.GaussianBlur(enhanced, (3, 3), 0)
+        smoothed = cv2.GaussianBlur(enhanced, (2, 2), 0)
         self.add_step("高斯模糊", smoothed,
             "2×2高斯滤波，轻度去噪。原理：用高斯函数作为卷积核，减少噪声同时保留边缘细节。")
 
@@ -52,88 +52,61 @@ class AlgorithmVisualizer:
         self.add_step("二值化", thresh,
             "Otsu自适应阈值分割。原理：自动寻找最佳阈值，使类内方差最小化，将图像分为前景（CNT）和背景。")
 
-        # 步骤5：骨架提取（直接提取，不做分割）
+        # 步骤5：分水岭分割（分离交叉CNT）
+        from scipy.ndimage import maximum_filter, label
+
+        dist = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
+
+        # 找种子点
+        local_max = maximum_filter(dist, footprint=np.ones((3, 3), dtype=int))
+        threshold_value = dist.max() * 0.3
+        local_max = (local_max == dist) & (dist > threshold_value)
+
+        # 标记种子点
+        markers = label(local_max, structure=np.ones((3, 3), dtype=int))
+        markers = markers.astype(np.int32)
+
+        # 分水岭分割
+        cv2.watershed(cv2.cvtColor(smoothed, cv2.COLOR_GRAY2BGR), markers)
+
+        # 创建分割后的二值图像（移除负标记）
+        segmented = np.zeros_like(thresh)
+        for i in range(1, markers.max() + 1):
+            segmented[markers == i] = 255
+
+        # 可视化分割结果（每个区域不同颜色）
+        segmented_display = cv2.cvtColor(segmented, cv2.COLOR_GRAY2BGR)
+        segmented_labels = label(segmented > 0, connectivity=2)
+        colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
+                  (0, 255, 255), (128, 0, 128), (0, 128, 0), (0, 0, 128), (128, 128, 0)]
+        for rid in range(1, min(segmented_labels.max() + 1, 11)):
+            color = colors[(rid - 1) % len(colors)]
+            segmented_display[segmented_labels == rid] = color
+
+        self.add_step("分水岭分割", segmented_display,
+            "分水岭算法分离交叉CNT。原理：基于距离变换找到种子点，用分水岭算法将交叉的CNT分割为独立的连通区域，每根CNT一条骨架。")
+
+        # 步骤6：骨架提取
         from skimage.morphology import skeletonize
 
-        skel_full = skeletonize(thresh > 0).astype(np.uint8) * 255
+        skel = skeletonize(segmented > 0).astype(np.uint8) * 255
 
-        # 叠加显示完整骨架
-        skeleton_full_display = cv2.cvtColor(smoothed, cv2.COLOR_GRAY2BGR)
-        skeleton_full_display[skel_full > 0] = [0, 255, 0]  # 绿色骨架
-        self.add_step("完整骨架", skeleton_full_display,
-            "绿色曲线为完整骨架（未处理）。原理：直接对二值图像进行骨架化，得到所有CNT的骨架。")
-
-        # 步骤6：最大骨架区域提取（只保留最大的一个连通区域）
-        max_skel = self._extract_largest_skeleton(skel_full)
-
-        # 叠加显示最大骨架
+        # 叠加显示骨架
         skeleton_display = cv2.cvtColor(smoothed, cv2.COLOR_GRAY2BGR)
-        skeleton_display[max_skel > 0] = [0, 255, 0]  # 绿色骨架
-        self.add_step("最大骨架", skeleton_display,
-            "绿色曲线为最大骨架区域。原理：在所有骨架连通区域中，找到像素数最多的一个区域，只保留该区域作为主干CNT。")
+        skeleton_display[skel > 0] = [0, 255, 0]  # 绿色骨架
+        self.add_step("骨架提取", skeleton_display,
+            "绿色曲线为CNT骨架。原理：骨架提取通过迭代腐蚀保留中心线，得到1像素宽的拓扑结构。分水岭分割确保每根CNT独立，骨架不连通。")
 
         # 步骤7：对齐方向场
-        self._add_alignment_step(enhanced, max_skel)
+        self._add_alignment_step(enhanced, skel)
 
         # 步骤8：直径测量可视化
-        self._add_diameter_step(thresh, max_skel)
+        self._add_diameter_step(segmented, skel)
 
         # 步骤9：骨架追踪曲率
-        self._add_curvature_step(max_skel)
+        self._add_curvature_step(skel)
 
         return self.steps
-
-    def _extract_largest_skeleton(self, skeleton):
-        """在完整骨架中提取最大区域内的最长连续路径（无分支）"""
-        from skimage.measure import label
-        from scipy.ndimage import convolve
-
-        # 标记连通区域
-        labeled = label(skeleton > 0, connectivity=2)
-        n_regions = labeled.max()
-
-        # 找到像素数最多的区域
-        largest_region_id = -1
-        max_pixel_count = 0
-
-        if n_regions > 0:
-            for rid in range(1, n_regions + 1):
-                region_mask = (labeled == rid)
-                pixel_count = np.sum(region_mask)
-                if pixel_count > max_pixel_count:
-                    max_pixel_count = pixel_count
-                    largest_region_id = rid
-
-        # 在最大区域内找最长的连续路径
-        if largest_region_id > 0:
-            region_mask = (labeled == largest_region_id).astype(np.uint8)
-
-            # 找端点
-            kernel = np.ones((3, 3), dtype=np.uint8)
-            kernel[1, 1] = 0
-            neighbor_count = convolve(region_mask, kernel, mode='constant', cval=0)
-            endpoints = np.argwhere((region_mask > 0) & (neighbor_count == 1))
-
-            # 找最长的路径
-            longest_path = []
-            longest_length = 0
-
-            if len(endpoints) >= 2:
-                max_pairs = min(len(endpoints), 10)
-                for i in range(max_pairs):
-                    for j in range(i + 1, max_pairs):
-                        path = self._trace_skeleton(region_mask, endpoints[i], endpoints[j])
-                        if len(path) > longest_length:
-                            longest_path = path
-                            longest_length = len(path)
-
-        # 只保留最长路径
-        result = np.zeros_like(skeleton)
-        if len(longest_path) > 5:
-            for point in longest_path:
-                result[int(point[0]), int(point[1])] = 255
-
-        return result
 
     def _add_alignment_step(self, enhanced, skel):
         """添加对齐分析步骤"""
@@ -267,8 +240,8 @@ class AlgorithmVisualizer:
 
         self.add_step("骨架追踪曲率", curvature_display,
             f"平均曲率 κ = {avg_curvature_nm:.3f} nm⁻¹。原理：基于骨架化提取中轴线，追踪真实路径计算曲率。"
-            f"算法流程：直接提取最长骨架路径，计算曲率κ = dθ/ds。"
-            f"优势：自动找到图像中最长的连续CNT骨架。"
+            f"算法流程：1)识别端点（度数=1的骨架点）；2)追踪骨架路径；3)计算曲率κ = dθ/ds（角度变化/路径长度）。"
+            f"优势：反映真实的CNT形变，对长波弯曲敏感。分水岭分割确保每根CNT独立。"
             f"颜色编码：绿色=直（κ < 0.05），黄色=波（0.05 ≤ κ < 0.15），红色=卷曲（κ ≥ 0.15）。")
 
     def _trace_skeleton(self, mask, start, end):

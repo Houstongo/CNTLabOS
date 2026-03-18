@@ -2,9 +2,17 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from backend.core.knowledge_base import KnowledgeBaseService
+from backend.core.knowledge_seed import (
+    DEFAULT_KB_SEED_SOURCES,
+    infer_theme_from_path,
+    import_seed_sources,
+    relabel_document_themes,
+)
 from backend.core.knowledge_rag import RAGRetriever
+from manage import kb_bootstrap, safe_console_text
 
 
 class KnowledgeBaseServiceTests(unittest.TestCase):
@@ -55,6 +63,27 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         self.assertEqual(documents[0]["theme"], "growth_mechanism")
         self.assertEqual(documents[0]["is_core"], 1)
 
+    def test_ingest_text_extracts_process_morphology_performance_links(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Relation note",
+            text=(
+                "Increasing temperature improves alignment and conductivity in CNT forests. "
+                "Higher Fe thickness increases diameter and can reduce conductivity."
+            ),
+            source_type="paper",
+            theme="process_morphology",
+            is_core=True,
+        )
+
+        stats = service.get_stats()
+        self.assertGreater(stats["link_count"], 0)
+
+        links = service.search_links("temperature alignment conductivity", top_k=3)
+        self.assertGreaterEqual(len(links), 1)
+        self.assertIn(links[0].get("effect_direction"), {"increase", "decrease", "nonlinear_or_tradeoff"})
+
     def test_task_aware_retrieval_prefers_matching_theme_and_keywords(self):
         service = KnowledgeBaseService(self.db_path)
         service.bootstrap_task_profiles()
@@ -86,6 +115,45 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         self.assertEqual(results[0]["title"], "Morphology interpretation note")
         self.assertEqual(results[0]["theme"], "morphology_interpretation")
 
+    def test_task_aware_retrieval_prefers_primary_and_secondary_themes(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.bootstrap_task_profiles()
+        profile = service._get_task_profile("morphology_interpretation")
+        self.assertIn("characterization", profile["preferred_themes"])
+        self.assertIn("applications", profile["discouraged_themes"])
+        service.ingest_text(
+            title="Characterization note",
+            text="Alignment analysis in CNT arrays relies on morphology characterization and interpretation.",
+            source_type="paper",
+            theme="characterization",
+            is_core=True,
+        )
+        service.ingest_text(
+            title="Process note",
+            text="Alignment can change with process conditions and catalyst behavior in CNT arrays.",
+            source_type="paper",
+            theme="process_morphology",
+            is_core=True,
+        )
+        service.ingest_text(
+            title="Application note",
+            text="Alignment is also discussed for flexible device applications of CNT materials.",
+            source_type="paper",
+            theme="applications",
+            is_core=True,
+        )
+
+        results = service.search(
+            query="alignment analysis of CNT arrays",
+            task_name="morphology_interpretation",
+            top_k=3,
+        )
+
+        top_themes = [item["theme"] for item in results[:2]]
+        self.assertIn("characterization", top_themes)
+        self.assertIn("process_morphology", top_themes)
+        self.assertNotEqual(results[0]["theme"], "applications")
+
     def test_ingest_directory_imports_supported_text_files(self):
         service = KnowledgeBaseService(self.db_path)
         source_dir = os.path.join(self.temp_dir.name, "source")
@@ -113,6 +181,51 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         service = KnowledgeBaseService(self.db_path)
 
         self.assertEqual(service.get_stats()["document_count"], 0)
+
+    def test_ingest_directory_imports_pdf_with_extracted_text(self):
+        service = KnowledgeBaseService(self.db_path)
+        source_dir = os.path.join(self.temp_dir.name, "pdf_source")
+        os.makedirs(source_dir, exist_ok=True)
+        pdf_path = os.path.join(source_dir, "forest_growth.pdf")
+        with open(pdf_path, "wb") as handle:
+            handle.write(b"%PDF-1.4 placeholder")
+
+        with patch.object(
+            KnowledgeBaseService,
+            "_extract_text_from_pdf",
+            return_value="CNT forest growth depends on catalyst activity and water-assisted chemistry.",
+        ):
+            result = service.ingest_directory(
+                source_dir=source_dir,
+                source_type="paper",
+                theme="growth_mechanism",
+                is_core=True,
+                allowed_extensions=[".pdf"],
+            )
+
+        self.assertEqual(result["document_count"], 1)
+        documents = service.list_documents()
+        self.assertEqual(documents[0]["source_type"], "paper")
+        self.assertEqual(documents[0]["theme"], "growth_mechanism")
+
+    def test_ingest_directory_can_walk_nested_folders(self):
+        service = KnowledgeBaseService(self.db_path)
+        source_dir = os.path.join(self.temp_dir.name, "nested_source")
+        nested_dir = os.path.join(source_dir, "growth", "core")
+        os.makedirs(nested_dir, exist_ok=True)
+        with open(os.path.join(nested_dir, "alignment.txt"), "w", encoding="utf-8") as handle:
+            handle.write("Alignment improves when catalyst activity remains stable.")
+
+        result = service.ingest_directory(
+            source_dir=source_dir,
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+            allowed_extensions=[".txt"],
+        )
+
+        self.assertEqual(result["document_count"], 1)
+        self.assertEqual(service.get_stats()["document_count"], 1)
 
 
 class RAGRetrieverCompatibilityTests(unittest.TestCase):
@@ -170,6 +283,119 @@ class RAGRetrieverCompatibilityTests(unittest.TestCase):
 
         self.assertTrue(os.path.exists(self.kb_path))
         self.assertEqual(self.retriever.get_stats()["document_count"], 1)
+
+
+class KnowledgeSeedTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.kb_path = os.path.join(self.temp_dir.name, "kb.sqlite")
+        self.service = KnowledgeBaseService(self.kb_path)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_import_seed_sources_imports_each_spec_with_its_theme(self):
+        root = os.path.join(self.temp_dir.name, "sources")
+        growth_dir = os.path.join(root, "growth")
+        ml_dir = os.path.join(root, "ml")
+        os.makedirs(growth_dir, exist_ok=True)
+        os.makedirs(ml_dir, exist_ok=True)
+
+        with open(os.path.join(growth_dir, "forest.txt"), "w", encoding="utf-8") as handle:
+            handle.write("CNT forest growth depends on catalyst activity.")
+        with open(os.path.join(ml_dir, "automation.txt"), "w", encoding="utf-8") as handle:
+            handle.write("Machine learning can accelerate CNT synthesis optimization.")
+
+        result = import_seed_sources(
+            self.service,
+            [
+                {
+                    "path": growth_dir,
+                    "source_type": "paper",
+                    "theme": "growth_mechanism",
+                    "is_core": True,
+                },
+                {
+                    "path": ml_dir,
+                    "source_type": "paper",
+                    "theme": "ml_growth",
+                    "is_core": False,
+                },
+            ],
+        )
+
+        self.assertEqual(result["document_count"], 2)
+        themes = {doc["theme"] for doc in self.service.list_documents()}
+        self.assertEqual(themes, {"growth_mechanism", "ml_growth"})
+
+    def test_infer_theme_from_path_maps_known_directories(self):
+        self.assertEqual(
+            infer_theme_from_path(r"D:\CNTDATA\RagDocument\CORE\12. CNT生长"),
+            "growth_mechanism",
+        )
+        self.assertEqual(
+            infer_theme_from_path(r"D:\CNTDATA\RagDocument\CORE\碳纳米管相关0312\2.AI辅助碳管生长"),
+            "ml_growth",
+        )
+        self.assertEqual(
+            infer_theme_from_path(r"D:\CNTDATA\RagDocument\CORE\碳纳米管相关0312\1.碳管\重点参考"),
+            "reference_review",
+        )
+        self.assertEqual(
+            infer_theme_from_path(r"D:\CNTDATA\RagDocument\CORE\碳纳米管相关0312\3.碳纳米管感受器"),
+            "applications",
+        )
+
+    def test_default_seed_sources_use_inferred_theme_labels(self):
+        themes = {item["theme"] for item in DEFAULT_KB_SEED_SOURCES}
+        self.assertIn("growth_mechanism", themes)
+        self.assertIn("ml_growth", themes)
+        self.assertIn("reference_review", themes)
+
+    def test_relabel_document_themes_updates_existing_documents(self):
+        self.service.ingest_text(
+            title="Imported note",
+            text="Machine learning can optimize CNT synthesis.",
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+            file_path=r"D:\CNTDATA\RagDocument\CORE\碳纳米管相关0312\2.AI辅助碳管生长\automation.txt",
+        )
+
+        result = relabel_document_themes(self.service)
+
+        self.assertEqual(result["updated_count"], 1)
+        documents = self.service.list_documents()
+        self.assertEqual(documents[0]["theme"], "ml_growth")
+
+
+class ManageKnowledgeBootstrapTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_kb_bootstrap_infers_theme_when_theme_is_not_provided(self):
+        source_dir = os.path.join(self.temp_dir.name, "12. CNT生长")
+        os.makedirs(source_dir, exist_ok=True)
+        with open(os.path.join(source_dir, "growth.txt"), "w", encoding="utf-8") as handle:
+            handle.write("Catalyst activity controls CNT growth kinetics.")
+
+        with patch("manage.PROJECT_ROOT", self.temp_dir.name):
+            os.makedirs(os.path.join(self.temp_dir.name, "database"), exist_ok=True)
+            kb_bootstrap(source_dir=source_dir, source_type="paper", theme=None, is_core=True)
+
+        kb_path = os.path.join(self.temp_dir.name, "database", "cnta_knowledge_base.sqlite")
+        service = KnowledgeBaseService(kb_path)
+        documents = service.list_documents()
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]["theme"], "growth_mechanism")
+
+    def test_safe_console_text_replaces_unencodable_characters(self):
+        text = "alpha ª beta"
+        sanitized = safe_console_text(text)
+        self.assertIsInstance(sanitized, str)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,625 @@
+﻿{
+    "model":  "bm25",
+    "top_n":  20,
+    "items":  [
+                  {
+                      "id":  "q1",
+                      "query":  "提高生长温度对CNT取向度和直径的影响",
+                      "candidates":  [
+                                         {
+                                             "rank":  1,
+                                             "score":  3.288625244652103,
+                                             "chunk_id":  656,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ippingmodel [9] 2012 CurlymorphologyatbottomregionmakestheCNTforest unspinnable where k¼ðdQ=lÞ1=2=3L, a is the helix angle between the Synthesis of spinnable CNT forests CNTs and the yarn axis, d is the CNT diameter, l is the friction coefficient between CNTs,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  2,
+                                             "score":  3.288625244652103,
+                                             "chunk_id":  1984,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ippingmodel [9] 2012 CurlymorphologyatbottomregionmakestheCNTforest unspinnable where k¼ðdQ=lÞ1=2=3L, a is the helix angle between the Synthesis of spinnable CNT forests CNTs and the yarn axis, d is the CNT diameter, l is the friction coefficient between CNTs,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  3,
+                                             "score":  3.264115211278595,
+                                             "chunk_id":  3082,
+                                             "doc_id":  41,
+                                             "title":  "Vertically Aligned Carbon Nanotubes as a Unique Material forBiomedical Applications",
+                                             "theme":  "reference_review",
+                                             "snippet":  "ult in CNT overlap, both of tedious controllability. To begin, the main method for which limit the effective CNT surface area to volume ratio.44 patterning CNT is using dispersions in liquid mediums. To Lowersurfaceareatovolumeratioconsequentlydecreasesthe eff",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  4,
+                                             "score":  3.157745868736199,
+                                             "chunk_id":  593,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ngth of the CNT wafer on the Si Figure 1. (a) Key steps in fabricating the bonding CNT wafer. (b) substratewas13N/cm2.Thislevelofadhesionwassufficientto SEMimageofanarrayofverticallyalignedCNTfilm.Double-headed bear the numerous process steps. The resistivitie",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  5,
+                                             "score":  3.157745868736199,
+                                             "chunk_id":  1921,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ngth of the CNT wafer on the Si Figure 1. (a) Key steps in fabricating the bonding CNT wafer. (b) substratewas13N/cm2.Thislevelofadhesionwassufficientto SEMimageofanarrayofverticallyalignedCNTfilm.Double-headed bear the numerous process steps. The resistivitie",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  6,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  1996,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ationship between the spinna- several other groups [8, 12–14], though the reported upper bility and the growth time of the CNT forests. Figure 3 limits on the spinnable height of the CNT forests were displays the spinnability rating and lengths of the CNT slig",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  7,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  651,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "que.Manyarticleshavebeen reportedtoexplain the ditionscausesalossofspinnability. important features of yarn spinning from CNT forest. Several articles are briefly summarized in Table 1. Currently, much research on CNT yarns is focused on Introduction theproduc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  8,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  668,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ationship between the spinna- several other groups [8, 12–14], though the reported upper bility and the growth time of the CNT forests. Figure 3 limits on the spinnable height of the CNT forests were displays the spinnability rating and lengths of the CNT slig",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  9,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  1979,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "que.Manyarticleshavebeen reportedtoexplain the ditionscausesalossofspinnability. important features of yarn spinning from CNT forest. Several articles are briefly summarized in Table 1. Currently, much research on CNT yarns is focused on Introduction theproduc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  10,
+                                             "score":  3.05211676509479,
+                                             "chunk_id":  658,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "gandthegrowth In studies on the forest spinning technique, however, it stages; this corresponded to a residence time of 38 s. has been reported that there exist upper limits on the Growth experiments of spinnable CNT forests were height of spinnable CNT forest",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  11,
+                                             "score":  3.05211676509479,
+                                             "chunk_id":  1986,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "gandthegrowth In studies on the forest spinning technique, however, it stages; this corresponded to a residence time of 38 s. has been reported that there exist upper limits on the Growth experiments of spinnable CNT forests were height of spinnable CNT forest",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  12,
+                                             "score":  3.010584739890118,
+                                             "chunk_id":  3844,
+                                             "doc_id":  43,
+                                             "title":  "综述：平行基底生长碳管阵列 （基础讲得很清楚） Horizontally aligned carbon nanotube arrays",
+                                             "theme":  "reference_review",
+                                             "snippet":  "Therefore, it is of special significance to develop feasible and effectivemanipulationtechnologiesforthestudyofCNTs.During Fig.41 (a) Optical image of a suspended CNT decorated with nano- thepastyears,variousnanomanipulationtechniqueshavebeen particles. (b) Op",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  13,
+                                             "score":  3.0019086525108265,
+                                             "chunk_id":  622,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "e 4. (a) Optical microscope image of layer-by-layer CNT and device array. Arrows indicate CNT alignment directions. (e) structures on plastic substrate. Arrows indicate CNT alignment Current versus voltage curve for RRAM device. Top, middle, and directions. Sc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  14,
+                                             "score":  3.0019086525108265,
+                                             "chunk_id":  1950,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "e 4. (a) Optical microscope image of layer-by-layer CNT and device array. Arrows indicate CNT alignment directions. (e) structures on plastic substrate. Arrows indicate CNT alignment Current versus voltage curve for RRAM device. Top, middle, and directions. Sc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  15,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  1857,
+                                             "doc_id":  26,
+                                             "title":  "2012 - ACS Nano - Alignment Control of Carbon Nanotube Forest from Random to Nearly Perfectly Aligned by Utilizing the",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "sociated ideal CNT density (640 mg/cm3), we XUETAL. VOL.6 ’ NO.7 ’ 5837–5844 ’ 2012 5839 www.acsnano.org ARTICLE Figure3. ObservationofcatalystnanoparticlesoftheCNT forestswithdifferentdegreeofalignmentbyhighresolu- Figure 4. Modeling. (a) Schematic of the ass",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  16,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  3977,
+                                             "doc_id":  43,
+                                             "title":  "综述：平行基底生长碳管阵列 （基础讲得很清楚） Horizontally aligned carbon nanotube arrays",
+                                             "theme":  "reference_review",
+                                             "snippet":  "s,massproductionand moreapplications of Fig.50 (a and b) Morphology and characteristics of CNT-film-based HACNTs. cascade photovoltaic cells. (c–f) Performance and response of CNT- film-basedIRphotodetectors.(g)Thewavelength-dependentresponsivity Asstatedabove",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  17,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  529,
+                                             "doc_id":  9,
+                                             "title":  "2012 - ACS Nano - Alignment Control of Carbon Nanotube Forest from Random to Nearly Perfectly Aligned by Utilizing the",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "sociated ideal CNT density (640 mg/cm3), we XUETAL. VOL.6 ’ NO.7 ’ 5837–5844 ’ 2012 5839 www.acsnano.org ARTICLE Figure3. ObservationofcatalystnanoparticlesoftheCNT forestswithdifferentdegreeofalignmentbyhighresolu- Figure 4. Modeling. (a) Schematic of the ass",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  18,
+                                             "score":  2.9647301741836287,
+                                             "chunk_id":  600,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "orted from the movements of the second layer CNT film during the liquid induced densification process. During the drying phase of the densification process, the second-layer CNT film was pulled into the open regions separatingthefirst-layerCNTstructuresbycapil",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  19,
+                                             "score":  2.9647301741836287,
+                                             "chunk_id":  1928,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "orted from the movements of the second layer CNT film during the liquid induced densification process. During the drying phase of the densification process, the second-layer CNT film was pulled into the open regions separatingthefirst-layerCNTstructuresbycapil",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  20,
+                                             "score":  2.94975415816572,
+                                             "chunk_id":  649,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "wedthatthe of the process variables is relatively easy, and the CNT intensityratioofG-bandtoD-bandattheupperregionwas yarn produced using this method contains few impurities 1.50andthatnearthebottomwas1.14.Wealsofoundthat [3]. thereactionterminationprocessaffe",
+                                             "is_relevant":  false
+                                         }
+                                     ]
+                  },
+                  {
+                      "id":  "q2",
+                      "query":  "Fe催化剂厚度增加是否会导致管径增大",
+                      "candidates":  [
+                                         {
+                                             "rank":  1,
+                                             "score":  4.9766544857255655,
+                                             "chunk_id":  4526,
+                                             "doc_id":  48,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " 138.11 kJ/mol (Fe Si4cC ) 11 Fe 4 and 123.22 kJ/mol (Fe Si8dC ) 11 Fe 4 [13–15], the formation energy is far larger than that of Fe C. 3 There- fore, it is very difficult to form Fe Si C in 11 Fe 4 this growth system. Based on the above analysis, the catalyst",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  2,
+                                             "score":  4.9766544857255655,
+                                             "chunk_id":  2881,
+                                             "doc_id":  38,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " 138.11 kJ/mol (Fe Si4cC ) 11 Fe 4 and 123.22 kJ/mol (Fe Si8dC ) 11 Fe 4 [13–15], the formation energy is far larger than that of Fe C. 3 There- fore, it is very difficult to form Fe Si C in 11 Fe 4 this growth system. Based on the above analysis, the catalyst",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  3,
+                                             "score":  4.801363140012422,
+                                             "chunk_id":  2880,
+                                             "doc_id":  38,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " However, the solubility of silicon in cementite is negligibly small, so the trapping of silicon is considered to dramatically reduce the driving force for precipitation. Therefore, it can be inferred that the presence of Si prevents the formation of cementite",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  4,
+                                             "score":  4.801363140012422,
+                                             "chunk_id":  4525,
+                                             "doc_id":  48,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " However, the solubility of silicon in cementite is negligibly small, so the trapping of silicon is considered to dramatically reduce the driving force for precipitation. Therefore, it can be inferred that the presence of Si prevents the formation of cementite",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  5,
+                                             "score":  4.755858534864883,
+                                             "chunk_id":  4523,
+                                             "doc_id":  48,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "ctive catalyst particles are mainly Fe C. 3 The catalyst was formed via co- pyrolysis of ferrocene and triethylsilane for the growth of various CNTs, the particles comprised of Fe, C and Si have been by verified the EDS analysis, showing that the atomic ratio ",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  6,
+                                             "score":  4.755858534864883,
+                                             "chunk_id":  2878,
+                                             "doc_id":  38,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "ctive catalyst particles are mainly Fe C. 3 The catalyst was formed via co- pyrolysis of ferrocene and triethylsilane for the growth of various CNTs, the particles comprised of Fe, C and Si have been by verified the EDS analysis, showing that the atomic ratio ",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  7,
+                                             "score":  4.720571916084444,
+                                             "chunk_id":  4424,
+                                             "doc_id":  47,
+                                             "title":  "3.Fabrication of carbon nanotube with high purity and crystallinity by methane decomposition over ceria-supported catalysts",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " doping CeO 2 , Fe/CeO 2 , and Ni/CeO 2 , respectively. All catalysts showed metals such as Co, Fe, and Ni. Prior to experiments, all samples peakscorrespondingtotheirmetallicandoxidativestates:777.1, werepretreatedunder10%H 2 inArat500(cid:1)Cfor2h,andcurve 7",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  8,
+                                             "score":  4.720571916084444,
+                                             "chunk_id":  2779,
+                                             "doc_id":  37,
+                                             "title":  "3.Fabrication of carbon nanotube with high purity and crystallinity by methane decomposition over ceria-supported catalysts",
+                                             "theme":  "ml_growth",
+                                             "snippet":  " doping CeO 2 , Fe/CeO 2 , and Ni/CeO 2 , respectively. All catalysts showed metals such as Co, Fe, and Ni. Prior to experiments, all samples peakscorrespondingtotheirmetallicandoxidativestates:777.1, werepretreatedunder10%H 2 inArat500(cid:1)Cfor2h,andcurve 7",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  9,
+                                             "score":  4.601087932015679,
+                                             "chunk_id":  2701,
+                                             "doc_id":  36,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "EMimageofa 2nm-Al/Fe–Sifilmonwhichthelinescanwasdone. (B)Compositionsofelementsacrossthelinemarkedinthedarkfield image. (B) TherelationshipbetweentheCNTlengthandtheAlinterlayer thicknessisfurthershowninfigure4. Themethane/hydrogen ratio was 4/9. The length of ",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  10,
+                                             "score":  4.601087932015679,
+                                             "chunk_id":  4346,
+                                             "doc_id":  46,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "EMimageofa 2nm-Al/Fe–Sifilmonwhichthelinescanwasdone. (B)Compositionsofelementsacrossthelinemarkedinthedarkfield image. (B) TherelationshipbetweentheCNTlengthandtheAlinterlayer thicknessisfurthershowninfigure4. Themethane/hydrogen ratio was 4/9. The length of ",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  11,
+                                             "score":  4.572702639948851,
+                                             "chunk_id":  1361,
+                                             "doc_id":  18,
+                                             "title":  "2003 - Nano Lett. - Efficient Formation of Iron Nanoparticle Catalysts on Silicon Oxide by Hydroxylamine for Carbon Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ons, and found that while hydroxylamine is efficient in Fe(III),andidentifiedthefollowingsolutionphasereactions:20 enlarging preformed nanoparticles, it does not lead to nucleationofnewAunanoparticlesfromtheAu3+solution,15 Fe3++NH OH/Fe(NH OH)3+ despite that t",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  12,
+                                             "score":  4.572702639948851,
+                                             "chunk_id":  33,
+                                             "doc_id":  1,
+                                             "title":  "2003 - Nano Lett. - Efficient Formation of Iron Nanoparticle Catalysts on Silicon Oxide by Hydroxylamine for Carbon Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ons, and found that while hydroxylamine is efficient in Fe(III),andidentifiedthefollowingsolutionphasereactions:20 enlarging preformed nanoparticles, it does not lead to nucleationofnewAunanoparticlesfromtheAu3+solution,15 Fe3++NH OH/Fe(NH OH)3+ despite that t",
+                                             "is_relevant":  true
+                                         },
+                                         {
+                                             "rank":  13,
+                                             "score":  4.553972888433183,
+                                             "chunk_id":  2877,
+                                             "doc_id":  38,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "tern of aligned CNTs. formation reaction thermodynamics of cementite Fe C 3 from iron and carbon, namely 3Fe + C (cid:2) Fe C 3 balances at 578◦C [12], and it means either the reaction product Fe C 3 exists alone or only the starting materials Fe and C coexist",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  14,
+                                             "score":  4.553972888433183,
+                                             "chunk_id":  4522,
+                                             "doc_id":  48,
+                                             "title":  "4.Growth of well-aligned carbon nanotubes with different shapes",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "tern of aligned CNTs. formation reaction thermodynamics of cementite Fe C 3 from iron and carbon, namely 3Fe + C (cid:2) Fe C 3 balances at 578◦C [12], and it means either the reaction product Fe C 3 exists alone or only the starting materials Fe and C coexist",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  15,
+                                             "score":  4.552390207155443,
+                                             "chunk_id":  1291,
+                                             "doc_id":  17,
+                                             "title":  "N掺杂碳纳米管的CVD合成",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ivenin aminewasusedasanitrogensource[31]. NH 2 + Fe Fe NH 2 Fe Fig.2. Thecatalystsystemsusedwithtolueneascarbonsource:(a)ferrocene(FcH);(b)ferrocene+aniline(FcH/PhNH2)and(c)4-ferrocenylaniline(FcPhNH2). Table1 SummaryoftheyieldandsizedistributionofSCNMsproduce",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  16,
+                                             "score":  4.552390207155443,
+                                             "chunk_id":  2619,
+                                             "doc_id":  34,
+                                             "title":  "N掺杂碳纳米管的CVD合成",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ivenin aminewasusedasanitrogensource[31]. NH 2 + Fe Fe NH 2 Fe Fig.2. Thecatalystsystemsusedwithtolueneascarbonsource:(a)ferrocene(FcH);(b)ferrocene+aniline(FcH/PhNH2)and(c)4-ferrocenylaniline(FcPhNH2). Table1 SummaryoftheyieldandsizedistributionofSCNMsproduce",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  17,
+                                             "score":  4.3897759795989915,
+                                             "chunk_id":  4345,
+                                             "doc_id":  46,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "m,thecross microRamanspectrometerfromRenishawwithaHe–Nelaser sectional morphologies and microstructure are similar to that sourcewithawavelengthof633nmwasusedtodeterminethe of 2 nm-Al/Fe–Si except that the Al interlayers are visiblein qualityofCNTs. the6nm-Al,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  18,
+                                             "score":  4.3897759795989915,
+                                             "chunk_id":  2700,
+                                             "doc_id":  36,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "m,thecross microRamanspectrometerfromRenishawwithaHe–Nelaser sectional morphologies and microstructure are similar to that sourcewithawavelengthof633nmwasusedtodeterminethe of 2 nm-Al/Fe–Si except that the Al interlayers are visiblein qualityofCNTs. the6nm-Al,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  19,
+                                             "score":  4.280558668975869,
+                                             "chunk_id":  2705,
+                                             "doc_id":  36,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "thane/hydrogenratio was 4/9. After5minofgrowth, the CNTs shown in figure 5(B) is 13 μm, which is equal to that CNTs grown on the etched Fe–Si catalyst have an average ofCNTsgrownontheetchedFe–Sicatalysts. Forthesamples lengthof13μm; whiletheCNTsgrownontheetche",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  20,
+                                             "score":  4.280558668975869,
+                                             "chunk_id":  4350,
+                                             "doc_id":  46,
+                                             "title":  "2.Growth of CNTs on Fe–Si catalyst prepared on Si",
+                                             "theme":  "ml_growth",
+                                             "snippet":  "thane/hydrogenratio was 4/9. After5minofgrowth, the CNTs shown in figure 5(B) is 13 μm, which is equal to that CNTs grown on the etched Fe–Si catalyst have an average ofCNTsgrownontheetchedFe–Sicatalysts. Forthesamples lengthof13μm; whiletheCNTsgrownontheetche",
+                                             "is_relevant":  false
+                                         }
+                                     ]
+                  },
+                  {
+                      "id":  "q3",
+                      "query":  "气体流量与CNT密度关系的机理证据",
+                      "candidates":  [
+                                         {
+                                             "rank":  1,
+                                             "score":  3.288625244652103,
+                                             "chunk_id":  656,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ippingmodel [9] 2012 CurlymorphologyatbottomregionmakestheCNTforest unspinnable where k¼ðdQ=lÞ1=2=3L, a is the helix angle between the Synthesis of spinnable CNT forests CNTs and the yarn axis, d is the CNT diameter, l is the friction coefficient between CNTs,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  2,
+                                             "score":  3.288625244652103,
+                                             "chunk_id":  1984,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ippingmodel [9] 2012 CurlymorphologyatbottomregionmakestheCNTforest unspinnable where k¼ðdQ=lÞ1=2=3L, a is the helix angle between the Synthesis of spinnable CNT forests CNTs and the yarn axis, d is the CNT diameter, l is the friction coefficient between CNTs,",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  3,
+                                             "score":  3.264115211278595,
+                                             "chunk_id":  3082,
+                                             "doc_id":  41,
+                                             "title":  "Vertically Aligned Carbon Nanotubes as a Unique Material forBiomedical Applications",
+                                             "theme":  "reference_review",
+                                             "snippet":  "ult in CNT overlap, both of tedious controllability. To begin, the main method for which limit the effective CNT surface area to volume ratio.44 patterning CNT is using dispersions in liquid mediums. To Lowersurfaceareatovolumeratioconsequentlydecreasesthe eff",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  4,
+                                             "score":  3.157745868736199,
+                                             "chunk_id":  593,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ngth of the CNT wafer on the Si Figure 1. (a) Key steps in fabricating the bonding CNT wafer. (b) substratewas13N/cm2.Thislevelofadhesionwassufficientto SEMimageofanarrayofverticallyalignedCNTfilm.Double-headed bear the numerous process steps. The resistivitie",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  5,
+                                             "score":  3.157745868736199,
+                                             "chunk_id":  1921,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ngth of the CNT wafer on the Si Figure 1. (a) Key steps in fabricating the bonding CNT wafer. (b) substratewas13N/cm2.Thislevelofadhesionwassufficientto SEMimageofanarrayofverticallyalignedCNTfilm.Double-headed bear the numerous process steps. The resistivitie",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  6,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  1996,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ationship between the spinna- several other groups [8, 12–14], though the reported upper bility and the growth time of the CNT forests. Figure 3 limits on the spinnable height of the CNT forests were displays the spinnability rating and lengths of the CNT slig",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  7,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  651,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "que.Manyarticleshavebeen reportedtoexplain the ditionscausesalossofspinnability. important features of yarn spinning from CNT forest. Several articles are briefly summarized in Table 1. Currently, much research on CNT yarns is focused on Introduction theproduc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  8,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  668,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "ationship between the spinna- several other groups [8, 12–14], though the reported upper bility and the growth time of the CNT forests. Figure 3 limits on the spinnable height of the CNT forests were displays the spinnability rating and lengths of the CNT slig",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  9,
+                                             "score":  3.0649323171865257,
+                                             "chunk_id":  1979,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "que.Manyarticleshavebeen reportedtoexplain the ditionscausesalossofspinnability. important features of yarn spinning from CNT forest. Several articles are briefly summarized in Table 1. Currently, much research on CNT yarns is focused on Introduction theproduc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  10,
+                                             "score":  3.05211676509479,
+                                             "chunk_id":  658,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "gandthegrowth In studies on the forest spinning technique, however, it stages; this corresponded to a residence time of 38 s. has been reported that there exist upper limits on the Growth experiments of spinnable CNT forests were height of spinnable CNT forest",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  11,
+                                             "score":  3.05211676509479,
+                                             "chunk_id":  1986,
+                                             "doc_id":  28,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "gandthegrowth In studies on the forest spinning technique, however, it stages; this corresponded to a residence time of 38 s. has been reported that there exist upper limits on the Growth experiments of spinnable CNT forests were height of spinnable CNT forest",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  12,
+                                             "score":  3.010584739890118,
+                                             "chunk_id":  3844,
+                                             "doc_id":  43,
+                                             "title":  "综述：平行基底生长碳管阵列 （基础讲得很清楚） Horizontally aligned carbon nanotube arrays",
+                                             "theme":  "reference_review",
+                                             "snippet":  "Therefore, it is of special significance to develop feasible and effectivemanipulationtechnologiesforthestudyofCNTs.During Fig.41 (a) Optical image of a suspended CNT decorated with nano- thepastyears,variousnanomanipulationtechniqueshavebeen particles. (b) Op",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  13,
+                                             "score":  3.0019086525108265,
+                                             "chunk_id":  622,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "e 4. (a) Optical microscope image of layer-by-layer CNT and device array. Arrows indicate CNT alignment directions. (e) structures on plastic substrate. Arrows indicate CNT alignment Current versus voltage curve for RRAM device. Top, middle, and directions. Sc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  14,
+                                             "score":  3.0019086525108265,
+                                             "chunk_id":  1950,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "e 4. (a) Optical microscope image of layer-by-layer CNT and device array. Arrows indicate CNT alignment directions. (e) structures on plastic substrate. Arrows indicate CNT alignment Current versus voltage curve for RRAM device. Top, middle, and directions. Sc",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  15,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  1857,
+                                             "doc_id":  26,
+                                             "title":  "2012 - ACS Nano - Alignment Control of Carbon Nanotube Forest from Random to Nearly Perfectly Aligned by Utilizing the",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "sociated ideal CNT density (640 mg/cm3), we XUETAL. VOL.6 ’ NO.7 ’ 5837–5844 ’ 2012 5839 www.acsnano.org ARTICLE Figure3. ObservationofcatalystnanoparticlesoftheCNT forestswithdifferentdegreeofalignmentbyhighresolu- Figure 4. Modeling. (a) Schematic of the ass",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  16,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  3977,
+                                             "doc_id":  43,
+                                             "title":  "综述：平行基底生长碳管阵列 （基础讲得很清楚） Horizontally aligned carbon nanotube arrays",
+                                             "theme":  "reference_review",
+                                             "snippet":  "s,massproductionand moreapplications of Fig.50 (a and b) Morphology and characteristics of CNT-film-based HACNTs. cascade photovoltaic cells. (c–f) Performance and response of CNT- film-basedIRphotodetectors.(g)Thewavelength-dependentresponsivity Asstatedabove",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  17,
+                                             "score":  2.979859033820309,
+                                             "chunk_id":  529,
+                                             "doc_id":  9,
+                                             "title":  "2012 - ACS Nano - Alignment Control of Carbon Nanotube Forest from Random to Nearly Perfectly Aligned by Utilizing the",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "sociated ideal CNT density (640 mg/cm3), we XUETAL. VOL.6 ’ NO.7 ’ 5837–5844 ’ 2012 5839 www.acsnano.org ARTICLE Figure3. ObservationofcatalystnanoparticlesoftheCNT forestswithdifferentdegreeofalignmentbyhighresolu- Figure 4. Modeling. (a) Schematic of the ass",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  18,
+                                             "score":  2.9647301741836287,
+                                             "chunk_id":  600,
+                                             "doc_id":  10,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "orted from the movements of the second layer CNT film during the liquid induced densification process. During the drying phase of the densification process, the second-layer CNT film was pulled into the open regions separatingthefirst-layerCNTstructuresbycapil",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  19,
+                                             "score":  2.9647301741836287,
+                                             "chunk_id":  1928,
+                                             "doc_id":  27,
+                                             "title":  "2012 - Nano Lett. - Hierarchical Three-Dimensional Layer-by-Layer Assembly of Carbon Nanotube Wafers for Integrated Nano",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "orted from the movements of the second layer CNT film during the liquid induced densification process. During the drying phase of the densification process, the second-layer CNT film was pulled into the open regions separatingthefirst-layerCNTstructuresbycapil",
+                                             "is_relevant":  false
+                                         },
+                                         {
+                                             "rank":  20,
+                                             "score":  2.94975415816572,
+                                             "chunk_id":  649,
+                                             "doc_id":  11,
+                                             "title":  "2013 - J Mater Sci - The reason for an upper limit to the height of spinnable carbon nanotube forests",
+                                             "theme":  "growth_mechanism",
+                                             "snippet":  "wedthatthe of the process variables is relatively easy, and the CNT intensityratioofG-bandtoD-bandattheupperregionwas yarn produced using this method contains few impurities 1.50andthatnearthebottomwas1.14.Wealsofoundthat [3]. thereactionterminationprocessaffe",
+                                             "is_relevant":  true
+                                         }
+                                     ]
+                  }
+              ],
+    "labeling_guide":  "Set is_relevant=true/false for each candidate. Then extract relevant chunk/doc ids into retrieval_eval_set.json."
+}

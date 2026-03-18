@@ -1,0 +1,124 @@
+{
+  "items": [
+    {
+      "id": "q01",
+      "query": "提高生长温度对CNT取向度和直径的影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q02",
+      "query": "Fe催化剂厚度增加是否会导致管径增大",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q03",
+      "query": "气体流量与CNT密度关系的机理证据",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q04",
+      "query": "碳源浓度变化如何影响CNT阵列高度与生长速率",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q05",
+      "query": "氢气比例对CNT缺陷程度和石墨化程度的影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q06",
+      "query": "水汽辅助CVD中水分压如何影响催化剂寿命",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q07",
+      "query": "生长时间延长会不会导致CNT底部卷曲和可纺性下降",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q08",
+      "query": "反应压力变化对CNT阵列密度和取向度的耦合影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q09",
+      "query": "Al2O3缓冲层厚度对Fe纳米颗粒形成及CNT形貌的影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q10",
+      "query": "退火温度如何改变催化剂颗粒尺寸分布与最终管径",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q11",
+      "query": "基底位置或温度梯度对CNT阵列均匀性的影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q12",
+      "query": "不同碳源气体例如乙炔与甲烷对CNT直径分布的差异",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q13",
+      "query": "催化剂失活的主要机制及其对生长终止的证据",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q14",
+      "query": "取向度提升是否一定带来电导率提升",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q15",
+      "query": "密度与波曲度对CNT纱线强度的联合影响",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q16",
+      "query": "平均曲率增大是否会降低CNT网络导电性能",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q17",
+      "query": "高温快速生长条件下为何更容易出现结构缺陷",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q18",
+      "query": "催化剂颗粒团聚与CNT粗化之间的关系",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q19",
+      "query": "在同等生长高度下如何平衡高取向与高密度",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    },
+    {
+      "id": "q20",
+      "query": "工艺参数到形貌再到性能的关键因果链有哪些",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": []
+    }
+  ]
+}

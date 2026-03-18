@@ -7,9 +7,14 @@ venv/
 env/
 .env
 *.backup
+*.log
+*.debugbak
+_head_index_tmp.html
+index_final.html
 
 data/raw/
 data/temp/
+database/
 backend/data/temp/
 reports/
 results/

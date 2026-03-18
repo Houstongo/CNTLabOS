@@ -1,0 +1,42 @@
+{
+    "items":  [
+                  {
+                      "id":  "q1",
+                      "query":  "提高生长温度对CNT取向度和直径的影响",
+                      "relevant_chunk_ids":  [
+                                                 529,
+                                                 1857
+                                             ],
+                      "relevant_doc_ids":  [
+                                               9,
+                                               26
+                                           ]
+                  },
+                  {
+                      "id":  "q2",
+                      "query":  "Fe催化剂厚度增加是否会导致管径增大",
+                      "relevant_chunk_ids":  [
+                                                 33,
+                                                 1361,
+                                                 2701,
+                                                 4346
+                                             ],
+                      "relevant_doc_ids":  [
+                                               1,
+                                               18,
+                                               36,
+                                               46
+                                           ]
+                  },
+                  {
+                      "id":  "q3",
+                      "query":  "气体流量与CNT密度关系的机理证据",
+                      "relevant_chunk_ids":  [
+                                                 649
+                                             ],
+                      "relevant_doc_ids":  [
+                                               11
+                                           ]
+                  }
+              ]
+}

@@ -3,23 +3,75 @@ import re
 import sqlite3
 from typing import Dict, List, Optional
 
+PROCESS_FACTOR_PATTERNS = {
+    "growth_temp": [r"\btemperature\b", r"温度", r"生长温度"],
+    "growth_time": [r"\bgrowth time\b", r"\btime\b", r"生长时间"],
+    "anneal_time": [r"\banneal", r"退火"],
+    "ar_flow": [r"\bar\b", r"氩", r"氩气"],
+    "h2_flow": [r"\bh2\b", r"氢", r"氢气"],
+    "c2h4_flow": [r"\bc2h4\b", r"乙烯"],
+    "fe_thickness": [r"\bfe\b", r"铁", r"催化剂厚度"],
+    "al2o3_thickness": [r"al2o3", r"氧化铝", r"支撑层"],
+}
+
+MORPHOLOGY_FACTOR_PATTERNS = {
+    "alignment": [r"\balignment\b", r"取向", r"对齐"],
+    "density": [r"\bdensity\b", r"密度", r"覆盖率"],
+    "diameter": [r"\bdiameter\b", r"管径", r"直径"],
+    "curvature": [r"\bcurvature\b", r"弯曲", r"波曲", r"wav"],
+    "tortuosity": [r"\btortuosity\b", r"曲折度"],
+}
+
+PERFORMANCE_FACTOR_PATTERNS = {
+    "conductivity": [r"\bconductiv", r"电导", r"导电"],
+    "resistivity": [r"\bresistiv", r"电阻率"],
+    "sheet_resistance": [r"\bsheet resistance\b", r"方阻"],
+    "tensile_strength": [r"\btensile\b", r"抗拉", r"强度"],
+    "modulus": [r"\bmodulus\b", r"模量"],
+}
+
+INCREASE_PATTERNS = [r"increase", r"improve", r"enhance", r"rise", r"提高", r"增大", r"增加", r"改善"]
+DECREASE_PATTERNS = [r"decrease", r"reduce", r"drop", r"decline", r"降低", r"减小", r"下降", r"恶化"]
+MECHANISM_PATTERNS = [
+    r"mechanism",
+    r"kinetic",
+    r"diffusion",
+    r"deactivation",
+    r"poison",
+    r"ripening",
+    r"activation energy",
+    r"机理",
+    r"动力学",
+    r"扩散",
+    r"失活",
+    r"中毒",
+    r"烧结",
+    r"团聚",
+]
+
 
 DEFAULT_TASK_PROFILES = (
     (
         "morphology_interpretation",
         "morphology_interpretation",
+        "characterization,process_morphology,growth_mechanism",
+        "applications",
         "mechanism morphology_interpretation process_morphology",
         "alignment density diameter curvature mechanism catalyst growth",
     ),
     (
         "process_analysis",
         "process_morphology",
+        "process_morphology,growth_mechanism,characterization",
+        "applications",
         "process_rule process_morphology growth_mechanism",
         "temperature flow catalyst growth morphology alignment diameter density",
     ),
     (
         "prediction_explanation",
         "prediction_support",
+        "ml_growth,process_morphology,growth_mechanism",
+        "applications",
         "process_rule prediction_support growth_mechanism",
         "prediction process morphology mechanism evidence",
     ),
@@ -75,9 +127,14 @@ class KnowledgeBaseService:
                 CREATE TABLE IF NOT EXISTS kb_links (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     doc_id INTEGER REFERENCES kb_documents(id) ON DELETE CASCADE,
+                    relation_type TEXT,
+                    source_node TEXT,
+                    target_node TEXT,
                     process_factor TEXT,
                     morphology_factor TEXT,
+                    performance_factor TEXT,
                     effect_direction TEXT,
+                    confidence REAL DEFAULT 0.5,
                     mechanism_summary TEXT,
                     evidence_text TEXT
                 );
@@ -86,14 +143,46 @@ class KnowledgeBaseService:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_name TEXT NOT NULL UNIQUE,
                     preferred_theme TEXT,
+                    preferred_themes TEXT,
+                    discouraged_themes TEXT,
                     preferred_knowledge_types TEXT,
                     preferred_keywords TEXT
                 );
                 """
             )
+            self._ensure_task_profile_columns(conn)
+            self._ensure_link_columns(conn)
             conn.commit()
         finally:
             conn.close()
+
+    @staticmethod
+    def _ensure_task_profile_columns(conn):
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(kb_task_profiles)").fetchall()
+        }
+        if "preferred_themes" not in existing:
+            conn.execute("ALTER TABLE kb_task_profiles ADD COLUMN preferred_themes TEXT")
+        if "discouraged_themes" not in existing:
+            conn.execute("ALTER TABLE kb_task_profiles ADD COLUMN discouraged_themes TEXT")
+
+    @staticmethod
+    def _ensure_link_columns(conn):
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(kb_links)").fetchall()
+        }
+        if "relation_type" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN relation_type TEXT")
+        if "source_node" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN source_node TEXT")
+        if "target_node" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN target_node TEXT")
+        if "performance_factor" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN performance_factor TEXT")
+        if "confidence" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN confidence REAL DEFAULT 0.5")
 
     def bootstrap_task_profiles(self):
         conn = self._connect()
@@ -101,10 +190,13 @@ class KnowledgeBaseService:
             conn.executemany(
                 """
                 INSERT INTO kb_task_profiles (
-                    task_name, preferred_theme, preferred_knowledge_types, preferred_keywords
-                ) VALUES (?, ?, ?, ?)
+                    task_name, preferred_theme, preferred_themes, discouraged_themes,
+                    preferred_knowledge_types, preferred_keywords
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(task_name) DO UPDATE SET
                     preferred_theme = excluded.preferred_theme,
+                    preferred_themes = excluded.preferred_themes,
+                    discouraged_themes = excluded.discouraged_themes,
                     preferred_knowledge_types = excluded.preferred_knowledge_types,
                     preferred_keywords = excluded.preferred_keywords
                 """,
@@ -155,6 +247,30 @@ class KnowledgeBaseService:
                         self._infer_knowledge_type(theme),
                     ),
                 )
+
+                for relation in self._extract_relations_from_chunk(chunk):
+                    cursor.execute(
+                        """
+                        INSERT INTO kb_links (
+                            doc_id, relation_type, source_node, target_node,
+                            process_factor, morphology_factor, performance_factor,
+                            effect_direction, confidence, mechanism_summary, evidence_text
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            doc_id,
+                            relation.get("relation_type"),
+                            relation.get("source_node"),
+                            relation.get("target_node"),
+                            relation.get("process_factor"),
+                            relation.get("morphology_factor"),
+                            relation.get("performance_factor"),
+                            relation.get("effect_direction"),
+                            relation.get("confidence", 0.5),
+                            relation.get("mechanism_summary"),
+                            relation.get("evidence_text"),
+                        ),
+                    )
             conn.commit()
         finally:
             conn.close()
@@ -183,6 +299,21 @@ class KnowledgeBaseService:
         conn = self._connect()
         try:
             conn.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_document_theme(self, doc_id: int, theme: str) -> None:
+        conn = self._connect()
+        try:
+            conn.execute(
+                "UPDATE kb_documents SET theme = ? WHERE id = ?",
+                (theme, doc_id),
+            )
+            conn.execute(
+                "UPDATE kb_chunks SET knowledge_type = ? WHERE doc_id = ?",
+                (self._infer_knowledge_type(theme), doc_id),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -243,13 +374,149 @@ class KnowledgeBaseService:
             core_count = conn.execute(
                 "SELECT COUNT(*) FROM kb_documents WHERE is_core = 1"
             ).fetchone()[0]
+            link_count = conn.execute("SELECT COUNT(*) FROM kb_links").fetchone()[0]
         finally:
             conn.close()
         return {
             "document_count": doc_count,
             "chunk_count": chunk_count,
             "core_document_count": core_count,
+            "link_count": link_count,
         }
+
+    def rebuild_links(self, doc_ids: Optional[List[int]] = None, clear_existing: bool = True) -> Dict[str, int]:
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if clear_existing:
+                if doc_ids:
+                    placeholders = ",".join("?" for _ in doc_ids)
+                    cursor.execute(
+                        f"DELETE FROM kb_links WHERE doc_id IN ({placeholders})",
+                        tuple(doc_ids),
+                    )
+                else:
+                    cursor.execute("DELETE FROM kb_links")
+
+            if doc_ids:
+                placeholders = ",".join("?" for _ in doc_ids)
+                chunk_rows = cursor.execute(
+                    f"""
+                    SELECT doc_id, text
+                    FROM kb_chunks
+                    WHERE doc_id IN ({placeholders})
+                    ORDER BY doc_id, chunk_index
+                    """,
+                    tuple(doc_ids),
+                ).fetchall()
+            else:
+                chunk_rows = cursor.execute(
+                    """
+                    SELECT doc_id, text
+                    FROM kb_chunks
+                    ORDER BY doc_id, chunk_index
+                    """
+                ).fetchall()
+
+            link_count = 0
+            doc_set = set()
+            for row in chunk_rows:
+                doc_id = int(row["doc_id"])
+                doc_set.add(doc_id)
+                for relation in self._extract_relations_from_chunk(row["text"] or ""):
+                    cursor.execute(
+                        """
+                        INSERT INTO kb_links (
+                            doc_id, relation_type, source_node, target_node,
+                            process_factor, morphology_factor, performance_factor,
+                            effect_direction, confidence, mechanism_summary, evidence_text
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            doc_id,
+                            relation.get("relation_type"),
+                            relation.get("source_node"),
+                            relation.get("target_node"),
+                            relation.get("process_factor"),
+                            relation.get("morphology_factor"),
+                            relation.get("performance_factor"),
+                            relation.get("effect_direction"),
+                            relation.get("confidence", 0.5),
+                            relation.get("mechanism_summary"),
+                            relation.get("evidence_text"),
+                        ),
+                    )
+                    link_count += 1
+
+            conn.commit()
+            return {
+                "doc_count": len(doc_set),
+                "link_count": link_count,
+            }
+        finally:
+            conn.close()
+
+    def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
+        query_tokens = set(self._tokenize(query))
+        if not query_tokens:
+            return []
+
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT l.id, l.process_factor, l.morphology_factor, l.performance_factor,
+                       l.relation_type, l.source_node, l.target_node, l.effect_direction,
+                       l.confidence, l.mechanism_summary, l.evidence_text,
+                       d.id AS doc_id, d.title, d.theme
+                FROM kb_links l
+                JOIN kb_documents d ON d.id = l.doc_id
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+        scored = []
+        for row in rows:
+            row_dict = dict(row)
+            haystack = " ".join(
+                str(row_dict.get(key) or "")
+                for key in (
+                    "process_factor",
+                    "morphology_factor",
+                    "performance_factor",
+                    "relation_type",
+                    "source_node",
+                    "target_node",
+                    "effect_direction",
+                    "mechanism_summary",
+                    "evidence_text",
+                    "theme",
+                    "title",
+                )
+            ).lower()
+            token_hits = sum(1 for token in query_tokens if token in haystack)
+            if token_hits > 0:
+                scored.append((token_hits, row_dict))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [row for _, row in scored[:top_k]]
+
+    def get_relation_chain_summary(self, query: str, top_k: int = 20) -> Dict[str, List[Dict[str, object]]]:
+        links = self.search_links(query, top_k=top_k)
+        grouped = {
+            "process_to_morphology": [],
+            "morphology_to_performance": [],
+            "process_to_performance": [],
+            "mechanism_evidence": [],
+        }
+        for row in links:
+            rel_type = str(row.get("relation_type") or "")
+            if rel_type in grouped:
+                grouped[rel_type].append(row)
+        return grouped
 
     def ingest_directory(
         self,
@@ -259,37 +526,56 @@ class KnowledgeBaseService:
         is_core: bool = False,
         allowed_extensions: Optional[List[str]] = None,
     ) -> Dict[str, int]:
-        extensions = allowed_extensions or [".txt"]
+        extensions = [ext.lower() for ext in (allowed_extensions or [".txt", ".pdf"])]
         imported = 0
-        for entry in sorted(os.listdir(source_dir)):
-            path = os.path.join(source_dir, entry)
-            if not os.path.isfile(path):
-                continue
-            if os.path.splitext(entry)[1].lower() not in extensions:
-                continue
-            with open(path, "r", encoding="utf-8") as handle:
-                text = handle.read()
-            self.ingest_text(
-                title=os.path.splitext(entry)[0],
-                text=text,
-                source_type=source_type,
-                theme=theme,
-                is_core=is_core,
-                file_path=path,
-                language="zh" if re.search(r"[\u4e00-\u9fff]", text) else "en",
-            )
-            imported += 1
+        for root, _, files in os.walk(source_dir):
+            for entry in sorted(files):
+                path = os.path.join(root, entry)
+                if os.path.splitext(entry)[1].lower() not in extensions:
+                    continue
+                self.ingest_file(
+                    file_path=path,
+                    source_type=source_type,
+                    theme=theme,
+                    is_core=is_core,
+                )
+                imported += 1
         return {"document_count": imported}
+
+    def ingest_file(
+        self,
+        file_path: str,
+        source_type: str,
+        theme: Optional[str] = None,
+        is_core: bool = False,
+    ) -> Dict[str, int]:
+        extension = os.path.splitext(file_path)[1].lower()
+        if extension == ".pdf":
+            text = self._extract_text_from_pdf(file_path)
+        else:
+            with open(file_path, "r", encoding="utf-8") as handle:
+                text = handle.read()
+
+        return self.ingest_text(
+            title=os.path.splitext(os.path.basename(file_path))[0],
+            text=text,
+            source_type=source_type,
+            theme=theme,
+            is_core=is_core,
+            file_path=file_path,
+            language="zh" if re.search(r"[\u4e00-\u9fff]", text) else "en",
+        )
 
     def _get_task_profile(self, task_name: Optional[str]) -> Optional[Dict[str, str]]:
         if not task_name:
             return None
-        conn = sqlite3.connect(self.db_path)
+        conn = self._connect()
         try:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """
-                SELECT task_name, preferred_theme, preferred_knowledge_types, preferred_keywords
+                SELECT task_name, preferred_theme, preferred_themes, discouraged_themes,
+                       preferred_knowledge_types, preferred_keywords
                 FROM kb_task_profiles
                 WHERE task_name = ?
                 """,
@@ -322,6 +608,22 @@ class KnowledgeBaseService:
             preferred_theme = task_profile.get("preferred_theme")
             if preferred_theme and row.get("theme") == preferred_theme:
                 score += 4.0
+
+            preferred_themes = {
+                item.strip()
+                for item in (task_profile.get("preferred_themes") or "").split(",")
+                if item.strip()
+            }
+            if row.get("theme") in preferred_themes:
+                score += 2.5
+
+            discouraged_themes = {
+                item.strip()
+                for item in (task_profile.get("discouraged_themes") or "").split(",")
+                if item.strip()
+            }
+            if row.get("theme") in discouraged_themes:
+                score -= 2.0
 
             preferred_types = set(
                 self._tokenize(task_profile.get("preferred_knowledge_types", ""))
@@ -363,6 +665,145 @@ class KnowledgeBaseService:
         for token in self._tokenize(text):
             frequency[token] = frequency.get(token, 0) + 1
         return sorted(frequency, key=lambda token: (-frequency[token], token))[:top_n]
+
+    def _extract_relations_from_chunk(self, chunk: str) -> List[Dict[str, str]]:
+        if not chunk:
+            return []
+        sentences = [
+            item.strip()
+            for item in re.split(r"[。！？.!?;\n]+", chunk)
+            if item and item.strip()
+        ]
+        relations: List[Dict[str, str]] = []
+        for sentence in sentences:
+            process_hits = self._match_factors(sentence, PROCESS_FACTOR_PATTERNS)
+            morph_hits = self._match_factors(sentence, MORPHOLOGY_FACTOR_PATTERNS)
+            perf_hits = self._match_factors(sentence, PERFORMANCE_FACTOR_PATTERNS)
+
+            direction = self._detect_effect_direction(sentence)
+            if not direction:
+                continue
+
+            has_mechanism = any(
+                re.search(pattern, sentence.lower()) for pattern in MECHANISM_PATTERNS
+            )
+            base_confidence = 0.55 + 0.1 * int(has_mechanism)
+
+            for process_factor in process_hits:
+                for morphology_factor in morph_hits:
+                    relations.append(
+                        {
+                            "relation_type": "process_to_morphology",
+                            "source_node": f"process:{process_factor}",
+                            "target_node": f"morphology:{morphology_factor}",
+                            "process_factor": process_factor,
+                            "morphology_factor": morphology_factor,
+                            "performance_factor": None,
+                            "effect_direction": direction,
+                            "confidence": min(base_confidence, 0.95),
+                            "mechanism_summary": sentence[:220],
+                            "evidence_text": sentence[:320],
+                        }
+                    )
+
+            for morphology_factor in morph_hits:
+                for performance_factor in perf_hits:
+                    relations.append(
+                        {
+                            "relation_type": "morphology_to_performance",
+                            "source_node": f"morphology:{morphology_factor}",
+                            "target_node": f"performance:{performance_factor}",
+                            "process_factor": None,
+                            "morphology_factor": morphology_factor,
+                            "performance_factor": performance_factor,
+                            "effect_direction": direction,
+                            "confidence": min(base_confidence + 0.05, 0.95),
+                            "mechanism_summary": sentence[:220],
+                            "evidence_text": sentence[:320],
+                        }
+                    )
+
+            for process_factor in process_hits:
+                for performance_factor in perf_hits:
+                    relations.append(
+                        {
+                            "relation_type": "process_to_performance",
+                            "source_node": f"process:{process_factor}",
+                            "target_node": f"performance:{performance_factor}",
+                            "process_factor": process_factor,
+                            "morphology_factor": None,
+                            "performance_factor": performance_factor,
+                            "effect_direction": direction,
+                            "confidence": min(base_confidence + 0.03, 0.95),
+                            "mechanism_summary": sentence[:220],
+                            "evidence_text": sentence[:320],
+                        }
+                    )
+
+            if has_mechanism and (process_hits or morph_hits or perf_hits):
+                source = (
+                    f"process:{process_hits[0]}"
+                    if process_hits
+                    else (
+                        f"morphology:{morph_hits[0]}"
+                        if morph_hits
+                        else f"performance:{perf_hits[0]}"
+                    )
+                )
+                relations.append(
+                    {
+                        "relation_type": "mechanism_evidence",
+                        "source_node": source,
+                        "target_node": "evidence:literature",
+                        "process_factor": process_hits[0] if process_hits else None,
+                        "morphology_factor": morph_hits[0] if morph_hits else None,
+                        "performance_factor": perf_hits[0] if perf_hits else None,
+                        "effect_direction": direction,
+                        "confidence": min(base_confidence + 0.1, 0.98),
+                        "mechanism_summary": sentence[:220],
+                        "evidence_text": sentence[:320],
+                    }
+                )
+        return relations
+
+    @staticmethod
+    def _match_factors(text: str, factor_patterns: Dict[str, List[str]]) -> List[str]:
+        lowered = text.lower()
+        hits: List[str] = []
+        for factor, patterns in factor_patterns.items():
+            if any(re.search(pattern, lowered) for pattern in patterns):
+                hits.append(factor)
+        return hits
+
+    @staticmethod
+    def _detect_effect_direction(text: str) -> Optional[str]:
+        lowered = text.lower()
+        has_inc = any(re.search(pattern, lowered) for pattern in INCREASE_PATTERNS)
+        has_dec = any(re.search(pattern, lowered) for pattern in DECREASE_PATTERNS)
+        if has_inc and has_dec:
+            return "nonlinear_or_tradeoff"
+        if has_inc:
+            return "increase"
+        if has_dec:
+            return "decrease"
+        return None
+
+    @staticmethod
+    def _extract_text_from_pdf(file_path: str) -> str:
+        try:
+            import pdfplumber
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "PDF ingestion requires the 'pdfplumber' package. Install project dependencies first."
+            ) from exc
+
+        pages = []
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    pages.append(text)
+        return "\n".join(pages)
 
     @staticmethod
     def _infer_knowledge_type(theme: Optional[str]) -> str:

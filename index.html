@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
         
@@ -24,6 +26,8 @@
             width: 100vw;
             display: flex;
             --sidebar-width: var(--sb-w);
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
         }
         
         .sidebar { 
@@ -106,6 +110,87 @@
             flex-direction: column;
             overflow: hidden;
             margin: 16px;
+        }
+
+        /* ML 页面使用独立卡片流，避免顶部摘要卡被 flex 拉伸成大空白 */
+        #ml-page > .data-card {
+            margin: 0;
+        }
+        #ml-page > .data-card:first-child {
+            flex: 0 0 auto;
+        }
+        #ml-subpage-visual {
+            overflow-y: auto;
+            padding-bottom: 16px;
+        }
+        #ml-subpage-data {
+            overflow-y: auto;
+            padding-bottom: 10px;
+        }
+        #rag-page .data-card {
+            margin: 0;
+        }
+        .rag-tab-btn {
+            border: 1px solid #dbe5f0;
+            background: #ffffff;
+            color: #475569;
+            padding: 8px 14px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 800;
+            transition: all 0.2s ease;
+        }
+        .rag-tab-btn:hover {
+            border-color: #6366f1;
+            color: #3730a3;
+            background: #eef2ff;
+        }
+        .rag-tab-btn.active {
+            border-color: #3730a3;
+            background: #3730a3;
+            color: #ffffff;
+            box-shadow: 0 8px 18px rgba(55, 48, 163, 0.25);
+        }
+        .ml-target-tab {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+        .ml-target-tab:hover {
+            border-color: #38bdf8;
+            color: #0f172a;
+        }
+        .ml-target-tab.active {
+            background: #0f172a;
+            border-color: #0f172a;
+            color: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+        }
+        .ml-info-tab {
+            border: 1px solid #dbe5f0;
+            background: #f8fbff;
+            color: #3b4f68;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+        .ml-info-tab:hover {
+            border-color: #7fb3f1;
+            color: #102a43;
+            background: #eef6ff;
+        }
+        .ml-info-tab.active {
+            background: #1d4ed8;
+            color: #ffffff;
+            border-color: #1d4ed8;
+            box-shadow: 0 6px 14px rgba(29, 78, 216, 0.25);
         }
         
         .table-header { background: #fcfcfd; border-bottom: 2px solid #ebedf3; font-size: 11px; text-transform: uppercase; font-weight: 700; color: #b5b5c3; height: 50px; flex-shrink: 0; }
@@ -200,6 +285,18 @@
 
         /* 相似实验卡片 */
         .similar-exp-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; font-size: 11px; }
+        .clean-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 800; }
+        .clean-chip.high { background: #dcfce7; color: #166534; }
+        .clean-chip.medium { background: #fef3c7; color: #92400e; }
+        .clean-chip.low { background: #fee2e2; color: #991b1b; }
+        .clean-flag { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 10px; padding: 8px 10px; font-size: 12px; color: #475569; }
+        .clean-flag.warn { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
+        .clean-flag.bad { border-color: #fca5a5; background: #fff1f2; color: #9f1239; }
+        .clean-list-row.active { background: #eff6ff; border-color: #93c5fd; }
+        .clean-main-image { width: 100%; height: min(58vh, 720px); object-fit: contain; cursor: zoom-in; display: block; background: #f8fafc; }
+        .clean-step-thumb { width: 100%; height: 220px; object-fit: contain; display: block; background: #f8fafc; cursor: zoom-in; }
+        .clean-lightbox { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); z-index: 180; display: flex; align-items: center; justify-content: center; padding: 32px; }
+        .clean-lightbox img { max-width: min(92vw, 1800px); max-height: 82vh; object-fit: contain; display: block; margin: 0 auto; background: #fff; }
     </style>
 </head>
 <body class="flex">
@@ -225,9 +322,13 @@
                 <span class="nav-text">形貌统计分析</span>
             </div>
 
-            <div class="nav-item">
+            <div class="nav-item" onclick="showPage('ml', this)">
                 <i class="fas fa-meteor"></i>
                 <span class="nav-text">机器学习预测</span>
+            </div>
+            <div class="nav-item" onclick="showPage('clean', this)">
+                <i class="fas fa-filter-circle-xmark"></i>
+                <span class="nav-text">数据清洗</span>
             </div>
             <div class="nav-item" onclick="showPage('rag', this)">
                 <i class="fas fa-book-open"></i>
@@ -256,15 +357,19 @@
 
     <!-- Main Content -->
     <div class="main-container">
-        <header class="glass-header px-8 py-4 flex justify-between items-center">
-            <div>
+        <header id="main-header" class="glass-header px-8 py-4 flex justify-between items-center">
+            <div id="header-title-block">
                 <h1 class="text-xl font-extrabold text-[#181c32]">碳纳米管 (CNTA) 制备科研驾驶舱 <span class="text-slate-400 font-normal text-sm ml-2">v3.2.0</span></h1>
                 <div class="flex gap-4 mt-2">
                     <span class="text-xs text-slate-500"><i class="fas fa-circle text-emerald-500 mr-1 scale-75"></i> 系统在线</span>
                     <span id="progress-text" class="text-xs text-slate-500">正在检索本地数据库...</span>
                 </div>
             </div>
-            <div class="flex gap-3">
+            <div id="header-actions-block" class="flex gap-3">
+                <select id="ml-subpage-switch-top" onchange="switchMlSubPage(this.value)" class="hidden px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-sm outline-none min-w-[150px]">
+                    <option value="visual">可视化子页面</option>
+                    <option value="data">数据子页面</option>
+                </select>
                 <select id="source-filter" onchange="resetAndLoad()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-sm outline-none">
                     <option value="">所有实验批次</option>
                     <option value="XR">XR 梯度实验序列</option>
@@ -328,42 +433,352 @@
                 </div>
             </div>
         </div>
+
+        <div id="ml-page" class="hidden flex-1 flex flex-col overflow-y-auto p-6 bg-slate-50/50">
+            <div class="data-card overflow-hidden shadow-sm border-0 bg-white rounded-2xl">
+                <div class="px-8 py-6 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white relative overflow-hidden flex-shrink-0">
+                    <!-- Deco overlay bg -->
+                    <div class="absolute inset-0 z-0 opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent"></div>
+                    <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 relative z-10">
+                        <div>
+                            <div class="text-[10px] tracking-[0.2em] uppercase text-indigo-300 font-extrabold flex items-center gap-2"><i class="fas fa-network-wired"></i> XR Machine Learning Workbench</div>
+                            <h2 class="text-2xl font-black mt-1 text-white">机器学习预测看板</h2>
+                            <p class="text-xs text-indigo-100/70 mt-1">控制变量：实际温度、流速、催化剂浓度。通过预测推导核心形貌特征。</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 justify-end">
+                            <select id="ml-run-filter" onchange="applyXrMlView()" class="px-4 py-2.5 rounded-xl bg-slate-800/80 text-white border border-slate-700/50 text-xs font-bold min-w-[220px] backdrop-blur outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                                <option value="">全部批次预测</option>
+                            </select>
+                            <button onclick="loadXrMlPage()" class="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-500/20 transition-all">
+                                <i class="fas fa-sync-alt mr-1"></i>刷新模型数据
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ml-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 relative z-10"></div>
+                </div>
+            </div>
+
+            <div id="ml-subpage-visual" class="data-card mt-6 p-6 rounded-2xl shadow-sm border border-slate-200/60 bg-white">
+                <!-- Control Bar -->
+                <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 mb-6 shadow-inner">
+                    <div class="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4">
+                        <div id="ml-target-tabs" class="flex flex-wrap items-center gap-2">
+                            <button type="button" class="ml-target-tab" data-target="diameter" onclick="selectMlVizTarget('diameter')">平均管径模型</button>
+                            <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">面填充密度模型</button>
+                            <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向度预测</button>
+                            <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">骨架曲率推断</button>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">视图设置</span>
+                            <div class="h-4 w-px bg-slate-200 mx-1"></div>
+                            
+                            <select id="ml-viz-mode" onchange="onMlVizOptionChange()" class="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer">
+                                <option value="2d">二维趋势映射</option>
+                                <option value="3d">三维模型渲染</option>
+                            </select>
+                            <select id="ml-viz-xkey" onchange="onMlVizOptionChange()" class="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer">
+                                <option value="actual_temp">X轴: 实际温度</option>
+                                <option value="flow_rate">X轴: 流速</option>
+                                <option value="catalyst_concentration">X轴: 催化剂浓度</option>
+                                <option value="sample_no">X轴: 样品编号</option>
+                                <option value="shot_no">X轴: 拍摄编号</option>
+                            </select>
+                            <select id="ml-viz-y-mode" onchange="onMlVizOptionChange()" class="text-xs font-bold text-indigo-600 bg-transparent outline-none cursor-pointer">
+                                <option value="pred">Y值: 模型预测</option>
+                                <option value="actual">Y值: 实测标签</option>
+                                <option value="residual">Y值: 偏差(实测-预测)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-[1.9fr_1fr] gap-6">
+                    <div class="space-y-6">
+                        <div id="ml-2d-panels" class="space-y-6">
+                            <div class="rounded-2xl border border-slate-100 shadow-sm bg-white p-5 relative">
+                                <div id="ml-main-chart-title" class="text-[11px] font-black text-slate-400 tracking-widest uppercase mb-1 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div> 主视觉映射</div>
+                                <div id="ml-chart-main" style="width:100%;height:340px;"></div>
+                            </div>
+                            <div class="rounded-2xl border border-slate-100 shadow-sm bg-white p-5">
+                                <div id="ml-trend-chart-title" class="text-[11px] font-black text-slate-400 tracking-widest uppercase mb-1 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div> 变量分箱趋势</div>
+                                <div id="ml-chart-trend" style="width:100%;height:180px;"></div>
+                            </div>
+                        </div>
+                        <div id="ml-3d-panel" class="rounded-2xl border border-slate-100 shadow-sm bg-white p-5 hidden">
+                            <div id="ml-3d-title" class="text-[11px] font-black text-slate-400 tracking-widest uppercase mb-1 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div> 三维超平面模型</div>
+                            <div id="ml-chart-3d" style="width:100%;height:560px;"></div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="rounded-2xl border border-slate-100 shadow-sm bg-gradient-to-br from-white to-slate-50 p-5">
+                            <div class="text-sm font-black text-slate-800 mb-3 flex items-center justify-between">
+                                <span>数据视图统计</span>
+                                <i class="fas fa-chart-line text-slate-300"></i>
+                            </div>
+                            <div id="ml-viz-summary" class="space-y-3 text-xs text-slate-600"></div>
+                        </div>
+                        
+                        <div class="rounded-2xl border border-slate-100 shadow-sm bg-white p-5">
+                            <div class="text-sm font-black text-slate-800 mb-3 flex items-center justify-between">
+                                <span>焦点样本诊断</span>
+                                <i class="fas fa-crosshairs text-slate-300"></i>
+                            </div>
+                            <div id="ml-point-detail" class="text-xs text-slate-500 leading-relaxed bg-slate-50/50 p-3 rounded-xl border border-slate-100 min-h-[80px]">点击左侧数据点交互</div>
+                        </div>
+                        
+                        <div class="rounded-2xl border border-slate-100 shadow-sm bg-white p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="text-sm font-black text-slate-800">可解释引擎</div>
+                                <div class="text-[10px] tracking-widest text-slate-400 font-bold uppercase">XAI Core</div>
+                            </div>
+                            <div class="flex p-1 bg-slate-100/80 rounded-xl mb-4 shadow-inner">
+                                <button type="button" class="flex-1 py-1.5 text-xs font-bold rounded-lg ml-info-tab text-slate-500 hover:text-slate-700 transition" data-info="coef" onclick="switchMlInfoTab('coef')">线性系数解析</button>
+                                <button type="button" class="flex-1 py-1.5 text-xs font-bold rounded-lg ml-info-tab text-slate-500 hover:text-slate-700 transition" data-info="corr" onclick="switchMlInfoTab('corr')">特征相关性网</button>
+                            </div>
+                            <div id="ml-info-coef" class="p-2">
+                                <div id="ml-coef-panel" class="space-y-3 text-sm"></div>
+                            </div>
+                            <div id="ml-info-corr" class="hidden p-2">
+                                <div id="ml-corr-panel" class="space-y-3 text-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ml-subpage-data" class="data-card mt-6 p-6 rounded-2xl shadow-sm border border-slate-200/60 bg-white hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-xs font-black text-slate-700 uppercase tracking-widest">预测明细大表</div>
+                    <div id="ml-table-meta" class="text-[11px] font-bold text-slate-400 px-3 py-1 bg-slate-100 rounded-lg">--</div>
+                </div>
+                <div class="overflow-auto max-h-[600px] border border-slate-100 rounded-xl">
+                    <table class="min-w-full text-[11px]">
+                        <thead class="bg-slate-50 text-slate-500 font-bold sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="px-3 py-3 text-left">批次序列</th>
+                                <th class="px-3 py-3 text-left">样品 ID</th>
+                                <th class="px-3 py-3 text-left">部位</th>
+                                <th class="px-3 py-3 text-left">拍摄编号</th>
+                                <th class="px-3 py-3 text-right">实际温度</th>
+                                <th class="px-3 py-3 text-right">混合流速</th>
+                                <th class="px-3 py-3 text-right">催化剂浓度</th>
+                                <th class="px-3 py-3 text-right text-blue-600">模型管径</th>
+                                <th class="px-3 py-3 text-right text-emerald-600">模型密度</th>
+                                <th class="px-3 py-3 text-right text-orange-600">模型取向</th>
+                                <th class="px-3 py-3 text-right text-purple-600">模型曲率</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ml-table-body" class="divide-y divide-slate-100/60"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="clean-page" class="hidden flex-1 flex flex-col overflow-hidden bg-slate-50 border-l border-slate-200/60">
+            <!-- Top Filter Bar -->
+            <div class="px-6 py-4 border-b border-slate-200 shadow-sm bg-white z-20 shrink-0">
+                <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                    <div>
+                        <div class="text-[10px] tracking-[0.2em] uppercase text-blue-500 font-black mb-1 flex items-center gap-2"><i class="fas fa-layer-group"></i> Feature Review Console</div>
+                        <h2 class="text-xl font-black text-slate-800">数据清洗与质控看片台</h2>
+                        <p class="text-[11px] text-slate-500 mt-1">左侧选择样本进行图像审查，右侧确认机器清洗判定。点击下方步骤按钮切换不同过程图。</p>
+                    </div>
+                    <div id="clean-filter-bar" class="flex flex-wrap items-center gap-2 justify-end">
+                        <select id="clean-source-filter" onchange="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[120px] outline-none">
+                            <option value="">全部来源</option>
+                            <option value="XR">XR 梯度</option>
+                            <option value="ZZY">ZZY 工艺</option>
+                        </select>
+                        <select id="clean-confidence-filter" onchange="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[130px] outline-none">
+                            <option value="">全部可信度</option>
+                            <option value="high">高可信</option>
+                            <option value="medium">可参考</option>
+                            <option value="low">低可信</option>
+                        </select>
+                        <select id="clean-processed-filter" onchange="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[120px] outline-none">
+                            <option value="">全部状态</option>
+                            <option value="1">已提取</option>
+                            <option value="0">未提取</option>
+                        </select>
+                        <input id="clean-keyword-filter" oninput="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[180px] outline-none placeholder:text-slate-400 focus:border-blue-400" placeholder="搜索样品/批次/文件名">
+                        <button onclick="loadCleanPage()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black shadow-lg shadow-blue-500/20 transition-all">
+                            <i class="fas fa-sync-alt mr-1"></i>刷新数据
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex min-h-0 bg-slate-50 overflow-hidden">
+                <!-- Left Sidebar: Samples -->
+                <div class="w-[300px] flex flex-col border-r border-slate-200 bg-white shrink-0 z-10 box-border">
+                    <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                        <span class="text-xs font-black text-slate-500 uppercase tracking-widest">样品列表</span>
+                        <div id="clean-list-meta" class="text-[11px] font-bold text-blue-600 rounded bg-blue-50 px-2 py-0.5 border border-blue-100">--</div>
+                    </div>
+                    <!-- Sample list -->
+                    <div id="clean-sample-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+                </div>
+
+                <!-- Center: Viewing Stage -->
+                <div id="clean-viewer-stage" class="flex-1 flex flex-col min-w-0 border-r border-slate-200 bg-slate-100 relative">
+                    <!-- Main image pane -->
+                    <div id="clean-image-panel" class="flex-1 flex flex-col min-h-0 relative p-4 group justify-center items-center">
+                        <div class="absolute top-4 left-4 right-4 flex justify-between items-center z-10 pointer-events-none">
+                            <div id="clean-current-label" class="pointer-events-auto px-4 py-2 bg-white/90 backdrop-blur rounded-lg border border-slate-200 font-black text-slate-700 text-[11px] shadow-sm">请在左侧选择样品</div>
+                            <button id="clean-open-original" type="button" onclick="openCleanOriginal()" class="pointer-events-auto px-4 py-2 bg-white hover:bg-slate-50 text-blue-600 border border-slate-200 rounded-lg text-xs font-black transition-colors shadow-sm">
+                                <i class="fas fa-expand mr-1.5"></i>放大图像
+                            </button>
+                        </div>
+                        <img id="clean-original-image" class="hidden max-w-full max-h-full object-contain cursor-zoom-in rounded-lg shadow-sm bg-white" alt="大舞台原图" onclick="openCleanOriginal()">
+                        <div id="clean-original-placeholder" class="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-400 uppercase tracking-widest">尚未选择样品</div>
+                    </div>
+                    
+                    <!-- Quick Note Strip under image -->
+                    <div class="px-5 py-3 border-t border-b border-slate-200 bg-white/80 shrink-0 backdrop-blur">
+                        <div class="flex items-center gap-3">
+                            <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest whitespace-nowrap"><i class="fas fa-bolt mr-1"></i>快速结论</span>
+                            <div id="clean-quick-note" class="text-xs text-slate-600 w-full truncate font-bold">请选择样品查看分析摘要。</div>
+                        </div>
+                    </div>
+
+                    <!-- Step Strip Toolbar -->
+                    <div id="clean-step-strip" class="py-3 px-5 flex flex-col shrink-0 bg-white z-10">
+                        <div class="flex justify-between items-center shrink-0 mb-2">
+                            <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">处理步骤视图切换</span>
+                            <span class="text-[10px] text-slate-400">点击按钮在上方主区域显示对应步骤的图像</span>
+                        </div>
+                        <div id="clean-step-grid" class="flex flex-wrap gap-2">
+                            <!-- JS injected step buttons -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Review Panel -->
+                <div id="clean-review-panel" class="w-[360px] flex flex-col bg-slate-50 shrink-0 z-10 box-border">
+                    <div class="p-6 border-b border-slate-200 bg-white shrink-0 relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 opacity-[0.03]"><i class="fas fa-microscope text-9xl text-blue-900"></i></div>
+                        <h3 class="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-clipboard-check"></i> 清洗判定中心</h3>
+                        <p class="text-[11px] text-slate-500 mt-2 leading-relaxed tracking-wide z-10 relative">依据提取特征及规则逻辑进行的系统级可信度评估。</p>
+                    </div>
+                    <div class="flex-1 overflow-y-auto">
+                        <div id="clean-review-content" class="p-5">
+                            <div class="text-center text-xs text-slate-500 font-bold mt-10">👈 选择左侧样品以显示其特征</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Keep hidden grid below for compatibility if needed -->
+            <div id="clean-summary-grid" class="hidden"></div>
+        </div>
+    </div>
+
+    <div id="clean-lightbox" class="clean-lightbox hidden" onclick="closeCleanLightbox()">
+        <div class="w-full max-w-[1880px]" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-3 text-white">
+                <div id="clean-lightbox-title" class="text-sm font-black tracking-wide">图像放大查看</div>
+                <button type="button" onclick="closeCleanLightbox()" class="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-black">
+                    <i class="fas fa-times mr-1"></i>关闭
+                </button>
+            </div>
+            <div class="rounded-2xl overflow-hidden border border-white/10 bg-white/5 p-4">
+                <img id="clean-lightbox-image" alt="放大图">
+            </div>
+        </div>
     </div>
 
     <!-- ══ RAG 文献知识库页面 ══ -->
-    <div id="rag-page" class="hidden flex-1 overflow-y-auto p-8">
-        <div class="mb-6">
-            <h2 class="text-2xl font-black text-slate-800">📚 领域文献知识库</h2>
-            <p class="text-sm text-slate-400 mt-1">上传 PDF 文献，构建 RAG 检索索引，用于 AI 解读时的增强参考</p>
-        </div>
-
-        <!-- 上传区 -->
-        <div class="data-card p-6 mb-6">
-            <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <i class="fas fa-cloud-upload-alt text-blue-400"></i>上传新文献
-            </h3>
-            <div class="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-blue-300 transition-colors group">
-                <i class="fas fa-file-pdf text-5xl text-red-200 mb-4 block group-hover:text-red-300 transition-colors"></i>
-                <p class="text-sm text-slate-400 mb-4">仅支持 PDF 格式，单文件建议不超过 50MB</p>
-                <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100">
-                    <i class="fas fa-plus"></i>选择 PDF 文件
-                    <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
-                </label>
+    <div id="rag-page" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/50">
+        <div class="mb-5 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+            <div>
+                <h2 class="text-2xl font-black text-slate-800">领域文献知识库</h2>
+                <p class="text-sm text-slate-400 mt-1">把“工艺→形貌→机理→证据/性能”的成果直接展示在本页</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="rag-tab-success-btn" class="rag-tab-btn active" onclick="switchRagSubPage('success')">成果展示</button>
+                <button id="rag-tab-manage-btn" class="rag-tab-btn" onclick="switchRagSubPage('manage')">文献管理</button>
             </div>
         </div>
 
-        <!-- 已收录文献列表 -->
-        <div class="data-card p-6">
+        <div id="rag-subpage-success" class="space-y-4">
+            <div id="rag-success-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+            <div class="data-card p-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fas fa-list text-slate-400"></i>已收录文献
+                    <i class="fas fa-project-diagram text-indigo-400"></i>知识关联可视化
                 </h3>
-                <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
-                    <i class="fas fa-sync-alt mr-1"></i>刷新列表
+                <button onclick="loadRagLinks()" class="text-xs text-slate-400 hover:text-indigo-500 transition font-bold">
+                    <i class="fas fa-sync-alt mr-1"></i>刷新关联
                 </button>
             </div>
-            <div id="rag-doc-list" class="space-y-2 min-h-[60px] text-sm">
-                <span class="text-slate-300">暂无文献，请上传 PDF 文件</span>
+            <div class="flex flex-col gap-3 mb-4">
+                <div class="flex gap-2">
+                    <input id="rag-link-query" type="text"
+                        class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                        placeholder="输入查询词，例如：temperature alignment conductivity mechanism"
+                        value="temperature alignment conductivity mechanism"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();loadRagLinks();}">
+                    <button onclick="loadRagLinks()"
+                        class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm">
+                        查询
+                    </button>
+                </div>
+                <div class="text-[11px] text-slate-400">
+                    主分析链：工艺参数 → 形貌特征 → 生长机理 → 文献证据（并补充工艺/形貌到性能关联）
+                </div>
+            </div>
+            <div id="rag-link-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs"></div>
+            <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
+                <div class="text-xs font-black text-slate-600 mb-2">关系图谱（按当前查询实时生成）</div>
+                <div id="rag-graph-chart" class="w-full h-[360px] rounded-lg bg-white border border-slate-200"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                    <div class="text-xs font-black text-slate-600 mb-2">工艺 → 形貌</div>
+                    <div id="rag-chain-p2m" class="space-y-2 text-xs"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                    <div class="text-xs font-black text-slate-600 mb-2">形貌 → 性能</div>
+                    <div id="rag-chain-m2p" class="space-y-2 text-xs"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                    <div class="text-xs font-black text-slate-600 mb-2">工艺 → 性能</div>
+                    <div id="rag-chain-p2p" class="space-y-2 text-xs"></div>
+                </div>
+                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                    <div class="text-xs font-black text-slate-600 mb-2">机理 → 文献证据</div>
+                    <div id="rag-chain-mech" class="space-y-2 text-xs"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="rag-subpage-manage" class="hidden space-y-4">
+            <div class="data-card p-6">
+                <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i class="fas fa-cloud-upload-alt text-blue-400"></i>上传新文献
+                </h3>
+                <div class="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-blue-300 transition-colors group">
+                    <i class="fas fa-file-pdf text-5xl text-red-200 mb-4 block group-hover:text-red-300 transition-colors"></i>
+                    <p class="text-sm text-slate-400 mb-4">仅支持 PDF 格式，单文件建议不超过 50MB</p>
+                    <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100">
+                        <i class="fas fa-plus"></i>选择 PDF 文件
+                        <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
+                    </label>
+                </div>
+            </div>
+
+            <div class="data-card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                        <i class="fas fa-list text-slate-400"></i>已收录文献
+                    </h3>
+                    <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
+                        <i class="fas fa-sync-alt mr-1"></i>刷新列表
+                    </button>
+                </div>
+                <div id="rag-doc-list" class="space-y-2 min-h-[60px] text-sm">
+                    <span class="text-slate-300">暂无文献，请上传 PDF 文件</span>
+                </div>
             </div>
         </div>
     </div>
@@ -767,6 +1182,36 @@
             document.body.classList.toggle('sb-collapsed', side.classList.contains('collapsed'));
         }
 
+        function setMlFocusMode(enabled) {
+            const titleBlock = document.getElementById('header-title-block');
+            const actionBlock = document.getElementById('header-actions-block');
+            const sourceFilter = document.getElementById('source-filter');
+            const mlSwitchTop = document.getElementById('ml-subpage-switch-top');
+            if (!titleBlock || !actionBlock) return;
+            titleBlock.classList.toggle('hidden', !!enabled);
+            actionBlock.classList.toggle('w-full', !!enabled);
+            actionBlock.classList.toggle('justify-end', !!enabled);
+            if (sourceFilter) sourceFilter.classList.toggle('hidden', !!enabled);
+            if (mlSwitchTop) mlSwitchTop.classList.toggle('hidden', !enabled);
+        }
+
+        function setRagHeaderMode(enabled) {
+            const titleBlock = document.getElementById('header-title-block');
+            const actionBlock = document.getElementById('header-actions-block');
+            const progressText = document.getElementById('progress-text');
+            if (!titleBlock || !actionBlock) return;
+            if (enabled) {
+                titleBlock.classList.remove('hidden');
+                actionBlock.classList.add('hidden');
+                if (progressText) progressText.innerText = '知识库模式 · 展示当前可验证成果';
+            } else {
+                actionBlock.classList.remove('hidden');
+                if (progressText && progressText.innerText.includes('知识库模式')) {
+                    progressText.innerText = '正在检索本地数据库...';
+                }
+            }
+        }
+
         function setSource(val) {
             document.getElementById('source-filter').value = val;
 
@@ -774,9 +1219,11 @@
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             event.currentTarget.classList.add('active');
 
-            // 确保显示数据页、隐藏 RAG 页
+            // 确保显示数据页、隐藏其它页
             document.getElementById('data-page')?.classList.remove('hidden');
+            document.getElementById('ml-page')?.classList.add('hidden');
             document.getElementById('rag-page')?.classList.add('hidden');
+            setMlFocusMode(false);
 
             resetAndLoad();
         }
@@ -898,9 +1345,967 @@
             }
         }
 
+        function fmtMl(value, digits = 2) {
+            const n = Number(value);
+            return Number.isFinite(n) ? n.toFixed(digits) : '--';
+        }
+
+        function resizeMlCharts() {
+            Object.values(mlChartInstances || {}).forEach(chart => {
+                if (chart && typeof chart.resize === 'function') chart.resize();
+            });
+        }
+
+        function switchMlSubPage(page) {
+            const target = page === 'data' ? 'data' : 'visual';
+            const visual = document.getElementById('ml-subpage-visual');
+            const data = document.getElementById('ml-subpage-data');
+            const selTop = document.getElementById('ml-subpage-switch-top');
+            const selInline = document.getElementById('ml-subpage-switch');
+            if (visual) visual.classList.toggle('hidden', target !== 'visual');
+            if (data) data.classList.toggle('hidden', target !== 'data');
+            if (selTop && selTop.value !== target) selTop.value = target;
+            if (selInline && selInline.value !== target) selInline.value = target;
+            mlSubPage = target;
+            if (target === 'data') applyXrMlView({ skipCharts: true, forceTable: true });
+            setTimeout(() => resizeMlCharts(), 0);
+        }
+
+        const ML_TARGET_META = {
+            diameter: { label: '平均管径', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
+            density: { label: '面填充密度', predKey: 'density_pred', actualKey: 'density_actual' },
+            alignment: { label: '取向度', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
+            curvature: { label: '曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
+        };
+        const ML_X_META = {
+            actual_temp: { label: '实际温度', unit: 'C' },
+            flow_rate: { label: '流速', unit: '' },
+            catalyst_concentration: { label: '催化剂浓度', unit: '' },
+            sample_no: { label: '样品编号', unit: '' },
+            shot_no: { label: '拍摄编号', unit: '' },
+        };
+        const ML_Y_MODE_META = {
+            pred: '模型预测',
+            actual: '实测标签',
+            residual: '偏差(实测-预测)',
+        };
+
+        function getMlYValue(row, target, yMode) {
+            const meta = ML_TARGET_META[target] || ML_TARGET_META.diameter;
+            const pred = Number(row[meta.predKey]);
+            const actual = Number(row[meta.actualKey]);
+            if (yMode === 'actual') return Number.isFinite(actual) ? actual : null;
+            if (yMode === 'residual') return (Number.isFinite(actual) && Number.isFinite(pred)) ? (actual - pred) : null;
+            return Number.isFinite(pred) ? pred : null;
+        }
+
+        function ensureMlChart(key, domId) {
+            if (!window.echarts) return null;
+            const dom = document.getElementById(domId);
+            if (!dom) return null;
+            const cached = mlChartInstances[key];
+            if (cached && cached.getDom() === dom) return cached;
+            if (cached) cached.dispose();
+            const found = echarts.getInstanceByDom(dom);
+            const chart = found || echarts.init(dom, null, { renderer: 'canvas' });
+            mlChartInstances[key] = chart;
+            return chart;
+        }
+
+        function buildMlTrend(points) {
+            if (points.length < 8) return [];
+            const sorted = [...points].sort((a, b) => a.x - b.x);
+            const binCount = Math.max(5, Math.min(12, Math.round(Math.sqrt(sorted.length))));
+            const xMin = sorted[0].x;
+            const xMax = sorted[sorted.length - 1].x;
+            const step = ((xMax - xMin) || 1) / binCount;
+            const bins = Array.from({ length: binCount }, (_, i) => ({ x: xMin + step * (i + 0.5), values: [] }));
+            sorted.forEach(p => {
+                const idx = Math.min(binCount - 1, Math.max(0, Math.floor((p.x - xMin) / (step || 1))));
+                bins[idx].values.push(p.y);
+            });
+            return bins
+                .map(b => ({ x: b.x, y: b.values.length ? (b.values.reduce((s, v) => s + v, 0) / b.values.length) : null }))
+                .filter(p => Number.isFinite(p.y));
+        }
+
+        function drawMlScatter(chartId, points, xLabel, yLabel, xUnit) {
+            const chart = ensureMlChart('main', chartId);
+            if (!chart) return;
+            const unitLabel = xUnit ? ` (${xUnit})` : '';
+            const data = points.map(p => ({
+                value: [Number.isFinite(p.xPlot) ? p.xPlot : p.x, p.y],
+                rawX: p.x,
+                row: p.row,
+                hasActual: p.hasActual,
+            }));
+            const option = {
+                animation: false,
+                grid: { left: 58, right: 18, top: 16, bottom: 48 },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: params => {
+                        const d = params.data || {};
+                        const r = d.row || {};
+                        return [
+                            `${escapeHtml(String(r.run_name || '--'))}`,
+                            `样品: C${r.sample_no ?? '--'} / ${r.position ?? '--'} / ${r.shot_no ?? '--'}`,
+                            `${xLabel}: ${fmtMl(d.rawX, 3)}${xUnit ? ` ${xUnit}` : ''}`,
+                            `${yLabel}: ${fmtMl(params.value?.[1], 3)}`,
+                        ].join('<br/>');
+                    },
+                },
+                xAxis: {
+                    type: 'value',
+                    name: `${xLabel}${unitLabel}`,
+                    nameTextStyle: { fontWeight: 700, color: '#64748b' },
+                    axisLabel: { color: '#64748b' },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    splitLine: { show: true, lineStyle: { color: '#f1f5f9' } },
+                },
+                yAxis: {
+                    type: 'value',
+                    name: yLabel,
+                    nameTextStyle: { fontWeight: 700, color: '#64748b' },
+                    axisLabel: { color: '#64748b' },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    splitLine: { show: true, lineStyle: { color: '#f1f5f9' } },
+                },
+                series: [{
+                    type: 'scatter',
+                    data,
+                    symbolSize: (value, params) => (params?.data?.hasActual ? 8 : 6),
+                    itemStyle: {
+                        color: params => (params.data?.hasActual ? 'rgba(22,163,74,0.82)' : 'rgba(37,99,235,0.52)'),
+                    },
+                }],
+            };
+            chart.setOption(option, true);
+            chart.off('click');
+            chart.on('click', params => {
+                if (params?.data?.row) renderMlPointDetail({ row: params.data.row });
+            });
+        }
+
+        function drawMlTrend(chartId, points, xLabel, yLabel) {
+            const chart = ensureMlChart('trend', chartId);
+            if (!chart) return;
+            const trend = buildMlTrend(points);
+            if (trend.length < 2) {
+                chart.setOption({
+                    animation: false,
+                    title: {
+                        text: '趋势分箱后有效点不足',
+                        left: 10,
+                        top: 8,
+                        textStyle: { fontSize: 12, color: '#94a3b8', fontWeight: 600 },
+                    },
+                    xAxis: { show: false, type: 'value' },
+                    yAxis: { show: false, type: 'value' },
+                    series: [],
+                }, true);
+                return;
+            }
+            const option = {
+                animation: false,
+                grid: { left: 52, right: 18, top: 16, bottom: 34 },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: params => {
+                        const p = params?.[0];
+                        if (!p) return '';
+                        return `${xLabel}: ${fmtMl(p.value?.[0], 3)}<br/>${yLabel}: ${fmtMl(p.value?.[1], 3)}`;
+                    },
+                },
+                xAxis: {
+                    type: 'value',
+                    name: xLabel,
+                    axisLabel: { color: '#64748b' },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    splitLine: { show: true, lineStyle: { color: '#f1f5f9' } },
+                },
+                yAxis: {
+                    type: 'value',
+                    name: yLabel,
+                    axisLabel: { color: '#64748b' },
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    splitLine: { show: true, lineStyle: { color: '#f1f5f9' } },
+                },
+                series: [{
+                    type: 'line',
+                    data: trend.map(p => [p.x, p.y]),
+                    showSymbol: true,
+                    symbolSize: 7,
+                    smooth: false,
+                    lineStyle: { color: '#0284c7', width: 2.4 },
+                    itemStyle: { color: '#0284c7' },
+                }],
+            };
+            chart.setOption(option, true);
+        }
+
+        function updateMlVizControls() {
+            const tabs = document.querySelectorAll('.ml-target-tab');
+            tabs.forEach(btn => {
+                const active = btn.dataset.target === mlVizState.target;
+                btn.classList.toggle('active', active);
+            });
+            const mSel = document.getElementById('ml-viz-mode');
+            const xSel = document.getElementById('ml-viz-xkey');
+            const ySel = document.getElementById('ml-viz-y-mode');
+            if (mSel && mSel.value !== (mlVizState.mode || '2d')) mSel.value = mlVizState.mode || '2d';
+            if (xSel && xSel.value !== mlVizState.xKey) xSel.value = mlVizState.xKey;
+            if (ySel && ySel.value !== mlVizState.yMode) ySel.value = mlVizState.yMode;
+        }
+
+        function selectMlVizTarget(target) {
+            mlVizState.target = ML_TARGET_META[target] ? target : 'diameter';
+            updateMlVizControls();
+            applyXrMlView({ skipTable: true });
+        }
+
+        function onMlVizOptionChange() {
+            const modeSel = document.getElementById('ml-viz-mode');
+            const xSel = document.getElementById('ml-viz-xkey');
+            const ySel = document.getElementById('ml-viz-y-mode');
+            if (modeSel) mlVizState.mode = modeSel.value || '2d';
+            if (xSel) mlVizState.xKey = xSel.value || 'actual_temp';
+            if (ySel) mlVizState.yMode = ySel.value || 'pred';
+            if (mlUiPerfState.vizTimer) clearTimeout(mlUiPerfState.vizTimer);
+            mlUiPerfState.vizTimer = setTimeout(() => applyXrMlView({ skipTable: true }), 70);
+        }
+
+        function switchMlInfoTab(tab) {
+            const target = tab === 'corr' ? 'corr' : 'coef';
+            const coef = document.getElementById('ml-info-coef');
+            const corr = document.getElementById('ml-info-corr');
+            if (coef) coef.classList.toggle('hidden', target !== 'coef');
+            if (corr) corr.classList.toggle('hidden', target !== 'corr');
+            document.querySelectorAll('.ml-info-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.info === target);
+            });
+            mlVizState.infoTab = target;
+        }
+
+        function renderMlPointDetail(point) {
+            const panel = document.getElementById('ml-point-detail');
+            if (!panel) return;
+            if (!point || !point.row) {
+                panel.innerHTML = '点击左侧散点查看具体实验数据';
+                return;
+            }
+            const r = point.row;
+            panel.innerHTML = `
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <div class="text-slate-500">批次</div><div class="font-bold text-slate-700 text-right">${escapeHtml(String(r.run_name || '--'))}</div>
+                    <div class="text-slate-500">样品/部位/拍摄</div><div class="font-bold text-slate-700 text-right">C${r.sample_no ?? '--'} / ${r.position ?? '--'} / ${r.shot_no ?? '--'}</div>
+                    <div class="text-slate-500">实际温度</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.actual_temp, 2)}</div>
+                    <div class="text-slate-500">流速</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.flow_rate, 2)}</div>
+                    <div class="text-slate-500">催化剂浓度</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.catalyst_concentration, 3)}</div>
+                    <div class="text-slate-500">平均管径(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
+                    <div class="text-slate-500">面填充密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
+                    <div class="text-slate-500">取向度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
+                    <div class="text-slate-500">曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
+                </div>
+            `;
+        }
+
+        function renderMl3D(rows, target, yMode) {
+            const chart = document.getElementById('ml-chart-3d');
+            const title = document.getElementById('ml-3d-title');
+            if (!chart) return;
+            if (title) title.innerText = `三维变量模型（温度-流速-催化剂，颜色=${ML_TARGET_META[target]?.label || target} ${ML_Y_MODE_META[yMode] || yMode}）`;
+            const chart3d = ensureMlChart('chart3d', 'ml-chart-3d');
+            if (!chart3d) {
+                chart.innerHTML = '<div class="text-xs text-amber-600 font-bold p-3">ECharts-GL 未加载，请刷新页面重试</div>';
+                return;
+            }
+            const pts = [];
+            rows.forEach(r => {
+                const t = Number(r.actual_temp);
+                const f = Number(r.flow_rate);
+                const c = Number(r.catalyst_concentration);
+                const m = getMlYValue(r, target, yMode);
+                if (!Number.isFinite(t) || !Number.isFinite(f) || !Number.isFinite(c) || !Number.isFinite(m)) return;
+                pts.push({ t, f, c, m, row: r });
+            });
+            if (!pts.length) {
+                chart3d.setOption({
+                    animation: false,
+                    title: { text: '当前筛选无可绘制三维数据', left: 8, top: 6, textStyle: { fontSize: 12, color: '#64748b' } },
+                    xAxis3D: { show: false, type: 'value' },
+                    yAxis3D: { show: false, type: 'value' },
+                    zAxis3D: { show: false, type: 'value' },
+                    grid3D: { show: false },
+                    series: [],
+                }, true);
+                return;
+            }
+            const mValues = pts.map(p => p.m);
+            let mMin = Math.min(...mValues);
+            let mMax = Math.max(...mValues);
+            if (mMin === mMax) {
+                mMin -= 1;
+                mMax += 1;
+            }
+            const option = {
+                animation: false,
+                tooltip: {
+                    formatter: params => {
+                        const d = params?.data || {};
+                        const row = d.row || {};
+                        return [
+                            `${escapeHtml(String(row.run_name || '--'))}`,
+                            `样品: C${row.sample_no ?? '--'} / ${row.position ?? '--'} / ${row.shot_no ?? '--'}`,
+                            `温度: ${fmtMl(d.value?.[0], 2)}`,
+                            `流速: ${fmtMl(d.value?.[1], 2)}`,
+                            `催化剂浓度: ${fmtMl(d.value?.[2], 3)}`,
+                            `${ML_TARGET_META[target]?.label || target}: ${fmtMl(d.value?.[3], 3)}`,
+                        ].join('<br/>');
+                    },
+                },
+                visualMap: {
+                    min: mMin,
+                    max: mMax,
+                    dimension: 3,
+                    calculable: true,
+                    orient: 'vertical',
+                    right: 8,
+                    top: 8,
+                    text: ['高', '低'],
+                    textStyle: { color: '#475569', fontSize: 11 },
+                    inRange: { color: ['#60a5fa', '#22c55e', '#eab308'] },
+                },
+                xAxis3D: { type: 'value', name: '实际温度' },
+                yAxis3D: { type: 'value', name: '流速' },
+                zAxis3D: { type: 'value', name: '催化剂浓度' },
+                grid3D: {
+                    boxWidth: 120,
+                    boxDepth: 90,
+                    axisLine: { lineStyle: { color: '#94a3b8' } },
+                    axisPointer: { lineStyle: { color: '#38bdf8' } },
+                    viewControl: { projection: 'perspective', alpha: 20, beta: 35 },
+                    light: { main: { intensity: 1.2 }, ambient: { intensity: 0.45 } },
+                },
+                series: [{
+                    type: 'scatter3D',
+                    symbolSize: 7,
+                    data: pts.map(p => ({
+                        value: [p.t, p.f, p.c, p.m],
+                        row: p.row,
+                    })),
+                    itemStyle: { opacity: 0.88 },
+                }],
+            };
+            chart3d.setOption(option, true);
+            chart3d.off('click');
+            chart3d.on('click', params => {
+                if (params?.data?.row) renderMlPointDetail({ row: params.data.row });
+            });
+        }
+
+        function renderXrMlCharts(rows) {
+            updateMlVizControls();
+            const target = ML_TARGET_META[mlVizState.target] ? mlVizState.target : 'diameter';
+            const xKey = ML_X_META[mlVizState.xKey] ? mlVizState.xKey : 'actual_temp';
+            const yMode = mlVizState.yMode || 'pred';
+            const mode = mlVizState.mode || '2d';
+            const targetMeta = ML_TARGET_META[target];
+            const xMeta = ML_X_META[xKey];
+            const panel2d = document.getElementById('ml-2d-panels');
+            const panel3d = document.getElementById('ml-3d-panel');
+            const points = [];
+            let actualCount = 0;
+            rows.forEach(r => {
+                const x = Number(r[xKey]);
+                const y = getMlYValue(r, target, yMode);
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+                const hasActual = Number.isFinite(Number(r[targetMeta.actualKey]));
+                if (hasActual) actualCount += 1;
+                points.push({ x, y, hasActual, row: r });
+            });
+
+            if (panel2d) panel2d.classList.toggle('hidden', mode === '3d');
+            if (panel3d) panel3d.classList.toggle('hidden', mode !== '3d');
+            if (mode === '3d') {
+                renderMl3D(rows, target, yMode);
+            }
+
+            const uniqueX = [...new Set(points.map(p => p.x))].sort((a, b) => a - b);
+            const shouldJitter = uniqueX.length > 0 && uniqueX.length <= 12;
+            let jitter = 0;
+            if (shouldJitter) {
+                if (uniqueX.length > 1) {
+                    const gaps = [];
+                    for (let i = 1; i < uniqueX.length; i += 1) gaps.push(uniqueX[i] - uniqueX[i - 1]);
+                    const minGap = Math.min(...gaps.filter(g => g > 0));
+                    jitter = Number.isFinite(minGap) ? minGap * 0.08 : 0.2;
+                } else {
+                    jitter = 0.2;
+                }
+                points.forEach((p, i) => {
+                    const offset = ((i % 7) - 3) * jitter;
+                    p.xPlot = p.x + offset;
+                });
+            }
+
+            const yTitle = `${targetMeta.label} · ${ML_Y_MODE_META[yMode] || yMode}`;
+            const mainTitle = document.getElementById('ml-main-chart-title');
+            const trendTitle = document.getElementById('ml-trend-chart-title');
+            if (mode !== '3d') {
+                if (mainTitle) mainTitle.innerText = `${targetMeta.label} vs ${xMeta.label}（${ML_Y_MODE_META[yMode] || yMode}，唯一值 ${uniqueX.length}）`;
+                if (trendTitle) trendTitle.innerText = `${targetMeta.label} 分箱趋势（按 ${xMeta.label}）`;
+                drawMlScatter('ml-chart-main', points, xMeta.label, yTitle, xMeta.unit);
+                drawMlTrend('ml-chart-trend', points, xMeta.label, targetMeta.label);
+            } else {
+                mlVizState.mainPoints = [];
+            }
+
+            const panel = document.getElementById('ml-viz-summary');
+            if (panel) {
+                const ys = points.map(p => p.y);
+                const yAvg = ys.length ? ys.reduce((s, v) => s + v, 0) / ys.length : null;
+                const yMin = ys.length ? Math.min(...ys) : null;
+                const yMax = ys.length ? Math.max(...ys) : null;
+                const uniquePreview = uniqueX.slice(0, 8).map(v => fmtMl(v, 2)).join(', ') + (uniqueX.length > 8 ? ' ...' : '');
+                panel.innerHTML = `
+                    <div class="flex items-center justify-between"><span class="text-slate-500">指标</span><span class="font-bold text-slate-700">${targetMeta.label}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">横轴</span><span class="font-bold text-slate-700">${xMeta.label}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 值来源</span><span class="font-bold text-slate-700">${ML_Y_MODE_META[yMode] || yMode}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">视图模式</span><span class="font-bold text-slate-700">${mode === '3d' ? '三维模型' : '二维趋势'}</span></div>
+                    <div class="h-px bg-slate-100 my-1"></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">绘图点数</span><span class="font-bold text-slate-700">${points.length}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">含实测标签点</span><span class="font-bold text-slate-700">${actualCount}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 均值</span><span class="font-bold text-slate-700">${fmtMl(yAvg, 3)}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 范围</span><span class="font-bold text-slate-700">${fmtMl(yMin, 3)} ~ ${fmtMl(yMax, 3)}</span></div>
+                    <div class="flex items-start justify-between gap-2"><span class="text-slate-500 shrink-0">横轴唯一值</span><span class="font-bold text-slate-700 text-right">${uniqueX.length}</span></div>
+                    <div class="text-[11px] text-slate-500 leading-5">取值预览：${uniquePreview || '--'}</div>
+                `;
+            }
+            mlVizState.selectedPoint = null;
+            renderMlPointDetail(null);
+        }
+
+        function renderXrMlSummary(payload) {
+            const el = document.getElementById('ml-summary');
+            if (!el) return;
+            const s = payload.summary || {};
+            const labels = s.label_counts || {};
+            el.innerHTML = [
+                ['总数据行数', s.total_rows ?? 0],
+                ['批次数', s.n_runs ?? 0],
+                ['样品数', s.n_samples ?? 0],
+                ['已标注(径/密/向/曲)', `${labels.diameter ?? 0}/${labels.density ?? 0}/${labels.alignment ?? 0}/${labels.curvature ?? 0}`],
+            ].map(([k, v]) => `
+                <div class="bg-white/95 border border-white/20 rounded-xl px-3 py-2">
+                    <div class="text-[10px] font-black text-slate-500 uppercase">${k}</div>
+                    <div class="text-lg font-black text-slate-800 mt-1">${v}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderXrMlPanels(payload) {
+            const coefPanel = document.getElementById('ml-coef-panel');
+            const corrPanel = document.getElementById('ml-corr-panel');
+            if (!coefPanel || !corrPanel) return;
+            const coef = payload.coefficients || {};
+            const corr = payload.correlations || {};
+            const targets = ['diameter', 'density', 'alignment', 'curvature'];
+            const targetLabel = {
+                diameter: '平均管径',
+                density: '面填充密度',
+                alignment: '取向度',
+                curvature: '曲率',
+            };
+
+            coefPanel.innerHTML = targets.map(t => {
+                const c = coef[t] || {};
+                return `
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div class="font-black text-slate-800 text-sm">${targetLabel[t] || t}</div>
+                        <div class="text-slate-500 mt-1 text-xs">训练样本 n=${c.n_train ?? 0}，方法 ${c.method || '--'}</div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2 text-[13px] text-slate-700">
+                            <div>截距: <span class="font-black">${fmtMl(c.intercept, 3)}</span></div>
+                            <div>温度系数: <span class="font-black">${fmtMl(c.coef_temp, 4)}</span></div>
+                            <div>流速系数: <span class="font-black">${fmtMl(c.coef_flow, 4)}</span></div>
+                            <div>催化剂系数: <span class="font-black">${fmtMl(c.coef_catalyst, 4)}</span></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            corrPanel.innerHTML = targets.map(t => {
+                const c = corr[t] || {};
+                const entries = [
+                    ['实际温度', c.actual_temp],
+                    ['流速', c.flow_rate],
+                    ['催化剂浓度', c.catalyst_concentration],
+                ];
+                return `
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div class="font-black text-slate-800 text-sm">${targetLabel[t] || t}</div>
+                        <div class="mt-2 space-y-1.5">
+                            ${entries.map(([k, v]) => `
+                                <div class="flex items-center gap-2">
+                                    <div class="w-[132px] text-slate-600 text-xs">${k}</div>
+                                    <div class="flex-1 h-2 rounded bg-slate-200 overflow-hidden">
+                                        <div class="h-2 ${Number(v) >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}" style="width:${Math.min(100, Math.round(Math.abs(Number(v || 0)) * 100))}%"></div>
+                                    </div>
+                                    <div class="w-12 text-right font-black text-slate-800 text-[13px]">${fmtMl(v, 3)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            switchMlInfoTab(mlVizState.infoTab || 'coef');
+        }
+
+        function populateMlRunFilter(rows) {
+            const sel = document.getElementById('ml-run-filter');
+            if (!sel) return;
+            const runs = [...new Set((rows || []).map(r => r.run_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            const prev = sel.value || '';
+            sel.innerHTML = `<option value="">全部批次</option>` + runs.map(r => `<option value="${escapeHtml(String(r))}">${escapeHtml(String(r))}</option>`).join('');
+            if (runs.includes(prev)) sel.value = prev;
+        }
+
+        function renderXrMlTable(rows) {
+            const body = document.getElementById('ml-table-body');
+            const meta = document.getElementById('ml-table-meta');
+            if (!body) return;
+            const ordered = [...rows].sort((a, b) => {
+                const runCmp = String(a.run_name || '').localeCompare(String(b.run_name || ''));
+                if (runCmp !== 0) return runCmp;
+                if ((a.sample_no || 0) !== (b.sample_no || 0)) return (a.sample_no || 0) - (b.sample_no || 0);
+                const posCmp = String(a.position || '').localeCompare(String(b.position || ''));
+                if (posCmp !== 0) return posCmp;
+                return (a.shot_no || 0) - (b.shot_no || 0);
+            });
+            if (meta) meta.innerText = `显示 ${Math.min(ordered.length, 260)} / ${ordered.length}`;
+            body.innerHTML = ordered.slice(0, 260).map(r => `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-2 py-1.5">${escapeHtml(String(r.run_name || ''))}</td>
+                    <td class="px-2 py-1.5">C${r.sample_no ?? '--'}</td>
+                    <td class="px-2 py-1.5">${r.position ?? '--'}</td>
+                    <td class="px-2 py-1.5">${r.shot_no ?? '--'}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.actual_temp, 1)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.flow_rate, 0)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.catalyst_concentration, 2)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.diameter_pred, 2)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.density_pred, 2)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.alignment_pred, 3)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.curvature_pred, 3)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function applyXrMlView(options = {}) {
+            if (!xrMlPayload) return;
+            const opts = options || {};
+            const sel = document.getElementById('ml-run-filter');
+            const run = sel ? sel.value : '';
+            const allRows = xrMlPayload.rows || [];
+            const rows = run ? allRows.filter(r => r.run_name === run) : allRows;
+            if (!opts.skipCharts) renderXrMlCharts(rows);
+            const shouldRenderTable = !!opts.forceTable || (!opts.skipTable && mlSubPage === 'data');
+            if (shouldRenderTable) renderXrMlTable(rows);
+        }
+
+        async function loadXrMlPage() {
+            try {
+                const apiBase = window.location.origin || 'http://127.0.0.1:8000';
+                const res = await fetch(`${apiBase}/api/ml/xr/simple-model?limit=2500`);
+                if (!res.ok) throw new Error(`API ${res.status}: /api/ml/xr/simple-model unavailable`);
+                const payload = await res.json();
+                xrMlPayload = payload;
+                const rows = payload.rows || [];
+                renderXrMlSummary(payload);
+                renderXrMlPanels(payload);
+                populateMlRunFilter(rows);
+                applyXrMlView({ forceTable: mlSubPage === 'data' });
+            } catch (err) {
+                console.error('XR ML page load failed:', err);
+                const summary = document.getElementById('ml-summary');
+                if (summary) {
+                    summary.innerHTML = `
+                        <div class="col-span-2 md:col-span-4 bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 text-xs text-amber-700 font-bold">
+                            XR 模型接口不可用。请检查后端服务后刷新页面。
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function getCleanOriginalImageUrl(item) {
+            if (!item) return '';
+            const rawPath = String(item.file_path || '');
+            const lower = rawPath.toLowerCase();
+            if (lower.endsWith('.tif') || lower.endsWith('.tiff')) {
+                const rel = rawPath.replace(/^d:\\CNTDATA[\\/]/i, '').replace(/\\/g, '/');
+                return `http://127.0.0.1:8000/api/view/tif?path=${encodeURIComponent(rel)}`;
+            }
+            return item.url ? `http://127.0.0.1:8000${item.url}` : '';
+        }
+
+        function computeCleanAssessment(item) {
+            const reasons = [];
+            let score = 100;
+            const density = Number(item.density);
+            const alignment = Number(item.alignment);
+            const diameter = Number(item.diameter);
+            const curvature = Number(item.curvature);
+            const tortuosity = Number(item.tortuosity);
+            const mag = Number(item.magnification);
+
+            if (!Number.isFinite(density)) {
+                score -= 35;
+                reasons.push({ level: 'bad', text: '缺少 density，无法判断前景面积比例。' });
+            } else {
+                if (density <= 0 || density > 95) {
+                    score -= 40;
+                    reasons.push({ level: 'bad', text: `density=${fmtMl(density, 1)}%，明显异常，疑似二值化失败。` });
+                } else if (density < 5 || density > 85) {
+                    score -= 18;
+                    reasons.push({ level: 'warn', text: `density=${fmtMl(density, 1)}%，处于警戒区。` });
+                }
+            }
+
+            if (!Number.isFinite(alignment)) {
+                score -= 20;
+                reasons.push({ level: 'bad', text: '缺少 alignment，无法判断取向。' });
+            } else if (alignment < -0.5 || alignment > 1.0) {
+                score -= 30;
+                reasons.push({ level: 'bad', text: `alignment=${fmtMl(alignment, 3)} 超出理论范围。` });
+            } else if (alignment < 0) {
+                score -= 12;
+                reasons.push({ level: 'warn', text: `alignment=${fmtMl(alignment, 3)} 偏低，可能为杂乱网络或算法偏差。` });
+            }
+
+            if (!Number.isFinite(diameter)) {
+                score -= 15;
+                reasons.push({ level: 'warn', text: '缺少 diameter，可能倍率不足或直径提取失败。' });
+            } else if (diameter < 5 || diameter > 200) {
+                score -= 30;
+                reasons.push({ level: 'bad', text: `diameter=${fmtMl(diameter, 1)} nm 不合理，可能测到噪声或束宽。` });
+            } else if (diameter > 120) {
+                score -= 12;
+                reasons.push({ level: 'warn', text: `diameter=${fmtMl(diameter, 1)} nm 偏大，更像束宽而非单管直径。` });
+            }
+
+            if (!Number.isFinite(curvature)) {
+                score -= 18;
+                reasons.push({ level: 'warn', text: '缺少 curvature，局部弯曲强度不可用。' });
+            } else if (curvature < 0 || curvature > 2.0) {
+                score -= 28;
+                reasons.push({ level: 'bad', text: `curvature=${fmtMl(curvature, 3)} 超出推荐范围。` });
+            } else if (curvature > 0.8) {
+                score -= 10;
+                reasons.push({ level: 'warn', text: `curvature=${fmtMl(curvature, 3)} 偏高，需检查骨架是否抖动。` });
+            }
+
+            if (!Number.isFinite(tortuosity)) {
+                score -= 10;
+                reasons.push({ level: 'warn', text: '缺少 tortuosity，整体绕曲度无法参考。' });
+            } else if (tortuosity < 1.0 || tortuosity > 3.0) {
+                score -= 25;
+                reasons.push({ level: 'bad', text: `tortuosity=${fmtMl(tortuosity, 3)} 不合理，可能路径追踪异常。` });
+            } else if (tortuosity > 2.2) {
+                score -= 10;
+                reasons.push({ level: 'warn', text: `tortuosity=${fmtMl(tortuosity, 3)} 偏高，需确认是否真实卷曲。` });
+            }
+
+            if (Number.isFinite(mag) && mag < 20000) {
+                score -= 14;
+                reasons.push({ level: 'warn', text: `倍率 ${mag}x 偏低，直径与曲率结果天然低可信。` });
+            }
+
+            let confidence = 'high';
+            let label = '高可信';
+            if (score < 55) {
+                confidence = 'low';
+                label = '低可信';
+            } else if (score < 80) {
+                confidence = 'medium';
+                label = '可参考';
+            }
+            if (!reasons.length) {
+                reasons.push({ level: 'ok', text: '当前样品各字段都在推荐范围内，可先作为高可信样品查看。' });
+            }
+            return { score: Math.max(0, Math.round(score)), confidence, label, reasons };
+        }
+
+        function normalizeCleanItem(item) {
+            const assessment = computeCleanAssessment(item);
+            return { ...item, assessment };
+        }
+
+        function renderCleanSummary(items) {
+            const el = document.getElementById('clean-summary-grid');
+            if (!el) return;
+            const total = items.length;
+            const high = items.filter(x => x.assessment.confidence === 'high').length;
+            const medium = items.filter(x => x.assessment.confidence === 'medium').length;
+            const low = items.filter(x => x.assessment.confidence === 'low').length;
+            const processed = items.filter(x => Number(x.processed) === 1).length;
+            const xr = items.filter(x => String(x.source || '') === 'XR').length;
+            const zzy = items.filter(x => String(x.source || '') === 'ZZY').length;
+            el.innerHTML = [
+                ['样品数', total],
+                ['高可信', high],
+                ['可参考', medium],
+                ['低可信', low],
+                ['已提取', processed],
+                ['XR / ZZY', `${xr} / ${zzy}`],
+            ].map(([k, v]) => `
+                <div class="bg-white/95 border border-white/20 rounded-xl px-3 py-2">
+                    <div class="text-[10px] font-black text-slate-500 uppercase">${k}</div>
+                    <div class="text-lg font-black text-slate-800 mt-1">${v}</div>
+                </div>
+            `).join('');
+        }
+
+        function getFilteredCleanItems() {
+            let rows = [...(cleanState.items || [])];
+            const confidence = document.getElementById('clean-confidence-filter')?.value || '';
+            const processed = document.getElementById('clean-processed-filter')?.value || '';
+            const keyword = (document.getElementById('clean-keyword-filter')?.value || '').trim().toLowerCase();
+            if (confidence) rows = rows.filter(x => x.assessment.confidence === confidence);
+            if (processed !== '') rows = rows.filter(x => String(Number(x.processed || 0)) === processed);
+            if (keyword) {
+                rows = rows.filter(x => {
+                    const text = [
+                        x.sample_id, x.source, x.file_path,
+                        x.position_label, x.horizontal_pos,
+                    ].filter(Boolean).join(' ').toLowerCase();
+                    return text.includes(keyword);
+                });
+            }
+            return rows;
+        }
+
+        function openCleanLightbox(src, title = '图像放大查看') {
+            const modal = document.getElementById('clean-lightbox');
+            const img = document.getElementById('clean-lightbox-image');
+            const titleEl = document.getElementById('clean-lightbox-title');
+            if (!modal || !img || !src) return;
+            img.src = src;
+            if (titleEl) titleEl.innerText = title;
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function openCleanLightboxFromElement(el) {
+            if (!el) return;
+            openCleanLightbox(el.dataset.src || '', el.dataset.title || '图像放大查看');
+        }
+
+        function closeCleanLightbox() {
+            const modal = document.getElementById('clean-lightbox');
+            const img = document.getElementById('clean-lightbox-image');
+            if (img) img.removeAttribute('src');
+            if (modal) modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function openCleanOriginal() {
+            const img = document.getElementById('clean-original-image');
+            if (!img || img.classList.contains('hidden')) return;
+            const src = img.src;
+            if (!src) return;
+            const title = window.currentLightboxTitle || '图像放大查看';
+            openCleanLightbox(src, title);
+        }
+
+        function renderCleanList() {
+            const list = document.getElementById('clean-sample-list');
+            const meta = document.getElementById('clean-list-meta');
+            if (!list) return;
+            const rows = getFilteredCleanItems();
+            cleanState.filteredItems = rows;
+            if (meta) meta.innerText = `显示 ${rows.length} / ${cleanState.items.length}`;
+            if (!rows.length) {
+                list.innerHTML = '<div class="text-sm text-slate-400 font-bold py-8 text-center">没有符合筛选条件的样品</div>';
+                return;
+            }
+            list.innerHTML = rows.map(item => `
+                <button type="button" onclick="selectCleanItem(${item.id})" class="clean-list-row ${cleanState.selectedId === item.id ? 'active' : ''} w-full text-left mb-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition p-3">
+                    <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="font-black text-slate-800 text-sm truncate">${escapeHtml(String(item.sample_id || item.file_path || `ID-${item.id}`))}</div>
+                            <div class="text-[11px] text-slate-500 mt-1 truncate">${escapeHtml(String(item.file_path || ''))}</div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span>
+                            <span class="text-[11px] font-black text-slate-500">分数 ${item.assessment.score}</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3 text-[11px] text-slate-500">
+                        <div>density <span class="font-black text-slate-700">${fmtMl(item.density, 1)}</span></div>
+                        <div>alignment <span class="font-black text-slate-700">${fmtMl(item.alignment, 3)}</span></div>
+                        <div>diameter <span class="font-black text-slate-700">${fmtMl(item.diameter, 1)}</span></div>
+                        <div>curvature <span class="font-black text-slate-700">${fmtMl(item.curvature, 3)}</span></div>
+                        <div>tortuosity <span class="font-black text-slate-700">${fmtMl(item.tortuosity, 3)}</span></div>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        async function loadCleanVisualizations(item) {
+            const stepGrid = document.getElementById('clean-step-grid');
+            if (!stepGrid || !item?.id) return;
+            stepGrid.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-1">正在加载算法步骤...</div>';
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/images/${item.id}/visualize`);
+                const data = await res.json();
+                const steps = Array.isArray(data.steps) ? data.steps : [];
+                
+                let buttonsHtml = '';
+                steps.forEach((step, idx) => {
+                    let sName = String(step.name || '');
+                    if (sName.includes('最大骨架') || sName.includes('原始图像') || sName.includes('原始图')) return;
+                    
+                    let b64 = 'data:image/jpeg;base64,' + step.image;
+                    let stepName = escapeHtml(String(step.name || '步骤 ' + (idx+1)));
+                    buttonsHtml += `<button type="button" onclick="document.getElementById('clean-original-image').src='${b64}'; window.currentLightboxTitle='${stepName}'" class="px-4 py-2 rounded-lg bg-white text-slate-600 border border-slate-200 text-[11px] font-bold shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-slate-300 outline-none">${stepName}</button>`;
+                });
+                
+                if(!buttonsHtml) {
+                    stepGrid.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-1">当前样品无其他过程步骤</div>';
+                } else {
+                    stepGrid.innerHTML = buttonsHtml;
+                }
+            } catch (err) {
+                stepGrid.innerHTML = `<div class="text-[11px] text-rose-500 font-bold px-2 py-1">过程数据加载失败</div>`;
+            }
+        }
+
+        function renderCleanReview(item) {
+            const panel = document.getElementById('clean-review-content');
+            const label = document.getElementById('clean-current-label');
+            const quick = document.getElementById('clean-quick-note');
+            const image = document.getElementById('clean-original-image');
+            const placeholder = document.getElementById('clean-original-placeholder');
+            if (!panel || !quick || !label || !image || !placeholder) return;
+            if (!item) {
+                label.innerText = '请选择样品';
+                quick.innerText = '这里会显示当前样品的快速结论和主要风险点。';
+                image.classList.add('hidden');
+                image.removeAttribute('src');
+                placeholder.classList.remove('hidden');
+                const openBtn = document.getElementById('clean-open-original');
+                if (openBtn) openBtn.disabled = true;
+                panel.innerHTML = '<div class="text-slate-400 font-bold">请选择左侧样品，查看五个特征与可信度判定。</div>';
+                return;
+            }
+            label.innerText = `${item.source || '--'} / ${item.sample_id || item.id}`;
+            const originalUrl = getCleanOriginalImageUrl(item);
+            if (originalUrl) {
+                image.src = originalUrl;
+                window.currentLightboxTitle = `${item.source || '--'} / ${item.sample_id || item.id} 原图`;
+                image.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            }
+            const openBtn = document.getElementById('clean-open-original');
+            if (openBtn) openBtn.disabled = !originalUrl;
+            quick.innerText = item.assessment.reasons[0]?.text || '当前样品没有明显异常。';
+            const reasons = item.assessment.reasons || [];
+            panel.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] text-slate-400 font-black uppercase">可信度</div>
+                        <div class="mt-1"><span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span></div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[11px] text-slate-400 font-black uppercase">清洗分数</div>
+                        <div class="text-2xl font-black text-slate-800 mt-1">${item.assessment.score}</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">density</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.density, 1)} <span class="text-sm text-slate-400">%</span></div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">alignment</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.alignment, 3)}</div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">diameter</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.diameter, 1)} <span class="text-sm text-slate-400">nm</span></div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">curvature</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.curvature, 3)}</div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">tortuosity</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.tortuosity, 3)}</div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">倍率 / 状态</div><div class="text-lg font-black text-slate-800 mt-1">${item.magnification || '--'}x / ${Number(item.processed) === 1 ? '已提取' : '未提取'}</div></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-slate-400 font-black uppercase mb-2">关键风险命中</div>
+                    <div class="space-y-2">
+                        ${reasons.slice(0, 3).map(reason => `
+                            <div class="clean-flag ${reason.level === 'bad' ? 'bad' : reason.level === 'warn' ? 'warn' : ''}">${escapeHtml(String(reason.text || ''))}</div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="text-[11px] text-slate-400 font-black uppercase mb-2">基础信息</div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+                        <div class="text-slate-500">样品</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.sample_id || '--'))}</div>
+                        <div class="text-slate-500">来源</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.source || '--'))}</div>
+                        <div class="text-slate-500">位置</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.position_label || item.horizontal_pos || '--'))}</div>
+                        <div class="text-slate-500">温度</div><div class="text-right font-bold text-slate-700">${fmtMl(item.actual_temp ?? item.growth_temp, 1)}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function selectCleanItem(id) {
+            cleanState.selectedId = id;
+            const item = cleanState.items.find(x => x.id === id) || null;
+            renderCleanList();
+            renderCleanReview(item);
+            await loadCleanVisualizations(item);
+        }
+
+        function onCleanFilterChange() {
+            renderCleanList();
+            const rows = cleanState.filteredItems || [];
+            if (!rows.length) {
+                renderCleanReview(null);
+                const stepGrid = document.getElementById('clean-step-grid');
+                if (stepGrid) stepGrid.innerHTML = '';
+                return;
+            }
+            if (!rows.some(x => x.id === cleanState.selectedId)) {
+                selectCleanItem(rows[0].id);
+            } else {
+                renderCleanReview(cleanState.items.find(x => x.id === cleanState.selectedId) || null);
+            }
+        }
+
+        async function loadCleanPage() {
+            const source = document.getElementById('clean-source-filter')?.value || 'XR';
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/images?limit=400&offset=0${source ? `&source=${encodeURIComponent(source)}` : ''}`);
+                const data = await res.json();
+                cleanState.items = (data.items || []).map(normalizeCleanItem);
+                renderCleanSummary(cleanState.items);
+                renderCleanList();
+                const first = cleanState.filteredItems?.[0];
+                if (first) {
+                    await selectCleanItem(first.id);
+                } else {
+                    renderCleanReview(null);
+                    const stepGrid = document.getElementById('clean-step-grid');
+                    if (stepGrid) stepGrid.innerHTML = '';
+                }
+            } catch (err) {
+                const list = document.getElementById('clean-sample-list');
+                if (list) list.innerHTML = '<div class="text-sm text-rose-500 font-bold py-8 text-center">数据清洗模块加载失败</div>';
+            }
+        }
+
         // ─── 全局状态 ───
         let currentItem = null;
         let chatHistory = [];
+        let xrMlPayload = null;
+        let mlSubPage = 'visual';
+        let mlVizState = { target: 'diameter', mode: '2d', xKey: 'actual_temp', yMode: 'pred', infoTab: 'coef', mainPoints: [], selectedPoint: null };
+        let mlUiPerfState = { vizTimer: null };
+        let mlChartInstances = {};
+        let cleanState = { items: [], filteredItems: [], selectedId: null };
 
         // ─── 工具：获取当前选择的模型和 API Key ───
         function getApiHeaders() {
@@ -1729,7 +3134,12 @@
         }
 
         function escapeHtml(str) {
-            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return str
+                .replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // ─── RAG 文献管理 ───
@@ -1761,6 +3171,281 @@
                 `).join('');
             } catch (_) {
                 listEl.innerHTML = '<span class="text-red-300">加载失败</span>';
+            }
+        }
+
+        async function loadRagSuccessStats() {
+            const el = document.getElementById('rag-success-kpis');
+            if (!el) return;
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/rag/stats');
+                const stats = await res.json();
+                el.innerHTML = `
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">文献数</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${stats.document_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">文本块</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${stats.chunk_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">关系条目</div>
+                        <div class="text-xl font-black text-indigo-700 mt-1">${stats.link_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">核心文献</div>
+                        <div class="text-xl font-black text-emerald-700 mt-1">${stats.core_document_count || 0}</div>
+                    </div>
+                `;
+            } catch (err) {
+                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${err.message}</div>`;
+            }
+        }
+
+        function switchRagSubPage(page) {
+            const target = page === 'manage' ? 'manage' : 'success';
+            const success = document.getElementById('rag-subpage-success');
+            const manage = document.getElementById('rag-subpage-manage');
+            if (success) success.classList.toggle('hidden', target !== 'success');
+            if (manage) manage.classList.toggle('hidden', target !== 'manage');
+
+            const btnSuccess = document.getElementById('rag-tab-success-btn');
+            const btnManage = document.getElementById('rag-tab-manage-btn');
+            if (btnSuccess) btnSuccess.classList.toggle('active', target === 'success');
+            if (btnManage) btnManage.classList.toggle('active', target === 'manage');
+
+            if (target === 'success') {
+                loadRagSuccessStats();
+                loadRagLinks();
+            } else {
+                loadRagDocs();
+            }
+        }
+
+        function renderChainList(containerId, items) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!items || items.length === 0) {
+                el.innerHTML = '<div class="text-slate-300">暂无关联</div>';
+                return;
+            }
+            el.innerHTML = items.slice(0, 8).map(it => `
+                <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
+                    <div class="font-bold text-slate-700">${it.source_node || '--'} → ${it.target_node || '--'}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                        方向: ${it.effect_direction || '--'} · 置信度: ${(Number(it.confidence || 0)).toFixed(2)}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(it.title || '').replace(/"/g, '&quot;')}">
+                        ${it.title || '--'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderLinkSummary(chain) {
+            const summaryEl = document.getElementById('rag-link-summary');
+            if (!summaryEl) return;
+            const p2m = (chain?.process_to_morphology || []).length;
+            const m2p = (chain?.morphology_to_performance || []).length;
+            const p2p = (chain?.process_to_performance || []).length;
+            const mech = (chain?.mechanism_evidence || []).length;
+            summaryEl.innerHTML = `
+                <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
+                    <div class="text-slate-500">工艺→形貌</div>
+                    <div class="text-indigo-700 font-black text-lg mt-1">${p2m}</div>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                    <div class="text-slate-500">形貌→性能</div>
+                    <div class="text-emerald-700 font-black text-lg mt-1">${m2p}</div>
+                </div>
+                <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                    <div class="text-slate-500">工艺→性能</div>
+                    <div class="text-amber-700 font-black text-lg mt-1">${p2p}</div>
+                </div>
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-3">
+                    <div class="text-slate-500">机理证据</div>
+                    <div class="text-slate-700 font-black text-lg mt-1">${mech}</div>
+                </div>
+            `;
+        }
+
+        function relationTypeLabel(type) {
+            if (type === 'process_to_morphology') return '工艺→形貌';
+            if (type === 'morphology_to_performance') return '形貌→性能';
+            if (type === 'process_to_performance') return '工艺→性能';
+            if (type === 'mechanism_evidence') return '机理证据';
+            return type || '关联';
+        }
+
+        function nodeCategoryById(nodeId) {
+            const id = String(nodeId || '');
+            if (id.startsWith('process:')) return 0;
+            if (id.startsWith('morphology:')) return 1;
+            if (id.startsWith('performance:')) return 2;
+            return 3;
+        }
+
+        function renderRagGraph(chain, query) {
+            const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
+            if (!chart) return;
+
+            const buckets = [
+                ...(chain?.process_to_morphology || []),
+                ...(chain?.morphology_to_performance || []),
+                ...(chain?.process_to_performance || []),
+                ...(chain?.mechanism_evidence || []),
+            ];
+
+            if (buckets.length === 0) {
+                chart.clear();
+                chart.setOption({
+                    title: {
+                        text: `当前查询暂无可视化关联：${query}`,
+                        left: 'center',
+                        top: 'middle',
+                        textStyle: { color: '#94a3b8', fontSize: 12, fontWeight: 700 },
+                    },
+                });
+                return;
+            }
+
+            const nodeMap = new Map();
+            const edges = [];
+            for (const item of buckets) {
+                const source = item.source_node || 'unknown:source';
+                const target = item.target_node || 'unknown:target';
+                if (!nodeMap.has(source)) {
+                    nodeMap.set(source, {
+                        id: source,
+                        name: source,
+                        category: nodeCategoryById(source),
+                        value: 1,
+                    });
+                } else {
+                    nodeMap.get(source).value += 1;
+                }
+                if (!nodeMap.has(target)) {
+                    nodeMap.set(target, {
+                        id: target,
+                        name: target,
+                        category: nodeCategoryById(target),
+                        value: 1,
+                    });
+                } else {
+                    nodeMap.get(target).value += 1;
+                }
+                edges.push({
+                    source,
+                    target,
+                    value: relationTypeLabel(item.relation_type),
+                    lineStyle: { width: 1 + Math.max(0.5, Number(item.confidence || 0.5) * 3) },
+                });
+            }
+
+            const nodes = Array.from(nodeMap.values()).map(n => ({
+                ...n,
+                symbolSize: Math.min(56, 14 + Math.sqrt(n.value) * 10),
+            }));
+
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: params => {
+                        if (params.dataType === 'edge') {
+                            return `${params.data.source} → ${params.data.target}<br>${params.data.value || ''}`;
+                        }
+                        return `${params.data.name}<br>关联度: ${params.data.value}`;
+                    },
+                },
+                legend: {
+                    data: ['工艺参数', '形貌特征', '材料性能', '证据/其他'],
+                    bottom: 0,
+                    textStyle: { fontSize: 11, color: '#64748b' },
+                },
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'force',
+                        roam: true,
+                        draggable: true,
+                        data: nodes,
+                        links: edges,
+                        categories: [
+                            { name: '工艺参数', itemStyle: { color: '#3b82f6' } },
+                            { name: '形貌特征', itemStyle: { color: '#10b981' } },
+                            { name: '材料性能', itemStyle: { color: '#f59e0b' } },
+                            { name: '证据/其他', itemStyle: { color: '#64748b' } },
+                        ],
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: [4, 8],
+                        label: {
+                            show: true,
+                            position: 'right',
+                            color: '#334155',
+                            fontSize: 10,
+                            formatter: '{b}',
+                        },
+                        edgeLabel: {
+                            show: true,
+                            fontSize: 9,
+                            color: '#64748b',
+                            formatter: params => params.data.value || '',
+                        },
+                        lineStyle: {
+                            color: '#94a3b8',
+                            curveness: 0.18,
+                            opacity: 0.9,
+                        },
+                        force: {
+                            repulsion: 260,
+                            edgeLength: [80, 160],
+                            gravity: 0.1,
+                        },
+                        emphasis: { focus: 'adjacency' },
+                    },
+                ],
+            });
+        }
+
+        async function loadRagLinks() {
+            const queryInput = document.getElementById('rag-link-query');
+            const query = (queryInput?.value || '').trim();
+            if (!query) {
+                alert('请输入检索词');
+                return;
+            }
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/rag/links', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, top_k: 20 })
+                });
+                const data = await res.json();
+                const chain = data.chain || {};
+                renderLinkSummary(chain);
+                renderChainList('rag-chain-p2m', chain.process_to_morphology || []);
+                renderChainList('rag-chain-m2p', chain.morphology_to_performance || []);
+                renderChainList('rag-chain-p2p', chain.process_to_performance || []);
+                renderChainList('rag-chain-mech', chain.mechanism_evidence || []);
+                renderRagGraph(chain, query);
+            } catch (err) {
+                ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = `<div class="text-red-300">加载失败: ${err.message}</div>`;
+                });
+                const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
+                if (chart) {
+                    chart.clear();
+                    chart.setOption({
+                        title: {
+                            text: `图谱加载失败: ${err.message}`,
+                            left: 'center',
+                            top: 'middle',
+                            textStyle: { color: '#ef4444', fontSize: 12, fontWeight: 700 },
+                        },
+                    });
+                }
             }
         }
 
@@ -1847,16 +3532,59 @@
         // ─── 页面切换（SPA 路由） ───
         function showPage(name, el) {
             const dataPage = document.getElementById('data-page');
+            const mlPage = document.getElementById('ml-page');
+            const cleanPage = document.getElementById('clean-page');
             const ragPage = document.getElementById('rag-page');
+            const mlSubSwitchTop = document.getElementById('ml-subpage-switch-top');
+            const sourceFilter = document.getElementById('source-filter');
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
             if (el) el.classList.add('active');
             if (name === 'rag') {
                 dataPage.classList.add('hidden');
+                mlPage.classList.add('hidden');
+                if (cleanPage) cleanPage.classList.add('hidden');
                 ragPage.classList.remove('hidden');
-                loadRagDocs();
+                if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
+                setMlFocusMode(false);
+                if (sourceFilter) sourceFilter.classList.add('hidden');
+                setRagHeaderMode(true);
+                closeInterpretPanel();
+                closeDetails();
+                switchRagSubPage('success');
+            } else if (name === 'ml') {
+                dataPage.classList.add('hidden');
+                if (cleanPage) cleanPage.classList.add('hidden');
+                ragPage.classList.add('hidden');
+                mlPage.classList.remove('hidden');
+                if (mlSubSwitchTop) mlSubSwitchTop.classList.remove('hidden');
+                if (sourceFilter) sourceFilter.classList.add('hidden');
+                setRagHeaderMode(false);
+                setMlFocusMode(true);
+                closeInterpretPanel();
+                closeDetails();
+                switchMlSubPage(mlSubPage);
+                loadXrMlPage();
+            } else if (name === 'clean') {
+                dataPage.classList.add('hidden');
+                mlPage.classList.add('hidden');
+                ragPage.classList.add('hidden');
+                if (cleanPage) cleanPage.classList.remove('hidden');
+                if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
+                if (sourceFilter) sourceFilter.classList.add('hidden');
+                setRagHeaderMode(false);
+                setMlFocusMode(false);
+                closeInterpretPanel();
+                closeDetails();
+                loadCleanPage();
             } else {
                 dataPage.classList.remove('hidden');
+                mlPage.classList.add('hidden');
+                if (cleanPage) cleanPage.classList.add('hidden');
                 ragPage.classList.add('hidden');
+                if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
+                if (sourceFilter) sourceFilter.classList.remove('hidden');
+                setRagHeaderMode(false);
+                setMlFocusMode(false);
             }
         }
 

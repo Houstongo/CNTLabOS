@@ -7,6 +7,16 @@ import argparse
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(PROJECT_ROOT)
 
+
+def safe_console_text(text):
+    if text is None:
+        return ""
+    try:
+        text.encode("gbk")
+        return text
+    except UnicodeEncodeError:
+        return text.encode("gbk", errors="replace").decode("gbk")
+
 def run_backend():
     print("正在启动后端 API 服务 (FastAPI)...")
     env = os.environ.copy()
@@ -59,6 +69,7 @@ def kb_bootstrap(source_dir=None, source_type="notes", theme="growth_mechanism",
     print("Initializing knowledge-base backend...")
     try:
         from backend.core.knowledge_rag import RAGRetriever
+        from backend.core.knowledge_seed import infer_theme_from_path
 
         db_path = os.path.join(PROJECT_ROOT, "database", "cnta_experiments.sqlite")
         kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
@@ -70,10 +81,11 @@ def kb_bootstrap(source_dir=None, source_type="notes", theme="growth_mechanism",
         )
 
         if source_dir:
+            resolved_theme = theme or infer_theme_from_path(source_dir)
             imported = retriever.knowledge_base.ingest_directory(
                 source_dir=source_dir,
                 source_type=source_type,
-                theme=theme,
+                theme=resolved_theme,
                 is_core=is_core,
             )
             print(f"Imported documents: {imported['document_count']}")
@@ -86,6 +98,68 @@ def kb_bootstrap(source_dir=None, source_type="notes", theme="growth_mechanism",
         )
     except Exception as e:
         print(f"Knowledge-base bootstrap failed: {e}")
+
+
+def kb_import_core():
+    print("Importing core knowledge-base sources...")
+    try:
+        from backend.core.knowledge_rag import RAGRetriever
+        from backend.core.knowledge_seed import DEFAULT_KB_SEED_SOURCES, import_seed_sources
+
+        db_path = os.path.join(PROJECT_ROOT, "database", "cnta_experiments.sqlite")
+        kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
+        retriever = RAGRetriever(db_path, knowledge_db_path=kb_path)
+
+        result = import_seed_sources(retriever.knowledge_base, DEFAULT_KB_SEED_SOURCES)
+        stats = retriever.get_stats()
+        print(
+            f"Imported sources: {result['source_count']}, "
+            f"documents: {result['document_count']}"
+        )
+        print(
+            f"Knowledge base status: docs={stats['document_count']}, "
+            f"chunks={stats['chunk_count']}, core_docs={stats['core_document_count']}"
+        )
+    except Exception as e:
+        print(f"Knowledge-base core import failed: {e}")
+
+
+def kb_relabel_themes():
+    print("Relabeling knowledge-base document themes...")
+    try:
+        from backend.core.knowledge_rag import RAGRetriever
+        from backend.core.knowledge_seed import relabel_document_themes
+
+        db_path = os.path.join(PROJECT_ROOT, "database", "cnta_experiments.sqlite")
+        kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
+        retriever = RAGRetriever(db_path, knowledge_db_path=kb_path)
+        result = relabel_document_themes(retriever.knowledge_base)
+        print(f"Updated documents: {result['updated_count']}")
+        stats = retriever.get_stats()
+        print(
+            f"Knowledge base status: docs={stats['document_count']}, "
+            f"chunks={stats['chunk_count']}, core_docs={stats['core_document_count']}"
+        )
+    except Exception as e:
+        print(f"Knowledge-base relabel failed: {e}")
+
+
+def kb_search(query, task_name=None, top_k=5):
+    print("Searching knowledge base...")
+    try:
+        from backend.core.knowledge_rag import RAGRetriever
+
+        db_path = os.path.join(PROJECT_ROOT, "database", "cnta_experiments.sqlite")
+        kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
+        retriever = RAGRetriever(db_path, knowledge_db_path=kb_path)
+        results = retriever.retrieve_from_pdf(query=query, top_k=top_k, task_name=task_name)
+        print(f"Results: {len(results)}")
+        for index, item in enumerate(results, 1):
+            print(f"[{index}] {item['title']} | theme={item['theme']} | score={item['score']}")
+            print(safe_console_text(item["text"]))
+            print("-" * 60)
+    except Exception as e:
+        print(f"Knowledge-base search failed: {e}")
 
 
 def main():
@@ -112,8 +186,16 @@ def main():
     kb_parser = subparsers.add_parser("kb-bootstrap", help="Initialize the knowledge-base backend")
     kb_parser.add_argument("--source-dir", type=str, help="Directory of text files to import")
     kb_parser.add_argument("--source-type", type=str, default="notes", help="Document source type")
-    kb_parser.add_argument("--theme", type=str, default="growth_mechanism", help="Document theme")
+    kb_parser.add_argument("--theme", type=str, default=None, help="Document theme")
     kb_parser.add_argument("--core", action="store_true", help="Mark imported files as core documents")
+
+    subparsers.add_parser("kb-import-core", help="Import default core knowledge-base sources")
+    subparsers.add_parser("kb-relabel-themes", help="Relabel existing document themes from path rules")
+
+    kb_search_parser = subparsers.add_parser("kb-search", help="Search the knowledge base")
+    kb_search_parser.add_argument("query", type=str, help="Search query")
+    kb_search_parser.add_argument("--task-name", type=str, default=None, help="Task-aware retrieval profile")
+    kb_search_parser.add_argument("--top-k", type=int, default=5, help="Maximum number of results")
 
     args = parser.parse_args()
 
@@ -131,8 +213,18 @@ def main():
         kb_bootstrap(
             source_dir=getattr(args, "source_dir", None),
             source_type=getattr(args, "source_type", "notes"),
-            theme=getattr(args, "theme", "growth_mechanism"),
+            theme=getattr(args, "theme", None),
             is_core=getattr(args, "core", False),
+        )
+    elif args.command == "kb-import-core":
+        kb_import_core()
+    elif args.command == "kb-relabel-themes":
+        kb_relabel_themes()
+    elif args.command == "kb-search":
+        kb_search(
+            query=getattr(args, "query"),
+            task_name=getattr(args, "task_name", None),
+            top_k=getattr(args, "top_k", 5),
         )
     elif args.command == "analyze":
         analyze_batch(

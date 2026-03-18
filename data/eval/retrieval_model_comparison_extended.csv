@@ -1,0 +1,14 @@
+﻿model,Recall@5,MRR@5,nDCG@5,Recall@10,MRR@10,nDCG@10,status,note
+bm25,0.0056,0.3333,0.1446,0.0256,0.3704,0.2204,ok,
+sentence-transformers/all-MiniLM-L6-v2,0.0,0.0,0.0,0.0,0.0,0.0,ok,
+intfloat/multilingual-e5-base,,,,,,,error,"We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+BAAI/bge-small-zh-v1.5,,,,,,,error,"We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+BAAI/bge-large-zh-v1.5,,,,,,,error,BAAI/bge-large-zh-v1.5 does not appear to have a file named pytorch_model.bin or model.safetensors.
+sentence-transformers/allenai-specter,,,,,,,error,"We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+m3rg-iitd/matscibert,,,,,,,error,"We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+pritamdeka/S-PubMedBert-MS-MARCO,,,,,,,error,"We couldn't connect to 'https://huggingface.co' to load the files, and couldn't find them in the cached files.
+Check your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."

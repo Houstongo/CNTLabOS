@@ -6,3 +6,6 @@ numpy
 opencv-python
 Pillow
 requests
+pdfplumber
+python-pptx
+openpyxl

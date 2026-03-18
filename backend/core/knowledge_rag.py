@@ -126,4 +126,6 @@ class RAGRetriever:
         return {
             "similar_experiments": self.retrieve_from_db(features, params),
             "pdf_passages": self.retrieve_from_pdf(query, task_name=task_name) if query else [],
+            "knowledge_links": self.knowledge_base.search_links(query, top_k=5) if query else [],
+            "relation_chain": self.knowledge_base.get_relation_chain_summary(query, top_k=20) if query else {},
         }
