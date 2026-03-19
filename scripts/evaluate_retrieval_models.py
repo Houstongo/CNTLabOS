@@ -22,11 +22,19 @@ import math
 import os
 import re
 import sqlite3
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import json
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.core.knowledge_base import KnowledgeBaseService
 
 
 STOPWORDS = {
@@ -200,7 +208,7 @@ def ndcg_at_k(ranked_idx: Sequence[int], chunks: Sequence[Chunk], eval_item: Eva
     ideal_rel = min(k, rel_total)
     if ideal_rel == 0:
         return 0.0
-    idcg = sum(1.0 / math.log2(i + 1) for i in range(2, ideal_rel + 2))
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_rel + 1))
     return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -244,7 +252,7 @@ def evaluate_sentence_transformer(
             "sentence-transformers is not installed. Install it to compare embedding models."
         ) from exc
 
-    model = SentenceTransformer(model_name)
+    model = SentenceTransformer(model_name, local_files_only=True)
     doc_texts = [c.text for c in chunks]
     query_texts = [i.query for i in eval_items]
 
@@ -256,6 +264,35 @@ def evaluate_sentence_transformer(
     ranked: Dict[str, List[int]] = {}
     for row_idx, item in enumerate(eval_items):
         ranked[item.qid] = rank_from_scores(sim[row_idx])
+    return ranked
+
+
+def evaluate_service_search(
+    kb_db: str,
+    eval_items: Sequence[EvalItem],
+    chunks: Sequence[Chunk],
+    top_k: int,
+    disable_relation_reranker: bool = False,
+) -> Dict[str, List[int]]:
+    service = KnowledgeBaseService(kb_db)
+    chunk_index_by_id = {chunk.chunk_id: idx for idx, chunk in enumerate(chunks)}
+    ranked: Dict[str, List[int]] = {}
+
+    original_relation_scorer = service._relation_constraint_scores
+    if disable_relation_reranker:
+        service._relation_constraint_scores = lambda query, rows: {}
+
+    try:
+        for item in eval_items:
+            results = service.search(item.query, top_k=top_k)
+            ranked[item.qid] = [
+                chunk_index_by_id[result["chunk_id"]]
+                for result in results
+                if result["chunk_id"] in chunk_index_by_id
+            ]
+    finally:
+        service._relation_constraint_scores = original_relation_scorer
+
     return ranked
 
 
@@ -317,6 +354,22 @@ def main() -> int:
         try:
             if model_name.lower() == "bm25":
                 ranked = evaluate_bm25(eval_items, chunks)
+            elif model_name.lower() == "hybrid":
+                ranked = evaluate_service_search(
+                    kb_db=args.kb_db,
+                    eval_items=eval_items,
+                    chunks=chunks,
+                    top_k=max(ks),
+                    disable_relation_reranker=True,
+                )
+            elif model_name.lower() in {"hybrid+reranker", "hybrid_reranker", "hybrid-reranker"}:
+                ranked = evaluate_service_search(
+                    kb_db=args.kb_db,
+                    eval_items=eval_items,
+                    chunks=chunks,
+                    top_k=max(ks),
+                    disable_relation_reranker=False,
+                )
             else:
                 ranked = evaluate_sentence_transformer(model_name, eval_items, chunks)
 
@@ -343,4 +396,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

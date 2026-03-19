@@ -164,9 +164,9 @@ class AIInterpreter:
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 data = json.dumps({"type": "content", "text": delta.content}, ensure_ascii=False)
-                yield f"data: {data}\\n\\n"
+                yield f"data: {data}\n\n"
 
-        yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     def chat_stream(
         self,
@@ -217,6 +217,6 @@ class AIInterpreter:
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 data = json.dumps({"type": "content", "text": delta.content}, ensure_ascii=False)
-                yield f"data: {data}\\n\\n"
+                yield f"data: {data}\n\n"
 
-        yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"

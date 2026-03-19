@@ -7,6 +7,15 @@ from typing import Any, Dict, Optional
 
 class CNTADataParser:
     def __init__(self):
+        self.zzy_position_aliases = {
+            "top": "top",
+            "mid": "mid",
+            "middle": "mid",
+            "bottom": "bottom",
+            "bpttom": "bottom",
+            "all": "all",
+        }
+
         # ZZY filename parser.
         self.zzy_pattern = re.compile(
             r"No(\d+)\s+"                     # Sample ID
@@ -46,6 +55,8 @@ class CNTADataParser:
         # sample_id 包含样品号-倍率-重复号(含前缀)
         full_repeat = f"{prefix}-{repeat}" if prefix is not None else str(repeat)
         sample_id = f"No{g[0]}-{mag}-{full_repeat}"
+        raw_position = (g[12] or "Unknown").strip()
+        position_label = self.zzy_position_aliases.get(raw_position.lower(), raw_position)
 
         return {
             "source": "ZZY",
@@ -61,7 +72,7 @@ class CNTADataParser:
             "growth_temp": float(g[9]),
             "anneal_time": g[10],
             "growth_time": g[11],
-            "position_label": g[12] or "Unknown",
+            "position_label": position_label,
             "magnification": mag,
             "repeat_id": repeat,
         }

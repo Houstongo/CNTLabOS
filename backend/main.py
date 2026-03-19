@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import sqlite3
 import numpy as np
@@ -40,7 +41,14 @@ if os.path.exists(IMAGE_ROOT):
 async def read_root():
     """返回前端主页"""
     index_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "index.html")
-    return FileResponse(index_path)
+    return FileResponse(
+        index_path,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 from fastapi.responses import Response
 from PIL import Image
@@ -101,7 +109,7 @@ async def analyze_image_v2(image_id: int):
         # 快速特征提取
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(img)
-        smoothed = cv2.GaussianBlur(enhanced, (2, 2), 0)
+        smoothed = cv2.GaussianBlur(enhanced, (3, 3), 0)
         _, thresh = cv2.threshold(smoothed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         # 距离变换
@@ -306,6 +314,52 @@ async def update_features(image_id: int, features: Dict[str, Any]):
     return {"status": "success"}
 
 @app.get("/api/summary")
+
+# 标记图像为已删除
+@app.put("/api/images/{image_id}/delete")
+async def soft_delete_image(image_id: int):
+    """
+    标记图像为已删除（逻辑删除）
+    - is_deleted = 1: 已删除
+    - is_deleted = 0: 正常
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (image_id,))
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success", "deleted_id": image_id}
+
+
+# 恢复已删除的图像
+@app.put("/api/images/{image_id}/restore")
+async def restore_deleted_image(image_id: int):
+    """
+    恢复已删除的图像
+    - is_deleted = 0: 恢复正常状态
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE images SET is_deleted = 0 WHERE id = ?", (image_id,))
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success", "restored_id": image_id}
+
+
 async def get_summary():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -338,6 +392,19 @@ def _safe_float(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _sse_payload(payload: Dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _stream_with_error_boundary(stream_factory):
+    try:
+        yield from stream_factory()
+    except Exception as e:
+        detail = str(e) or "unknown stream error"
+        yield _sse_payload({"type": "error", "detail": detail})
+        yield _sse_payload({"type": "done"})
 
 
 def _parse_xr_label(sample_id: Optional[str], file_path: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -671,7 +738,10 @@ async def get_image_list(
     # 动态构建 WHERE 子句
     where_clauses = []
     params = []
-    
+
+    # 始终排除已删除的数据
+    where_clauses.append("COALESCE(is_deleted, 0) = 0")
+
     if source:
         where_clauses.append("source = ?")
         params.append(source)
@@ -684,7 +754,7 @@ async def get_image_list(
     if processed is not None:
         where_clauses.append("processed = ?")
         params.append(processed)
-        
+
     where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
     
     # 解析排序
@@ -785,13 +855,15 @@ async def interpret_image(
     temperature = float(x_temperature or 0.5)
 
     def event_stream():
-        yield from interpreter.interpret_stream(
-            features=features,
-            params=params,
-            similar_exps=rag_results["similar_experiments"],
-            pdf_passages=rag_results["pdf_passages"],
-            knowledge_links=rag_results.get("knowledge_links", []),
-            temperature=temperature,
+        yield from _stream_with_error_boundary(
+            lambda: interpreter.interpret_stream(
+                features=features,
+                params=params,
+                similar_exps=rag_results["similar_experiments"],
+                pdf_passages=rag_results["pdf_passages"],
+                knowledge_links=rag_results.get("knowledge_links", []),
+                temperature=temperature,
+            )
         )
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -840,11 +912,13 @@ async def chat_with_ai(
     temperature = float(x_temperature or 0.5)
 
     def event_stream():
-        yield from interpreter.chat_stream(
-            history=req.history or [],
-            user_message=req.message,
-            context=context,
-            temperature=temperature,
+        yield from _stream_with_error_boundary(
+            lambda: interpreter.chat_stream(
+                history=req.history or [],
+                user_message=req.message,
+                context=context,
+                temperature=temperature,
+            )
         )
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

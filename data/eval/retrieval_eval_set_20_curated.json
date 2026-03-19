@@ -1,0 +1,124 @@
+{
+  "items": [
+    {
+      "id": "q01",
+      "query": "water-assisted growth catalyst activity single-walled carbon nanotubes",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [2, 19]
+    },
+    {
+      "id": "q02",
+      "query": "growth mechanism long aligned multiwall carbon nanotube arrays water-assisted CVD",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [3, 20]
+    },
+    {
+      "id": "q03",
+      "query": "gas flow direction large area single-walled carbon nanotube forest growth",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [5, 22]
+    },
+    {
+      "id": "q04",
+      "query": "tailoring morphology carbon nanotube arrays spinnable forests undulating foams",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [6, 23]
+    },
+    {
+      "id": "q05",
+      "query": "ethanol promoted high-yield growth few-walled carbon nanotubes",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [7, 24]
+    },
+    {
+      "id": "q06",
+      "query": "structural morphological dependence carbon nanotube arrays catalyst aggregation",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [8, 25]
+    },
+    {
+      "id": "q07",
+      "query": "alignment control carbon nanotube forest random to nearly perfectly aligned",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [9, 26]
+    },
+    {
+      "id": "q08",
+      "query": "upper limit height spinnable carbon nanotube forests",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [11, 28]
+    },
+    {
+      "id": "q09",
+      "query": "nitrogen-doped carbon nanotubes water-assisted growth nitrogen content structure",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [12, 29]
+    },
+    {
+      "id": "q10",
+      "query": "boundary layer influence carbon nanotube forest growth kinetics",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [13, 30]
+    },
+    {
+      "id": "q11",
+      "query": "ultra-long carbon nanotube forest iron aluminum vapor sources",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [14, 31]
+    },
+    {
+      "id": "q12",
+      "query": "growth mechanism and kinetics vertically aligned carbon nanotube arrays",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [15, 32]
+    },
+    {
+      "id": "q13",
+      "query": "machine learning models and automation for carbon nanotube synthesis",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [16, 33]
+    },
+    {
+      "id": "q14",
+      "query": "stainless steel substrate carbon nanotube array bending study",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [35, 45]
+    },
+    {
+      "id": "q15",
+      "query": "growth of CNTs on Fe-Si catalyst prepared on silicon",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [36, 46]
+    },
+    {
+      "id": "q16",
+      "query": "methane decomposition ceria-supported catalysts high purity crystallinity carbon nanotube",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [37, 47]
+    },
+    {
+      "id": "q17",
+      "query": "growth of well-aligned carbon nanotubes with different shapes",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [38, 48]
+    },
+    {
+      "id": "q18",
+      "query": "water assisted atmospheric CVD super growth vertically aligned CNT",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [39, 49]
+    },
+    {
+      "id": "q19",
+      "query": "easy-peel high-density vertically aligned carbon nanotube forests mechanism study",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [40, 50]
+    },
+    {
+      "id": "q20",
+      "query": "horizontally aligned carbon nanotube arrays review",
+      "relevant_chunk_ids": [],
+      "relevant_doc_ids": [43]
+    }
+  ]
+}

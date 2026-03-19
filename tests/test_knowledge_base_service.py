@@ -84,6 +84,146 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         self.assertGreaterEqual(len(links), 1)
         self.assertIn(links[0].get("effect_direction"), {"increase", "decrease", "nonlinear_or_tradeoff"})
 
+    def test_ingest_text_normalizes_performance_factors_for_strength_and_modulus(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Performance relation note",
+            text=(
+                "Higher alignment improves electrical conductivity, mechanical strength, and Young's modulus in CNT arrays. "
+                "Increasing temperature also improves electrical conductivity."
+            ),
+            source_type="paper",
+            theme="process_morphology",
+            is_core=True,
+        )
+
+        links = service.search_links("alignment conductivity strength modulus temperature", top_k=20)
+        relation_pairs = {
+            (row.get("relation_type"), row.get("source_node"), row.get("target_node"))
+            for row in links
+        }
+        performance_factors = {row.get("performance_factor") for row in links}
+
+        self.assertIn("conductivity", performance_factors)
+        self.assertIn("tensile_strength", performance_factors)
+        self.assertIn("modulus", performance_factors)
+        self.assertIn(
+            ("morphology_to_performance", "morphology:alignment", "performance:conductivity"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("morphology_to_performance", "morphology:alignment", "performance:tensile_strength"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("morphology_to_performance", "morphology:alignment", "performance:modulus"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("process_to_performance", "process:growth_temp", "performance:conductivity"),
+            relation_pairs,
+        )
+
+    def test_ingest_text_extracts_mechanism_chain_relations(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Mechanism relation note",
+            text=(
+                "Higher temperature enhances carbon diffusion and improves alignment in CNT arrays. "
+                "Excessive Fe thickness promotes catalyst deactivation and reduces alignment."
+            ),
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+        )
+
+        links = service.search_links("temperature diffusion alignment deactivation fe", top_k=20)
+        relation_pairs = {
+            (row.get("relation_type"), row.get("source_node"), row.get("target_node"))
+            for row in links
+        }
+
+        self.assertIn(
+            ("process_to_mechanism", "process:growth_temp", "mechanism:diffusion"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("mechanism_to_morphology", "mechanism:diffusion", "morphology:alignment"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("process_to_mechanism", "process:fe_thickness", "mechanism:catalyst_deactivation"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("mechanism_to_morphology", "mechanism:catalyst_deactivation", "morphology:alignment"),
+            relation_pairs,
+        )
+
+    def test_ingest_text_derives_conductivity_from_resistivity_metrics(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Electrical inverse metrics note",
+            text=(
+                "Alignment reduces electrical resistivity and sheet resistance in CNT films. "
+                "Higher temperature also reduces electrical resistivity."
+            ),
+            source_type="paper",
+            theme="performance",
+            is_core=True,
+        )
+
+        links = service.search_links("alignment resistivity sheet resistance conductivity temperature", top_k=30)
+        relation_pairs = {
+            (row.get("relation_type"), row.get("source_node"), row.get("target_node"), row.get("effect_direction"))
+            for row in links
+        }
+        performance_factors = {row.get("performance_factor") for row in links}
+
+        self.assertIn("resistivity", performance_factors)
+        self.assertIn("sheet_resistance", performance_factors)
+        self.assertIn("conductivity", performance_factors)
+        self.assertIn(
+            ("morphology_to_performance", "morphology:alignment", "performance:conductivity", "increase"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("process_to_performance", "process:growth_temp", "performance:conductivity", "increase"),
+            relation_pairs,
+        )
+
+    def test_ingest_text_normalizes_specific_conductivity_and_stiffness(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Specific conductivity note",
+            text="Reduced curvature improves specific conductivity and stiffness in CNT yarns.",
+            source_type="paper",
+            theme="performance",
+            is_core=True,
+        )
+
+        links = service.search_links("curvature conductivity stiffness modulus", top_k=20)
+        relation_pairs = {
+            (row.get("relation_type"), row.get("source_node"), row.get("target_node"))
+            for row in links
+        }
+        performance_factors = {row.get("performance_factor") for row in links}
+
+        self.assertIn("conductivity", performance_factors)
+        self.assertIn("modulus", performance_factors)
+        self.assertIn(
+            ("morphology_to_performance", "morphology:curvature", "performance:conductivity"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("morphology_to_performance", "morphology:curvature", "performance:modulus"),
+            relation_pairs,
+        )
+
     def test_task_aware_retrieval_prefers_matching_theme_and_keywords(self):
         service = KnowledgeBaseService(self.db_path)
         service.bootstrap_task_profiles()
@@ -153,6 +293,79 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         self.assertIn("characterization", top_themes)
         self.assertIn("process_morphology", top_themes)
         self.assertNotEqual(results[0]["theme"], "applications")
+
+    def test_search_uses_semantic_scores_when_lexical_overlap_is_weak(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Alignment note",
+            text="Alignment improves conductivity in CNT arrays.",
+            source_type="paper",
+            theme="process_morphology",
+            is_core=False,
+        )
+        service.ingest_text(
+            title="Catalyst note",
+            text="Catalyst poisoning reduces growth rate in CNT synthesis.",
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=False,
+        )
+
+        def fake_semantic_scores(query, rows):
+            scores = {}
+            for row in rows:
+                if row["title"] == "Alignment note":
+                    scores[row["id"]] = 0.92
+                else:
+                    scores[row["id"]] = 0.08
+            return scores
+
+        with patch.object(service, "_semantic_scores", side_effect=fake_semantic_scores, create=True):
+            results = service.search(
+                query="straight nanotube ordering",
+                task_name=None,
+                top_k=3,
+            )
+
+        self.assertGreaterEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "Alignment note")
+        self.assertGreater(results[0]["score"], 0)
+
+    def test_search_reranks_candidates_using_relation_constraints(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Mechanism chain note",
+            text=(
+                "Higher temperature enhances diffusion and improves alignment in CNT arrays. "
+                "Better alignment improves conductivity."
+            ),
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=False,
+        )
+        service.ingest_text(
+            title="Weak relation note",
+            text="Temperature is discussed for CNT synthesis and catalyst preparation.",
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=False,
+        )
+
+        with patch.object(service, "_score_row", return_value=1.0), patch.object(
+            service,
+            "_semantic_scores",
+            return_value={1: 0.5, 2: 0.5},
+            create=True,
+        ):
+            results = service.search(
+                query="temperature diffusion alignment conductivity",
+                task_name=None,
+                top_k=2,
+            )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["title"], "Mechanism chain note")
+        self.assertGreater(results[0]["score"], results[1]["score"])
 
     def test_ingest_directory_imports_supported_text_files(self):
         service = KnowledgeBaseService(self.db_path)

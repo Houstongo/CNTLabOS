@@ -11,6 +11,10 @@ env/
 *.debugbak
 _head_index_tmp.html
 index_final.html
+index.broken-*.html
+plan.md
+test_output.txt
+xr_batch_output.txt
 
 data/raw/
 data/temp/
@@ -18,6 +22,10 @@ database/
 backend/data/temp/
 reports/
 results/
+src/analysis/*.txt
+src/analysis/algorithm_vis/
+src/analysis/vis_500x500/
+src/analysis/vis_curvature_judgment/
 
 database/*.sqlite
 database/*.sqlite-journal

@@ -3,6 +3,8 @@ import re
 import sqlite3
 from typing import Dict, List, Optional
 
+import numpy as np
+
 PROCESS_FACTOR_PATTERNS = {
     "growth_temp": [r"\btemperature\b", r"温度", r"生长温度"],
     "growth_time": [r"\bgrowth time\b", r"\btime\b", r"生长时间"],
@@ -23,30 +25,46 @@ MORPHOLOGY_FACTOR_PATTERNS = {
 }
 
 PERFORMANCE_FACTOR_PATTERNS = {
-    "conductivity": [r"\bconductiv", r"电导", r"导电"],
-    "resistivity": [r"\bresistiv", r"电阻率"],
+    "conductivity": [
+        r"\bconductiv",
+        r"\belectrical conductivity\b",
+        r"\bspecific conductivity\b",
+        r"\bconductance\b",
+        r"电导",
+        r"导电",
+    ],
+    "resistivity": [r"\bresistiv", r"\belectrical resist", r"电阻率"],
     "sheet_resistance": [r"\bsheet resistance\b", r"方阻"],
-    "tensile_strength": [r"\btensile\b", r"抗拉", r"强度"],
-    "modulus": [r"\bmodulus\b", r"模量"],
+    "tensile_strength": [
+        r"\btensile\b",
+        r"\bmechanical strength\b",
+        r"\bultimate strength\b",
+        r"\bstrength\b",
+        r"抗拉",
+        r"强度",
+    ],
+    "modulus": [r"\bmodulus\b", r"\byoung'?s modulus\b", r"\belastic modulus\b", r"\bstiffness\b", r"模量"],
+}
+
+INVERSE_PERFORMANCE_FACTORS = {
+    "resistivity": "conductivity",
+    "sheet_resistance": "conductivity",
 }
 
 INCREASE_PATTERNS = [r"increase", r"improve", r"enhance", r"rise", r"提高", r"增大", r"增加", r"改善"]
 DECREASE_PATTERNS = [r"decrease", r"reduce", r"drop", r"decline", r"降低", r"减小", r"下降", r"恶化"]
-MECHANISM_PATTERNS = [
-    r"mechanism",
-    r"kinetic",
-    r"diffusion",
-    r"deactivation",
-    r"poison",
-    r"ripening",
-    r"activation energy",
-    r"机理",
-    r"动力学",
-    r"扩散",
-    r"失活",
-    r"中毒",
-    r"烧结",
-    r"团聚",
+MECHANISM_FACTOR_PATTERNS = {
+    "diffusion": [r"\bdiffusion\b", r"扩散"],
+    "catalyst_deactivation": [r"\bdeactivation\b", r"\bpoison", r"失活", r"中毒"],
+    "catalyst_agglomeration": [r"\bripening\b", r"\bagglomer", r"\bsinter", r"烧结", r"团聚"],
+    "growth_kinetics": [r"\bkinetic", r"\bactivation energy\b", r"动力学"],
+    "boundary_layer_effect": [r"\bboundary layer\b", r"边界层"],
+}
+
+MECHANISM_PATTERNS = [r"mechanism", r"机理"] + [
+    pattern
+    for patterns in MECHANISM_FACTOR_PATTERNS.values()
+    for pattern in patterns
 ]
 
 
@@ -81,7 +99,17 @@ DEFAULT_TASK_PROFILES = (
 class KnowledgeBaseService:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self.embedding_model_name = os.getenv(
+            "CNTA_KB_EMBED_MODEL",
+            "sentence-transformers/all-MiniLM-L6-v2",
+        )
+        self._embedding_model = None
+        self._embedding_disabled_reason: Optional[str] = None
+        self._semantic_cache: Optional[Dict[str, object]] = None
         self.init_schema()
+
+    def _invalidate_semantic_cache(self):
+        self._semantic_cache = None
 
     def _prepare_db_path(self):
         if os.path.exists(self.db_path) and os.path.getsize(self.db_path) == 0:
@@ -275,6 +303,7 @@ class KnowledgeBaseService:
         finally:
             conn.close()
 
+        self._invalidate_semantic_cache()
         return {"doc_id": doc_id, "chunk_count": len(chunks)}
 
     def list_documents(self) -> List[Dict[str, object]]:
@@ -302,6 +331,7 @@ class KnowledgeBaseService:
             conn.commit()
         finally:
             conn.close()
+        self._invalidate_semantic_cache()
 
     def update_document_theme(self, doc_id: int, theme: str) -> None:
         conn = self._connect()
@@ -317,6 +347,7 @@ class KnowledgeBaseService:
             conn.commit()
         finally:
             conn.close()
+        self._invalidate_semantic_cache()
 
     def search(
         self,
@@ -343,15 +374,22 @@ class KnowledgeBaseService:
         finally:
             conn.close()
 
+        row_dicts = [dict(row) for row in rows]
+        semantic_scores = self._semantic_scores(query, row_dicts)
+        relation_scores = self._relation_constraint_scores(query, row_dicts)
+
         scored = []
-        for row in rows:
-            score = self._score_row(dict(row), query_tokens, task_profile)
+        for row in row_dicts:
+            lexical_score = self._score_row(row, query_tokens, task_profile)
+            semantic_score = semantic_scores.get(int(row["id"]), 0.0)
+            relation_score = relation_scores.get(int(row["doc_id"]), 0.0)
+            score = lexical_score + (semantic_score * 6.0) + relation_score
             if score > 0:
-                scored.append((score, dict(row)))
+                scored.append((score, row, semantic_score, relation_score))
 
         scored.sort(key=lambda item: item[0], reverse=True)
         results = []
-        for score, row in scored[:top_k]:
+        for score, row, semantic_score, relation_score in scored[:top_k]:
             results.append(
                 {
                     "chunk_id": row["id"],
@@ -362,6 +400,8 @@ class KnowledgeBaseService:
                     "knowledge_type": row["knowledge_type"],
                     "text": row["text"][:400],
                     "score": round(score, 4),
+                    "semantic_score": round(semantic_score, 4),
+                    "relation_score": round(relation_score, 4),
                 }
             )
         return results
@@ -456,6 +496,7 @@ class KnowledgeBaseService:
             }
         finally:
             conn.close()
+            self._invalidate_semantic_cache()
 
     def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
         query_tokens = set(self._tokenize(query))
@@ -510,6 +551,8 @@ class KnowledgeBaseService:
             "process_to_morphology": [],
             "morphology_to_performance": [],
             "process_to_performance": [],
+            "process_to_mechanism": [],
+            "mechanism_to_morphology": [],
             "mechanism_evidence": [],
         }
         for row in links:
@@ -666,6 +709,212 @@ class KnowledgeBaseService:
             frequency[token] = frequency.get(token, 0) + 1
         return sorted(frequency, key=lambda token: (-frequency[token], token))[:top_n]
 
+    def _semantic_scores(self, query: str, rows: List[Dict[str, object]]) -> Dict[int, float]:
+        if not query or not rows:
+            return {}
+
+        model = self._get_embedding_model()
+        if model is None:
+            return {}
+
+        cache = self._ensure_semantic_cache(rows, model)
+        if cache is None:
+            return {}
+
+        query_embedding = self._encode_texts(model, [query])
+        if query_embedding.size == 0:
+            return {}
+
+        query_vector = query_embedding[0]
+        similarities = cache["embeddings"] @ query_vector
+        return {
+            int(row["id"]): float(score)
+            for row, score in zip(cache["rows"], similarities)
+        }
+
+    def _relation_constraint_scores(
+        self,
+        query: str,
+        rows: List[Dict[str, object]],
+    ) -> Dict[int, float]:
+        if not query or not rows:
+            return {}
+
+        profile = self._build_query_relation_profile(query)
+        if not profile["relation_types"] and not any(
+            profile[key] for key in ("process_hits", "morph_hits", "perf_hits", "mechanism_hits")
+        ):
+            return {}
+
+        doc_ids = sorted({int(row["doc_id"]) for row in rows})
+        if not doc_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in doc_ids)
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            link_rows = conn.execute(
+                f"""
+                SELECT doc_id, relation_type, process_factor, morphology_factor,
+                       performance_factor, source_node, target_node, confidence
+                FROM kb_links
+                WHERE doc_id IN ({placeholders})
+                """,
+                tuple(doc_ids),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        scores = {doc_id: 0.0 for doc_id in doc_ids}
+        matched_relation_types: Dict[int, set] = {doc_id: set() for doc_id in doc_ids}
+        for row in link_rows:
+            doc_id = int(row["doc_id"])
+            link_score = self._score_link_against_query_profile(dict(row), profile)
+            if link_score <= 0:
+                continue
+            scores[doc_id] += link_score
+            relation_type = str(row["relation_type"] or "")
+            if relation_type:
+                matched_relation_types[doc_id].add(relation_type)
+
+        for doc_id, rel_types in matched_relation_types.items():
+            if rel_types:
+                scores[doc_id] += min(len(rel_types) * 0.35, 1.4)
+        return scores
+
+    def _build_query_relation_profile(self, query: str) -> Dict[str, object]:
+        process_hits = self._match_factors(query, PROCESS_FACTOR_PATTERNS)
+        morph_hits = self._match_factors(query, MORPHOLOGY_FACTOR_PATTERNS)
+        perf_hits = self._match_factors(query, PERFORMANCE_FACTOR_PATTERNS)
+        mechanism_hits = self._match_factors(query, MECHANISM_FACTOR_PATTERNS)
+
+        relation_types = set()
+        if process_hits and morph_hits:
+            relation_types.add("process_to_morphology")
+        if process_hits and perf_hits:
+            relation_types.add("process_to_performance")
+        if morph_hits and perf_hits:
+            relation_types.add("morphology_to_performance")
+        if process_hits and mechanism_hits:
+            relation_types.add("process_to_mechanism")
+        if mechanism_hits and morph_hits:
+            relation_types.add("mechanism_to_morphology")
+        if mechanism_hits:
+            relation_types.add("mechanism_evidence")
+
+        return {
+            "process_hits": set(process_hits),
+            "morph_hits": set(morph_hits),
+            "perf_hits": set(perf_hits),
+            "mechanism_hits": set(mechanism_hits),
+            "relation_types": relation_types,
+        }
+
+    @staticmethod
+    def _score_link_against_query_profile(
+        link: Dict[str, object],
+        profile: Dict[str, object],
+    ) -> float:
+        score = 0.0
+        relation_type = str(link.get("relation_type") or "")
+        if relation_type in profile["relation_types"]:
+            score += 1.0
+
+        process_factor = str(link.get("process_factor") or "")
+        if process_factor and process_factor in profile["process_hits"]:
+            score += 0.7
+
+        morphology_factor = str(link.get("morphology_factor") or "")
+        if morphology_factor and morphology_factor in profile["morph_hits"]:
+            score += 0.7
+
+        performance_factor = str(link.get("performance_factor") or "")
+        if performance_factor and performance_factor in profile["perf_hits"]:
+            score += 0.7
+
+        mechanism_text = " ".join(
+            str(link.get(key) or "") for key in ("source_node", "target_node")
+        )
+        if any(hit in mechanism_text for hit in profile["mechanism_hits"]):
+            score += 0.8
+
+        confidence = float(link.get("confidence") or 0.0)
+        if score > 0:
+            score *= 0.7 + min(confidence, 1.0) * 0.3
+        return score
+
+    def _get_embedding_model(self):
+        if self._embedding_disabled_reason:
+            return None
+        if self._embedding_model is not None:
+            return self._embedding_model
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self._embedding_model = SentenceTransformer(
+                self.embedding_model_name,
+                local_files_only=True,
+            )
+            return self._embedding_model
+        except Exception as exc:
+            self._embedding_disabled_reason = str(exc)
+            return None
+
+    def _ensure_semantic_cache(self, rows: List[Dict[str, object]], model) -> Optional[Dict[str, object]]:
+        fingerprint = self._semantic_fingerprint(rows)
+        if self._semantic_cache and self._semantic_cache.get("fingerprint") == fingerprint:
+            return self._semantic_cache
+
+        texts = [self._compose_semantic_text(row) for row in rows]
+        embeddings = self._encode_texts(model, texts)
+        if embeddings.size == 0:
+            return None
+
+        self._semantic_cache = {
+            "fingerprint": fingerprint,
+            "rows": rows,
+            "embeddings": embeddings,
+        }
+        return self._semantic_cache
+
+    @staticmethod
+    def _encode_texts(model, texts: List[str]) -> np.ndarray:
+        vectors = np.asarray(
+            model.encode(
+                texts,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            ),
+            dtype=float,
+        )
+        if vectors.ndim == 1:
+            vectors = vectors.reshape(1, -1)
+        return vectors
+
+    @staticmethod
+    def _compose_semantic_text(row: Dict[str, object]) -> str:
+        parts = [
+            str(row.get("title") or ""),
+            str(row.get("theme") or ""),
+            str(row.get("knowledge_type") or ""),
+            str(row.get("keywords") or ""),
+            str(row.get("text") or "")[:800],
+        ]
+        return " ".join(part for part in parts if part).strip()
+
+    @staticmethod
+    def _semantic_fingerprint(rows: List[Dict[str, object]]) -> tuple:
+        ids = [int(row["id"]) for row in rows]
+        return (
+            len(rows),
+            ids[0] if ids else -1,
+            ids[-1] if ids else -1,
+            sum(ids),
+            sum(len(str(row.get("text") or "")) for row in rows),
+        )
+
     def _extract_relations_from_chunk(self, chunk: str) -> List[Dict[str, str]]:
         if not chunk:
             return []
@@ -679,12 +928,13 @@ class KnowledgeBaseService:
             process_hits = self._match_factors(sentence, PROCESS_FACTOR_PATTERNS)
             morph_hits = self._match_factors(sentence, MORPHOLOGY_FACTOR_PATTERNS)
             perf_hits = self._match_factors(sentence, PERFORMANCE_FACTOR_PATTERNS)
+            mechanism_hits = self._match_factors(sentence, MECHANISM_FACTOR_PATTERNS)
 
             direction = self._detect_effect_direction(sentence)
             if not direction:
                 continue
 
-            has_mechanism = any(
+            has_mechanism = bool(mechanism_hits) or any(
                 re.search(pattern, sentence.lower()) for pattern in MECHANISM_PATTERNS
             )
             base_confidence = 0.55 + 0.1 * int(has_mechanism)
@@ -701,6 +951,40 @@ class KnowledgeBaseService:
                             "performance_factor": None,
                             "effect_direction": direction,
                             "confidence": min(base_confidence, 0.95),
+                            "mechanism_summary": sentence[:220],
+                            "evidence_text": sentence[:320],
+                        }
+                    )
+
+            for process_factor in process_hits:
+                for mechanism_factor in mechanism_hits:
+                    relations.append(
+                        {
+                            "relation_type": "process_to_mechanism",
+                            "source_node": f"process:{process_factor}",
+                            "target_node": f"mechanism:{mechanism_factor}",
+                            "process_factor": process_factor,
+                            "morphology_factor": None,
+                            "performance_factor": None,
+                            "effect_direction": direction,
+                            "confidence": min(base_confidence + 0.08, 0.95),
+                            "mechanism_summary": sentence[:220],
+                            "evidence_text": sentence[:320],
+                        }
+                    )
+
+            for mechanism_factor in mechanism_hits:
+                for morphology_factor in morph_hits:
+                    relations.append(
+                        {
+                            "relation_type": "mechanism_to_morphology",
+                            "source_node": f"mechanism:{mechanism_factor}",
+                            "target_node": f"morphology:{morphology_factor}",
+                            "process_factor": None,
+                            "morphology_factor": morphology_factor,
+                            "performance_factor": None,
+                            "effect_direction": direction,
+                            "confidence": min(base_confidence + 0.08, 0.95),
                             "mechanism_summary": sentence[:220],
                             "evidence_text": sentence[:320],
                         }
@@ -742,12 +1026,16 @@ class KnowledgeBaseService:
 
             if has_mechanism and (process_hits or morph_hits or perf_hits):
                 source = (
-                    f"process:{process_hits[0]}"
-                    if process_hits
+                    f"mechanism:{mechanism_hits[0]}"
+                    if mechanism_hits
                     else (
-                        f"morphology:{morph_hits[0]}"
-                        if morph_hits
-                        else f"performance:{perf_hits[0]}"
+                        f"process:{process_hits[0]}"
+                        if process_hits
+                        else (
+                            f"morphology:{morph_hits[0]}"
+                            if morph_hits
+                            else f"performance:{perf_hits[0]}"
+                        )
                     )
                 )
                 relations.append(
@@ -764,7 +1052,7 @@ class KnowledgeBaseService:
                         "evidence_text": sentence[:320],
                     }
                 )
-        return relations
+        return self._expand_inverse_performance_relations(relations)
 
     @staticmethod
     def _match_factors(text: str, factor_patterns: Dict[str, List[str]]) -> List[str]:
@@ -787,6 +1075,53 @@ class KnowledgeBaseService:
         if has_dec:
             return "decrease"
         return None
+
+    @classmethod
+    def _expand_inverse_performance_relations(cls, relations: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        expanded = list(relations)
+        seen = {
+            (
+                relation.get("relation_type"),
+                relation.get("source_node"),
+                relation.get("target_node"),
+                relation.get("effect_direction"),
+            )
+            for relation in relations
+        }
+        for relation in relations:
+            performance_factor = str(relation.get("performance_factor") or "")
+            inverse_factor = INVERSE_PERFORMANCE_FACTORS.get(performance_factor)
+            if not inverse_factor:
+                continue
+            if relation.get("relation_type") not in {"morphology_to_performance", "process_to_performance"}:
+                continue
+
+            derived_relation = {
+                **relation,
+                "target_node": f"performance:{inverse_factor}",
+                "performance_factor": inverse_factor,
+                "effect_direction": cls._invert_effect_direction(relation.get("effect_direction")),
+                "confidence": min(float(relation.get("confidence") or 0.5) + 0.04, 0.9),
+            }
+            signature = (
+                derived_relation.get("relation_type"),
+                derived_relation.get("source_node"),
+                derived_relation.get("target_node"),
+                derived_relation.get("effect_direction"),
+            )
+            if signature in seen:
+                continue
+            seen.add(signature)
+            expanded.append(derived_relation)
+        return expanded
+
+    @staticmethod
+    def _invert_effect_direction(direction: Optional[str]) -> Optional[str]:
+        if direction == "increase":
+            return "decrease"
+        if direction == "decrease":
+            return "increase"
+        return direction
 
     @staticmethod
     def _extract_text_from_pdf(file_path: str) -> str:

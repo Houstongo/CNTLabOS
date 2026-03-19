@@ -130,6 +130,65 @@
         #rag-page .data-card {
             margin: 0;
         }
+        #rag-page {
+            overflow: hidden;
+        }
+        .rag-workspace {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 0;
+        }
+        .rag-subpage {
+            flex: 1;
+            min-height: 0;
+        }
+        .rag-panel-scroll {
+            min-height: 0;
+            overflow-y: auto;
+        }
+        .rag-mini-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 14px 16px;
+        }
+        .rag-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .rag-subpage-title {
+            font-size: 12px;
+            font-weight: 900;
+            color: #475569;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .rag-graph-filter-btn {
+            width: 100%;
+            border: 1px solid #dbe5f0;
+            background: #ffffff;
+            color: #475569;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .rag-graph-filter-btn:hover {
+            border-color: #818cf8;
+            background: #eef2ff;
+            color: #3730a3;
+        }
+        .rag-graph-filter-btn.active {
+            border-color: #3730a3;
+            background: #3730a3;
+            color: #ffffff;
+            box-shadow: 0 8px 18px rgba(55, 48, 163, 0.2);
+        }
         .rag-tab-btn {
             border: 1px solid #dbe5f0;
             background: #ffffff;
@@ -150,6 +209,16 @@
             background: #3730a3;
             color: #ffffff;
             box-shadow: 0 8px 18px rgba(55, 48, 163, 0.25);
+        }
+        @media (max-width: 1279px) {
+            #rag-page {
+                overflow-y: auto;
+            }
+            .rag-workspace,
+            .rag-subpage,
+            .rag-panel-scroll {
+                min-height: auto;
+            }
         }
         .ml-target-tab {
             border: 1px solid #cbd5e1;
@@ -220,15 +289,91 @@
             width: var(--det-w); 
             height: 100vh; 
             background: #ffffff; 
-            box-shadow: -10px 0 30px rgba(0,0,0,0.1); 
-            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+            box-shadow: -20px 0 50px rgba(0,0,0,0.08); 
+            transition: right 0.5s cubic-bezier(0.16, 1, 0.3, 1); 
             z-index: 100; 
             border-left: 1px solid #ebedf3; 
+            display: none;
+            flex-direction: column;
         }
-        .details-panel.open { right: 0; }
-        .feature-box { background: #f8f9fb; border: 1px solid #ebedf3; padding: 16px; border-radius: 12px; }
+        .details-panel.open { right: 0; display: flex; }
         
-        .page-ctrl button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .premium-card {
+            background: #ffffff;
+            border: 1px solid #f1f3f6;
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+        }
+        .premium-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+            transform: translateY(-2px);
+        }
+
+        .feature-box { 
+            background: #f8fafc; 
+            border: 1px solid #f1f5f9; 
+            padding: 20px; 
+            border-radius: 18px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: transparent;
+            transition: all 0.3s ease;
+        }
+        .feature-box:hover {
+            background: #fff;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            border-color: #e2e8f0;
+        }
+        .feature-box.blue:hover { border-left: 4px solid #3b82f6; }
+        .feature-box.orange:hover { border-left: 4px solid #f97316; }
+        .feature-box.emerald:hover { border-left: 4px solid #10b981; }
+        .feature-box.purple:hover { border-left: 4px solid #8b5cf6; }
+
+        .stat-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        
+        .btn-gradient-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        }
+        .btn-gradient-secondary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+        }
+        
+        .detail-img-box {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .detail-img-box img {
+            transition: transform 0.5s ease;
+        }
+        
+        .detail-img-box:hover img {
+            transform: scale(1.05);
+        }
 
         /* 左扩展解释面板 */
         .interpret-panel { 
@@ -247,8 +392,9 @@
             pointer-events: none; 
             transform: translateX(-12px); 
             transition: opacity 0.3s, transform 0.3s, left 0.3s cubic-bezier(0.4,0,0.2,1); 
+            display: none;
         }
-        .interpret-panel.open { opacity: 1; pointer-events: auto; transform: translateX(0); }
+        .interpret-panel.open { opacity: 1; pointer-events: auto; transform: translateX(0); display: flex; }
 
         /* 解释面板 markdown 内容样式 */
         .interp-md h2 { font-size: 13px; font-weight: 800; color: #1e293b; margin: 16px 0 7px; padding-bottom: 5px; border-bottom: 2px solid #e2e8f0; }
@@ -312,7 +458,7 @@
 
         <!-- Navigation -->
         <div class="flex-1 overflow-y-auto py-2">
-            <div class="nav-item active" onclick="setSource('')">
+            <div class="nav-item active" onclick="showPage('data', this); setSource('', this)">
                 <i class="fas fa-layer-group"></i>
                 <span class="nav-text">实验原始数据库</span>
             </div>
@@ -464,9 +610,9 @@
                     <div class="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4">
                         <div id="ml-target-tabs" class="flex flex-wrap items-center gap-2">
                             <button type="button" class="ml-target-tab" data-target="diameter" onclick="selectMlVizTarget('diameter')">平均管径模型</button>
-                            <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">面填充密度模型</button>
-                            <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向度预测</button>
-                            <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">骨架曲率推断</button>
+                            <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">覆盖密度模型</button>
+                            <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向性预测</button>
+                            <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">平均曲率推断</button>
                         </div>
                         <div class="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                             <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">视图设置</span>
@@ -563,10 +709,10 @@
                                 <th class="px-3 py-3 text-right">实际温度</th>
                                 <th class="px-3 py-3 text-right">混合流速</th>
                                 <th class="px-3 py-3 text-right">催化剂浓度</th>
-                                <th class="px-3 py-3 text-right text-blue-600">模型管径</th>
-                                <th class="px-3 py-3 text-right text-emerald-600">模型密度</th>
-                                <th class="px-3 py-3 text-right text-orange-600">模型取向</th>
-                                <th class="px-3 py-3 text-right text-purple-600">模型曲率</th>
+                                <th class="px-3 py-3 text-right text-blue-600">平均管径</th>
+                                <th class="px-3 py-3 text-right text-emerald-600">覆盖密度</th>
+                                <th class="px-3 py-3 text-right text-orange-600">取向性</th>
+                                <th class="px-3 py-3 text-right text-purple-600">平均曲率</th>
                             </tr>
                         </thead>
                         <tbody id="ml-table-body" class="divide-y divide-slate-100/60"></tbody>
@@ -602,8 +748,14 @@
                             <option value="0">未提取</option>
                         </select>
                         <input id="clean-keyword-filter" oninput="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[180px] outline-none placeholder:text-slate-400 focus:border-blue-400" placeholder="搜索样品/批次/文件名">
-                        <button onclick="loadCleanPage()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black shadow-lg shadow-blue-500/20 transition-all">
-                            <i class="fas fa-sync-alt mr-1"></i>刷新数据
+                        <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all">
+                            <i class="fas fa-list-alt mr-1"></i>查看已删除
+                        </button>
+                        <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all">
+                            <i class="fas fa-list-alt mr-1"></i>查看已删除
+                        </button>
+                        <button onclick="restartBackend()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-black shadow-lg shadow-red-500/20 transition-all">
+                            <i class="fas fa-redo mr-1"></i>重启后端
                         </button>
                     </div>
                 </div>
@@ -666,11 +818,188 @@
                             <div class="text-center text-xs text-slate-500 font-bold mt-10">👈 选择左侧样品以显示其特征</div>
                         </div>
                     </div>
+                    <!-- 删除操作按钮 -->
+                    <div class="p-4 border-t border-slate-200 bg-slate-50">
+                        <div id="clean-delete-actions" class="flex flex-col gap-2">
+                            <!-- JS injected delete/restore buttons -->
+                        </div>
+                    </div>
                 </div>
             </div>
             <!-- Keep hidden grid below for compatibility if needed -->
             <div id="clean-summary-grid" class="hidden"></div>
         </div>
+
+    <!-- ══ RAG 文献知识库页面 ══ -->
+    <div id="rag-page" class="hidden flex-1 p-4 xl:p-5 bg-slate-50/50">
+        <div class="rag-workspace">
+            <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">领域文献知识库</h2>
+                    <p class="text-sm text-slate-400 mt-1">把“工艺→形貌→机理→证据/性能”的成果拆分到独立工作页，便于展示与答辩演示</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="rag-tab-overview-btn" class="rag-tab-btn active" onclick="switchRagSubPage('overview')">总览</button>
+                    <button id="rag-tab-graph-btn" class="rag-tab-btn" onclick="switchRagSubPage('graph')">知识图谱</button>
+                    <button id="rag-tab-performance-btn" class="rag-tab-btn" onclick="switchRagSubPage('performance')">性能关联</button>
+                    <button id="rag-tab-manage-btn" class="rag-tab-btn" onclick="switchRagSubPage('manage')">文献管理</button>
+                </div>
+            </div>
+
+            <div class="data-card p-4 lg:p-5 flex-none">
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col xl:flex-row xl:items-center gap-3">
+                        <div class="flex-1 flex gap-2">
+                            <input id="rag-link-query" type="text"
+                                class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                                placeholder="输入查询词，例如：temperature alignment conductivity mechanism"
+                                value="temperature alignment conductivity mechanism"
+                                onkeydown="if(event.key==='Enter'){event.preventDefault();loadRagLinks();}">
+                            <button onclick="loadRagLinks()"
+                                class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shrink-0">
+                                查询
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span>主分析链：工艺参数 → 形貌特征 → 生长机理 → 文献证据</span>
+                            <button onclick="loadRagLinks()" class="text-slate-400 hover:text-indigo-500 transition font-bold shrink-0">
+                                <i class="fas fa-sync-alt mr-1"></i>刷新关联
+                            </button>
+                        </div>
+                    </div>
+                    <div id="rag-toolbar-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs"></div>
+                </div>
+            </div>
+
+            <div id="rag-subpage-overview" class="rag-subpage flex flex-col gap-4">
+                <div id="rag-success-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-none"></div>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 flex-1 min-h-0">
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">关系摘要</div>
+                            <div class="text-[10px] text-slate-400">一屏展示主要链路</div>
+                        </div>
+                        <div id="rag-overview-link-summary" class="grid grid-cols-2 gap-3 text-xs"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">图谱速览</div>
+                            <div class="text-[10px] text-slate-400">完整图谱请切换到知识图谱页</div>
+                        </div>
+                        <div id="rag-graph-glance" class="grid grid-cols-2 gap-3 text-xs"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1 min-h-0">
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="rag-subpage-title">工艺 → 形貌</div>
+                            <button id="rag-overview-more-p2m" class="text-[11px] font-bold text-indigo-500 hover:text-indigo-700" onclick="switchRagSubPage('graph')">查看更多</button>
+                        </div>
+                        <div id="rag-chain-p2m" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="rag-subpage-title">形貌 → 性能</div>
+                            <button id="rag-overview-more-m2p" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700" onclick="switchRagSubPage('performance')">查看更多</button>
+                        </div>
+                        <div id="rag-chain-m2p" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="rag-subpage-title">工艺 → 性能</div>
+                            <button id="rag-overview-more-p2p" class="text-[11px] font-bold text-sky-500 hover:text-sky-700" onclick="switchRagSubPage('performance')">查看更多</button>
+                        </div>
+                        <div id="rag-chain-p2p" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="rag-subpage-title">机理 → 文献证据</div>
+                            <button id="rag-overview-more-mech" class="text-[11px] font-bold text-slate-500 hover:text-slate-700" onclick="switchRagSubPage('graph')">查看更多</button>
+                        </div>
+                        <div id="rag-chain-mech" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="rag-subpage-graph" class="rag-subpage hidden">
+                <div class="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-4 h-full min-h-0">
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">图谱摘要</div>
+                            <div class="text-[10px] text-slate-400">单独查看图谱</div>
+                        </div>
+                        <div class="space-y-2 mb-3">
+                            <button id="rag-graph-filter-all" class="rag-graph-filter-btn active" onclick="setRagGraphFilter('all')">全部关系</button>
+                            <button id="rag-graph-filter-process_to_morphology" class="rag-graph-filter-btn" onclick="setRagGraphFilter('process_to_morphology')">仅看工艺 → 形貌</button>
+                            <button id="rag-graph-filter-morphology_to_performance" class="rag-graph-filter-btn" onclick="setRagGraphFilter('morphology_to_performance')">仅看形貌 → 性能</button>
+                            <button id="rag-graph-filter-process_to_performance" class="rag-graph-filter-btn" onclick="setRagGraphFilter('process_to_performance')">仅看工艺 → 性能</button>
+                            <button id="rag-graph-filter-mechanism_evidence" class="rag-graph-filter-btn" onclick="setRagGraphFilter('mechanism_evidence')">仅看机理证据</button>
+                        </div>
+                        <div id="rag-graph-link-summary" class="rag-stat-grid text-xs mb-3"></div>
+                        <div id="rag-graph-insights" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">知识图谱</div>
+                            <div class="text-[10px] text-slate-400">按当前查询实时生成，可拖拽缩放</div>
+                        </div>
+                        <div id="rag-graph-chart" class="w-full flex-1 min-h-0 rounded-2xl bg-white border border-slate-200"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="rag-subpage-performance" class="rag-subpage hidden">
+                <div class="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-4 h-full min-h-0">
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">性能摘要</div>
+                            <div class="text-[10px] text-slate-400">聚焦导电 / 强度 / 模量</div>
+                        </div>
+                        <div id="rag-performance-summary" class="grid grid-cols-2 gap-2 text-xs"></div>
+                    </div>
+                    <div class="data-card p-4 min-h-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="rag-subpage-title">性能关系列表</div>
+                            <div class="text-[10px] text-slate-400">支持答辩时直接展示热点链路</div>
+                        </div>
+                        <div id="rag-performance-list" class="space-y-2 text-xs rag-panel-scroll"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="rag-subpage-manage" class="rag-subpage hidden">
+                <div class="grid grid-cols-1 xl:grid-cols-[0.42fr_0.58fr] gap-4 h-full min-h-0">
+                    <div class="data-card p-6">
+                        <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <i class="fas fa-cloud-upload-alt text-blue-400"></i>上传新文献
+                        </h3>
+                        <div class="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-blue-300 transition-colors group">
+                            <i class="fas fa-file-pdf text-5xl text-red-200 mb-4 block group-hover:text-red-300 transition-colors"></i>
+                            <p class="text-sm text-slate-400 mb-4">仅支持 PDF 格式，单文件建议不超过 50MB</p>
+                            <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100">
+                                <i class="fas fa-plus"></i>选择 PDF 文件
+                                <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="data-card p-6 min-h-0">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-list text-slate-400"></i>已收录文献
+                            </h3>
+                            <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
+                                <i class="fas fa-sync-alt mr-1"></i>刷新列表
+                            </button>
+                        </div>
+                        <div id="rag-doc-list" class="space-y-2 min-h-[60px] text-sm rag-panel-scroll">
+                            <span class="text-slate-300">暂无文献，请上传 PDF 文件</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 
     <div id="clean-lightbox" class="clean-lightbox hidden" onclick="closeCleanLightbox()">
@@ -687,191 +1016,104 @@
         </div>
     </div>
 
-    <!-- ══ RAG 文献知识库页面 ══ -->
-    <div id="rag-page" class="hidden flex-1 overflow-y-auto p-6 bg-slate-50/50">
-        <div class="mb-5 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
-            <div>
-                <h2 class="text-2xl font-black text-slate-800">领域文献知识库</h2>
-                <p class="text-sm text-slate-400 mt-1">把“工艺→形貌→机理→证据/性能”的成果直接展示在本页</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <button id="rag-tab-success-btn" class="rag-tab-btn active" onclick="switchRagSubPage('success')">成果展示</button>
-                <button id="rag-tab-manage-btn" class="rag-tab-btn" onclick="switchRagSubPage('manage')">文献管理</button>
-            </div>
-        </div>
-
-        <div id="rag-subpage-success" class="space-y-4">
-            <div id="rag-success-kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
-            <div class="data-card p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fas fa-project-diagram text-indigo-400"></i>知识关联可视化
-                </h3>
-                <button onclick="loadRagLinks()" class="text-xs text-slate-400 hover:text-indigo-500 transition font-bold">
-                    <i class="fas fa-sync-alt mr-1"></i>刷新关联
-                </button>
-            </div>
-            <div class="flex flex-col gap-3 mb-4">
-                <div class="flex gap-2">
-                    <input id="rag-link-query" type="text"
-                        class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                        placeholder="输入查询词，例如：temperature alignment conductivity mechanism"
-                        value="temperature alignment conductivity mechanism"
-                        onkeydown="if(event.key==='Enter'){event.preventDefault();loadRagLinks();}">
-                    <button onclick="loadRagLinks()"
-                        class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm">
-                        查询
-                    </button>
-                </div>
-                <div class="text-[11px] text-slate-400">
-                    主分析链：工艺参数 → 形貌特征 → 生长机理 → 文献证据（并补充工艺/形貌到性能关联）
-                </div>
-            </div>
-            <div id="rag-link-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs"></div>
-            <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
-                <div class="text-xs font-black text-slate-600 mb-2">关系图谱（按当前查询实时生成）</div>
-                <div id="rag-graph-chart" class="w-full h-[360px] rounded-lg bg-white border border-slate-200"></div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                    <div class="text-xs font-black text-slate-600 mb-2">工艺 → 形貌</div>
-                    <div id="rag-chain-p2m" class="space-y-2 text-xs"></div>
-                </div>
-                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                    <div class="text-xs font-black text-slate-600 mb-2">形貌 → 性能</div>
-                    <div id="rag-chain-m2p" class="space-y-2 text-xs"></div>
-                </div>
-                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                    <div class="text-xs font-black text-slate-600 mb-2">工艺 → 性能</div>
-                    <div id="rag-chain-p2p" class="space-y-2 text-xs"></div>
-                </div>
-                <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                    <div class="text-xs font-black text-slate-600 mb-2">机理 → 文献证据</div>
-                    <div id="rag-chain-mech" class="space-y-2 text-xs"></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="rag-subpage-manage" class="hidden space-y-4">
-            <div class="data-card p-6">
-                <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <i class="fas fa-cloud-upload-alt text-blue-400"></i>上传新文献
-                </h3>
-                <div class="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-blue-300 transition-colors group">
-                    <i class="fas fa-file-pdf text-5xl text-red-200 mb-4 block group-hover:text-red-300 transition-colors"></i>
-                    <p class="text-sm text-slate-400 mb-4">仅支持 PDF 格式，单文件建议不超过 50MB</p>
-                    <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100">
-                        <i class="fas fa-plus"></i>选择 PDF 文件
-                        <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
-                    </label>
-                </div>
-            </div>
-
-            <div class="data-card p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                        <i class="fas fa-list text-slate-400"></i>已收录文献
-                    </h3>
-                    <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
-                        <i class="fas fa-sync-alt mr-1"></i>刷新列表
-                    </button>
-                </div>
-                <div id="rag-doc-list" class="space-y-2 min-h-[60px] text-sm">
-                    <span class="text-slate-300">暂无文献，请上传 PDF 文件</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="details-panel" class="details-panel flex flex-col">
-        <div class="p-8 border-b flex justify-between items-center">
+    <div id="details-panel" class="details-panel">
+        <!-- 头部栏 -->
+        <div class="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
             <div class="flex items-center gap-3">
                 <button id="toggle-interpret-btn" onclick="toggleInterpretPanel()"
-                    title="展开/折叠 AI 分析面板"
-                    class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all">
-                    <i class="fas fa-columns text-xs"></i>
+                    class="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
+                    <i class="fas fa-columns text-sm"></i>
                 </button>
-                <h2 class="text-lg font-bold">样品形貌特征 AI 分析</h2>
+                <h2 class="text-lg font-black text-slate-800">样品精细特征分析</h2>
             </div>
-            <button onclick="closeAll()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            <button onclick="closeAll()" class="text-slate-300 hover:text-slate-600 transition-all"><i class="fas fa-times"></i></button>
         </div>
-        <div class="flex-1 overflow-y-auto p-8">
-            <div class="detail-img-box rounded-xl overflow-hidden shadow-2xl mb-8 bg-black">
-                <img id="detail-img" src="" class="w-full h-auto cursor-zoom-in">
+
+        <div class="flex-1 overflow-y-auto p-8 space-y-8">
+            <!-- 剧场级图像预览 -->
+            <div class="relative rounded-2xl overflow-hidden shadow-2xl bg-black aspect-video group">
+                <img id="detail-img" src="" class="w-full h-full object-contain cursor-zoom-in" alt="Sample Analysis">
+                <div id="d-status" class="absolute top-4 right-4 px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-lg uppercase tracking-widest shadow-lg">校验通过</div>
             </div>
 
-            <div class="mb-6">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">实验工艺溯源</h3>
+            <!-- 数据展示网格 -->
+            <div class="space-y-6">
+                <!-- 量化核心指标 (2x2) -->
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-slate-50 p-3 rounded-lg"><div class="text-[10px] text-slate-500 uppercase">样品文件名</div><div id="d-name" class="font-bold text-sm truncate">--</div></div>
-                    <div class="bg-slate-50 p-3 rounded-lg"><div class="text-[10px] text-slate-500 uppercase">所属批次</div><div id="d-source" class="font-bold text-sm">--</div></div>
-                    <div class="bg-blue-50/50 p-3 rounded-lg ring-1 ring-blue-100"><div class="text-[10px] text-blue-500 font-black uppercase">实际生长温度 (校准)</div><div id="d-actual-temp" class="font-black text-blue-700 text-sm">-- ℃</div></div>
-                    <div class="bg-slate-50 p-3 rounded-lg"><div class="text-[10px] text-slate-500 uppercase">炉内物理位置</div><div id="d-pos-cm" class="font-bold text-sm">-- cm</div></div>
+                    <div class="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-indigo-500 font-black uppercase tracking-wider mb-2">平均管径 (Diameter)</div>
+                        <div class="flex items-baseline gap-1">
+                            <span id="f-dia" class="text-3xl font-black text-indigo-900 leading-none">--</span>
+                            <span class="text-sm font-bold text-indigo-400">nm</span>
+                        </div>
+                    </div>
+                    <div class="bg-orange-50/50 p-5 rounded-2xl border border-orange-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-orange-500 font-black uppercase tracking-wider mb-2">取向性 (Alignment)</div>
+                        <div id="f-ali" class="text-3xl font-black text-orange-900 leading-none">--</div>
+                    </div>
+                    <div class="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-emerald-500 font-black uppercase tracking-wider mb-2">覆盖密度 (Density)</div>
+                        <div class="flex items-baseline gap-1">
+                            <span id="f-den" class="text-3xl font-black text-emerald-900 leading-none">--</span>
+                            <span class="text-sm font-bold text-emerald-400">%</span>
+                        </div>
+                    </div>
+                    <div class="bg-purple-50/50 p-5 rounded-2xl border border-purple-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-purple-500 font-black uppercase tracking-wider mb-2">平均曲率 (Curvature)</div>
+                        <div id="f-cur" class="text-xl font-black text-purple-900 leading-tight">--</div>
+                    </div>
+                </div>
+
+                <!-- 溯源参数详情 (横向排列) -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="premium-card p-5 bg-slate-50 border-slate-200">
+                        <div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3">实验批次 & 编号</div>
+                        <div id="d-source" class="text-xs font-black text-indigo-600 mb-1">--</div>
+                        <div id="d-name" class="text-[11px] font-bold text-slate-700 truncate">--</div>
+                    </div>
+                    <div class="premium-card p-5 bg-slate-50 border-slate-200">
+                        <div class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3">工艺参数回溯</div>
+                        <div class="flex justify-between items-center">
+                            <div class="text-center">
+                                <div class="text-[10px] text-slate-400 font-bold mb-0.5">温度</div>
+                                <div id="d-actual-temp" class="text-sm font-black text-slate-800">--</div>
+                            </div>
+                            <div class="w-px h-6 bg-slate-200 mx-2"></div>
+                            <div class="text-center">
+                                <div class="text-[10px] text-slate-400 font-bold mb-0.5">位置</div>
+                                <div id="d-pos-cm" class="text-sm font-black text-slate-800">--</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="mb-8">
-                <h3 class="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3 flex justify-between">
-                    <span>图像特征量化结果</span>
-                    <span id="d-status" class="text-[10px] bg-emerald-100 text-emerald-600 px-2 rounded">已验证</span>
-                </h3>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="feature-box border-blue-100">
-                        <div class="text-[10px] text-blue-400 font-bold">平均管径 (Diameter)</div>
-                        <div class="flex items-baseline gap-1 mt-1"><span id="f-dia" class="text-2xl font-black text-slate-800">--</span><span class="text-xs text-slate-400">nm</span></div>
-                    </div>
-                    <div class="feature-box">
-                        <div class="text-[10px] text-orange-400 font-bold">垂直取向度 (Alignment S)</div>
-                        <div class="flex items-baseline gap-1 mt-1"><span id="f-ali" class="text-2xl font-black text-slate-800">--</span></div>
-                    </div>
-                    <div class="feature-box">
-                        <div class="text-[10px] text-emerald-400 font-bold">面填充密度 (Density)</div>
-                        <div class="flex items-baseline gap-1 mt-1"><span id="f-den" class="text-2xl font-black text-slate-800">--</span><span class="text-xs text-slate-400">%</span></div>
-                    </div>
-                    <div class="feature-box">
-                        <div class="text-[10px] text-purple-400 font-bold">平均骨架曲率 (Curvature)</div>
-                        <div id="f-cur" class="text-lg font-bold text-slate-800 mt-1">--</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 操作按钮区 -->
-            <div class="grid grid-cols-2 gap-2 mb-2">
+            <!-- 底部沉浸式操作区 -->
+            <div class="space-y-3 pt-4">
                 <button id="reanalyze-btn" onclick="reanalyzeImage()"
-                    class="bg-slate-100 border border-slate-200 py-3 rounded-xl font-bold text-slate-600 hover:bg-blue-600 hover:text-white transition-all text-[13px]">
-                    <i class="fas fa-microchip mr-1.5"></i>AI 提取图像特征
+                    class="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 group">
+                    <i class="fas fa-microchip group-hover:rotate-12 transition-transform"></i> 
+                    <span>重新进行 AI 特征量化分析</span>
                 </button>
-                <button onclick="openInterpretPanel('ai')"
-                    class="bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition-all text-[13px] shadow-lg shadow-purple-100">
-                    <i class="fas fa-microscope mr-1.5"></i>科研诊断报告
-                </button>
-            </div>
-            <div class="flex gap-2 mb-6">
-                <button onclick="openAlgoVisualization()"
-                    class="flex-1 bg-teal-50 text-teal-600 border border-teal-200 py-2.5 rounded-xl font-bold hover:bg-teal-600 hover:text-white transition-all text-[13px]">
-                    <i class="fas fa-layer-group mr-1.5"></i>算法可视化
-                </button>
-                <button onclick="openEditModal(currentItem)"
-                    class="flex-1 bg-blue-50 text-blue-600 border border-blue-200 py-2.5 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all text-[13px]">
-                    <i class="fas fa-edit mr-1.5"></i>修改参数
-                </button>
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="openInterpretPanel('ai')"
+                        class="col-span-1 h-12 bg-purple-50 text-purple-600 border border-purple-200 rounded-xl font-black text-xs hover:bg-purple-600 hover:text-white transition-all">
+                        诊疗解读
+                    </button>
+                    <button onclick="openAlgoVisualization()"
+                        class="col-span-1 h-12 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-50 transition-all">
+                        算法流转
+                    </button>
+                    <button onclick="openEditModal(currentItem)"
+                        class="col-span-1 h-12 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-50 transition-all">
+                        修参数
+                    </button>
+                </div>
                 <button onclick="deleteRecord(currentItem.id)"
-                    class="w-12 bg-red-50 text-red-500 border border-red-100 py-2.5 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-all">
-                    <i class="fas fa-trash-alt"></i>
+                    class="w-full h-10 bg-red-50 text-red-500 border border-red-100 rounded-xl font-bold text-xs hover:bg-red-500 hover:text-white transition-all group">
+                    <i class="fas fa-trash-alt mr-2 group-hover:shake"></i> 彻底移除该实验记录
                 </button>
             </div>
-            <div class="flex gap-2 mb-6">
-                <button onclick="openEditModal(currentItem)"
-                    class="flex-1 bg-blue-50 text-blue-600 border border-blue-200 py-2.5 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all text-[13px]">
-                    <i class="fas fa-edit mr-1.5"></i>修改参数
-                </button>
-                <button onclick="deleteRecord(currentItem.id)"
-                    class="w-12 bg-red-50 text-red-500 border border-red-100 py-2.5 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-all">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            </div>
-
-
         </div>
     </div>
 
@@ -1196,15 +1438,18 @@
         }
 
         function setRagHeaderMode(enabled) {
+            const mainHeader = document.getElementById('main-header');
             const titleBlock = document.getElementById('header-title-block');
             const actionBlock = document.getElementById('header-actions-block');
             const progressText = document.getElementById('progress-text');
-            if (!titleBlock || !actionBlock) return;
+            if (!mainHeader || !titleBlock || !actionBlock) return;
             if (enabled) {
+                mainHeader.classList.add('hidden');
                 titleBlock.classList.remove('hidden');
                 actionBlock.classList.add('hidden');
                 if (progressText) progressText.innerText = '知识库模式 · 展示当前可验证成果';
             } else {
+                mainHeader.classList.remove('hidden');
                 actionBlock.classList.remove('hidden');
                 if (progressText && progressText.innerText.includes('知识库模式')) {
                     progressText.innerText = '正在检索本地数据库...';
@@ -1212,16 +1457,18 @@
             }
         }
 
-        function setSource(val) {
+        function setSource(val, triggerEl = null) {
             document.getElementById('source-filter').value = val;
 
             // 更新 UI 激活状态
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            const activeEl = triggerEl || window.event?.currentTarget || null;
+            if (activeEl) activeEl.classList.add('active');
 
             // 确保显示数据页、隐藏其它页
             document.getElementById('data-page')?.classList.remove('hidden');
             document.getElementById('ml-page')?.classList.add('hidden');
+            document.getElementById('clean-page')?.classList.add('hidden');
             document.getElementById('rag-page')?.classList.add('hidden');
             setMlFocusMode(false);
 
@@ -1333,7 +1580,7 @@
                         </div>
                         <div class="text-center text-slate-600 font-black text-[13px]">${item.magnification || '--'}<span class="text-[9px] ml-0.5 text-slate-300">x</span></div>
                         <div class="text-center">
-                            <span class="${item.processed ? 'text-emerald-500' : 'text-slate-300'}">
+                            <span class="${item.processed ? 'text-emerald-500' : 'text-slate-300'} inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-slate-100 transition cursor-pointer" title="打开详情" onclick='event.stopPropagation(); openDetails(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
                                 <i class="fas ${item.processed ? 'fa-check-circle' : 'fa-clock'} text-lg"></i>
                             </span>
                         </div>
@@ -1373,9 +1620,9 @@
 
         const ML_TARGET_META = {
             diameter: { label: '平均管径', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
-            density: { label: '面填充密度', predKey: 'density_pred', actualKey: 'density_actual' },
-            alignment: { label: '取向度', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
-            curvature: { label: '曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
+            density: { label: '覆盖密度', predKey: 'density_pred', actualKey: 'density_actual' },
+            alignment: { label: '取向性', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
+            curvature: { label: '平均曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
         };
         const ML_X_META = {
             actual_temp: { label: '实际温度', unit: 'C' },
@@ -1603,9 +1850,9 @@
                     <div class="text-slate-500">流速</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.flow_rate, 2)}</div>
                     <div class="text-slate-500">催化剂浓度</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.catalyst_concentration, 3)}</div>
                     <div class="text-slate-500">平均管径(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
-                    <div class="text-slate-500">面填充密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
-                    <div class="text-slate-500">取向度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
-                    <div class="text-slate-500">曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
+                    <div class="text-slate-500">覆盖密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
+                    <div class="text-slate-500">取向性(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
+                    <div class="text-slate-500">平均曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
                 </div>
             `;
         }
@@ -1813,9 +2060,9 @@
             const targets = ['diameter', 'density', 'alignment', 'curvature'];
             const targetLabel = {
                 diameter: '平均管径',
-                density: '面填充密度',
-                alignment: '取向度',
-                curvature: '曲率',
+                density: '覆盖密度',
+                alignment: '取向性',
+                curvature: '平均曲率',
             };
 
             coefPanel.innerHTML = targets.map(t => {
@@ -1892,10 +2139,10 @@
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.actual_temp, 1)}</td>
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.flow_rate, 0)}</td>
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.catalyst_concentration, 2)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.diameter_pred, 2)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.density_pred, 2)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.alignment_pred, 3)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.curvature_pred, 3)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.diameter_actual, 2)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.density_actual, 2)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.alignment_actual, 3)}</td>
+                    <td class="px-2 py-1.5 text-right">${fmtMl(r.curvature_actual, 3)}</td>
                 </tr>
             `).join('');
         }
@@ -2037,7 +2284,7 @@
 
         function normalizeCleanItem(item) {
             const assessment = computeCleanAssessment(item);
-            return { ...item, assessment };
+            return { ...item, assessment, is_deleted: item.is_deleted || 0 };
         }
 
         function renderCleanSummary(items) {
@@ -2067,6 +2314,8 @@
 
         function getFilteredCleanItems() {
             let rows = [...(cleanState.items || [])];
+            // 过滤掉已删除的数据
+            rows = rows.filter(x => x.is_deleted !== 1);
             const confidence = document.getElementById('clean-confidence-filter')?.value || '';
             const processed = document.getElementById('clean-processed-filter')?.value || '';
             const keyword = (document.getElementById('clean-keyword-filter')?.value || '').trim().toLowerCase();
@@ -2136,6 +2385,7 @@
                             <div class="text-[11px] text-slate-500 mt-1 truncate">${escapeHtml(String(item.file_path || ''))}</div>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
+                            ${item.is_deleted ? '<span class="bg-red-100 text-red-700 text-xs px-2 py-1 rounded">已删除</span>' : ''}
                             <span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span>
                             <span class="text-[11px] font-black text-slate-500">分数 ${item.assessment.score}</span>
                         </div>
@@ -2187,6 +2437,11 @@
             const image = document.getElementById('clean-original-image');
             const placeholder = document.getElementById('clean-original-placeholder');
             if (!panel || !quick || !label || !image || !placeholder) return;
+            // 清空面板内容
+            panel.innerHTML = '';
+            const quickNoteEl = document.getElementById('clean-quick-note');
+            if (quickNoteEl) quickNoteEl.style.display = 'none';
+
             if (!item) {
                 label.innerText = '请选择样品';
                 quick.innerText = '这里会显示当前样品的快速结论和主要风险点。';
@@ -2195,7 +2450,6 @@
                 placeholder.classList.remove('hidden');
                 const openBtn = document.getElementById('clean-open-original');
                 if (openBtn) openBtn.disabled = true;
-                panel.innerHTML = '<div class="text-slate-400 font-bold">请选择左侧样品，查看五个特征与可信度判定。</div>';
                 return;
             }
             label.innerText = `${item.source || '--'} / ${item.sample_id || item.id}`;
@@ -2225,7 +2479,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">density</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.density, 1)} <span class="text-sm text-slate-400">%</span></div></div>
                         <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">alignment</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.alignment, 3)}</div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">diameter</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.diameter, 1)} <span class="text-sm text-slate-400">nm</span></div></div>
+                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">diameter</div><div class="text-lg font-black text-slate-800 mt-1">${item.diameter_mean ? fmtMl(item.diameter_mean, 1) : '--'}±${item.diameter_std ? fmtMl(item.diameter_std, 1) : '--'} <span class="text-sm text-slate-400">nm</span></div></div>
                         <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">curvature</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.curvature, 3)}</div></div>
                         <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">tortuosity</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.tortuosity, 3)}</div></div>
                         <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">倍率 / 状态</div><div class="text-lg font-black text-slate-800 mt-1">${item.magnification || '--'}x / ${Number(item.processed) === 1 ? '已提取' : '未提取'}</div></div>
@@ -2247,6 +2501,19 @@
                         <div class="text-slate-500">位置</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.position_label || item.horizontal_pos || '--'))}</div>
                         <div class="text-slate-500">温度</div><div class="text-right font-bold text-slate-700">${fmtMl(item.actual_temp ?? item.growth_temp, 1)}</div>
                     </div>
+                    <div class="mt-4 pt-4 border-t border-slate-200">
+                        <div class="text-[11px] text-slate-400 font-black uppercase mb-2">操作</div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="softDeleteCleanItem(${item.id})" class="flex-1 px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-black transition-colors shadow-sm">
+                                <i class="fas fa-trash-alt mr-1.5"></i>标记删除
+                            </button>
+                            ${item.is_deleted ? `
+                            <button type="button" onclick="restoreDeletedItem(${item.id})" class="flex-1 px-4 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-black transition-colors shadow-sm">
+                                <i class="fas fa-undo mr-1.5"></i>恢复删除
+                            </button>
+                            ` : ''}
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -2257,6 +2524,58 @@
             renderCleanList();
             renderCleanReview(item);
             await loadCleanVisualizations(item);
+        }
+
+        async function restartBackend() {
+            if (!confirm('确认重启后端服务？')) return;
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/restart', { method: 'POST' });
+                if (res.ok) {
+                    alert('后端服务已重启，请等待5-10秒后刷新页面');
+                } else {
+                    alert('重启失败');
+                }
+            } catch (err) {
+                console.error('重启失败:', err);
+                alert('重启失败: ' + err.message);
+            }
+        }
+
+        async function softDeleteCleanItem(id) {
+            if (!confirm('确认标记此图像为已删除？删除后不会显示在系统中，也不会参与建模。')) return;
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/images/${id}/delete`, { method: 'PUT' });
+                if (res.ok) {
+                    cleanState.items = cleanState.items.filter(x => x.id !== id);
+                    cleanState.selectedId = null;
+                    renderCleanList();
+                    renderCleanReview(null);
+                } else {
+                    alert('删除失败');
+                }
+            } catch (err) {
+                console.error('删除失败:', err);
+                alert('删除失败: ' + err.message);
+            }
+        }
+
+        async function restoreDeletedItem(id) {
+            if (!confirm('确认恢复此已删除的图像？')) return;
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/images/${id}/restore`, { method: 'PUT' });
+                if (res.ok) {
+                    await loadCleanPage();
+                    const item = cleanState.items.find(x => x.id === id);
+                    if (item) {
+                        await selectCleanItem(id);
+                    }
+                } else {
+                    alert('恢复失败');
+                }
+            } catch (err) {
+                console.error('恢复失败:', err);
+                alert('恢复失败: ' + err.message);
+            }
         }
 
         function onCleanFilterChange() {
@@ -2302,10 +2621,11 @@
         let chatHistory = [];
         let xrMlPayload = null;
         let mlSubPage = 'visual';
-        let mlVizState = { target: 'diameter', mode: '2d', xKey: 'actual_temp', yMode: 'pred', infoTab: 'coef', mainPoints: [], selectedPoint: null };
+        let mlVizState = { target: 'diameter', mode: '2d', xKey: 'actual_temp', yMode: 'actual', infoTab: 'coef', mainPoints: [], selectedPoint: null };
         let mlUiPerfState = { vizTimer: null };
         let mlChartInstances = {};
         let cleanState = { items: [], filteredItems: [], selectedId: null };
+        let ragState = { currentChain: null, currentQuery: '', graphFilter: 'all' };
 
         // ─── 工具：获取当前选择的模型和 API Key ───
         function getApiHeaders() {
@@ -2528,9 +2848,12 @@
             try {
                 const res = await fetch(`http://127.0.0.1:8000/api/images/${currentItem.id}/analyze`, { method: 'POST' });
                 const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+                }
                 if (data.status === 'success') {
                     const r = data.results;
-                    document.getElementById('f-dia').innerText = r.diameter  != null ? Number(r.diameter).toFixed(1)  : '--';
+                    document.getElementById('f-dia').innerText = r.diameter_mean != null ? Number(r.diameter_mean).toFixed(1) + '±' + (r.diameter_std != null ? Number(r.diameter_std).toFixed(1) : '--') : '--';
                     document.getElementById('f-ali').innerText = r.alignment != null ? Number(r.alignment).toFixed(3) : '--';
                     document.getElementById('f-den').innerText = r.density   != null ? Number(r.density).toFixed(2)   : '--';
                     document.getElementById('f-cur').innerText = r.curvature ?? '--';
@@ -2538,10 +2861,13 @@
                     loadData();
                     openInterpretPanel('algo');
                     // 加载算法可视化
-                    loadAlgorithmVisualization();
+                    await loadAlgorithmVisualization();
+                    return true;
                 }
+                return false;
             } catch (err) { alert('提取失败：' + err.message); }
             finally { btn.innerHTML = orig; btn.disabled = false; }
+            return false;
         }
 
         // ─── 解释面板控制 ───
@@ -2561,14 +2887,17 @@
             }
         }
 
-        function openAlgoVisualization() {
+        async function openAlgoVisualization() {
             if (!currentItem) {
                 alert('请先选择一张图像');
                 return;
             }
             if (!visualizationSteps) {
-                alert('请先运行"AI 提取图像特征"生成可视化数据');
-                return;
+                const ok = await reanalyzeImage();
+                if (!ok || !visualizationSteps) {
+                    alert('AI 提取图像特征尚未生成可视化数据');
+                    return;
+                }
             }
             openInterpretPanel('algo');
             showVisualizationPanel();
@@ -2796,27 +3125,24 @@
                     aiEl.classList.remove('typing-cursor');
                     aiEl.innerHTML = `<span class="text-red-500 text-sm">错误: ${e.detail}</span>`; return;
                 }
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                    const { done, value } = await reader.read(); if (done) break;
-                    for (const line of decoder.decode(value).split('\n')) {
-                        if (!line.startsWith('data:')) continue;
-                        try {
-                            const m = JSON.parse(line.slice(5).trim());
-                            if (m.type === 'content') {
-                                fullText += m.text;
-                                aiEl.classList.remove('typing-cursor');
-                                aiEl.innerHTML = marked.parse(fullText);
-                                scrollChatToBottom();
-                            } else if (m.type === 'done') {
-                                aiEl.innerHTML = marked.parse(fullText);
-                                chatHistory.push({ role: 'assistant', content: fullText });
-                                document.getElementById('similar-exps-section').classList.remove('hidden');
-                            }
-                        } catch (_) {}
+                await consumeSseJsonStream(res, async (m) => {
+                    if (m.type === 'content') {
+                        fullText += m.text || '';
+                        aiEl.classList.remove('typing-cursor');
+                        aiEl.innerHTML = marked.parse(fullText);
+                        scrollChatToBottom();
+                    } else if (m.type === 'error') {
+                        aiEl.classList.remove('typing-cursor');
+                        aiEl.innerHTML = `<span class="text-red-500 text-sm">请求失败: ${escapeHtml(m.detail || '上游模型流异常中断')}</span>`;
+                    } else if (m.type === 'done') {
+                        aiEl.classList.remove('typing-cursor');
+                        aiEl.innerHTML = marked.parse(fullText);
+                        if (fullText.trim()) {
+                            chatHistory.push({ role: 'assistant', content: fullText });
+                            document.getElementById('similar-exps-section').classList.remove('hidden');
+                        }
                     }
-                }
+                });
             } catch (err) {
                 aiEl.classList.remove('typing-cursor');
                 aiEl.innerHTML = `<span class="text-red-500 text-sm">请求失败: ${err.message}</span>`;
@@ -2830,7 +3156,10 @@
         function buildAlgoExplanation(features, params) {
             const den = features.density   != null ? Number(features.density).toFixed(2)  : '--';
             const ali = features.alignment != null ? Number(features.alignment).toFixed(3) : '--';
-            const dia = features.diameter  != null ? Number(features.diameter).toFixed(1)  : '--';
+            const diaMean = features.diameter_mean != null ? Number(features.diameter_mean).toFixed(1) : '--';
+            const diaStd = features.diameter_std != null ? Number(features.diameter_std).toFixed(1) : '--';
+            const diaMin = features.diameter_min != null ? Number(features.diameter_min).toFixed(1) : '--';
+            const diaMax = features.diameter_max != null ? Number(features.diameter_max).toFixed(1) : '--';
             const tort = features.tortuosity || (features.curvature != null && !isNaN(Number(features.curvature)) ? 1.0/Number(features.curvature) : null);
             const curRaw = tort ? (1.0 / tort) : null;
             const cur = curRaw != null ? curRaw.toFixed(3) : '--';
@@ -2841,7 +3170,7 @@
 
             const dq = features.density == null ? '' : (features.density > 25 && features.density < 65) ? '✅ 正常' : features.density <= 25 ? '⚠️ 偏低' : '⚠️ 偏高';
             const aq = features.alignment == null ? '' : features.alignment > 0.7 ? '✅ 高取向' : features.alignment > 0.4 ? '🔶 中等' : '❌ 取向差';
-            const diq= features.diameter  == null ? '' : (features.diameter > 8 && features.diameter < 30) ? '✅ 正常' : '⚠️ 偏离';
+            const diq= features.diameter_mean  == null ? '' : (features.diameter_mean > 8 && features.diameter_mean < 30) ? '✅ 正常' : '⚠️ 偏离';
             
             let cq = '', curDesc = '';
             if (curRaw == null) {
@@ -2851,17 +3180,17 @@
             } else if (curRaw > 0.60) {
                 cq = '🔶 中等 (Wavy)'; curDesc = 'CNT呈现轻微波浪状，可能存在热场不均或局部气流扰动。建议检查基底平整度。';
             } else {
-                cq = '❌ 较差 (Coiled)'; curDesc = 'CNT由于内应力或催化剂活性分布不均，呈现明显的弯曲或卷曲，会显著降低取向度和导电性。';
+                cq = '❌ 较差 (Coiled)'; curDesc = 'CNT由于内应力或催化剂活性分布不均，呈现明显的弯曲或卷曲，会显著降低取向性和导电性。';
             }
 
-            const aliDesc = features.alignment == null ? '未提取' : features.alignment > 0.7 ? '高取向度，CNT 生长平行度极佳。' : features.alignment > 0.4 ? '取向度中等，存在部分杂乱区域。' : '取向度偏低，阵列生长较为紊乱。';
+            const aliDesc = features.alignment == null ? '未提取' : features.alignment > 0.7 ? '高取向性，CNT 生长平行度极佳。' : features.alignment > 0.4 ? '取向性中等，存在部分杂乱区域。' : '取向性偏低，阵列生长较为紊乱。';
             return `## 📊 特征提取总览${sid ? ' · ' + sid : ''}
 
 | 特征 | 数值 | 评价 |
 |------|------|------|
 | 面密度 Density | **${den}%** | ${dq} |
-| 取向度 Alignment S | **${ali}** | ${aq} |
-| 平均管径 Diameter | **${dia} nm** | ${diq} |
+| 取向性 Alignment | **${ali}** | ${aq} |
+| 平均管径 Diameter | **${diaMean}±${diaStd} nm** (范围: ${diaMin}-${diaMax}) | ${diq} |
 | 弯曲度 Curvature | **${cur}** | ${cq} |
 
 > **关键工艺溯源**：样点物理位置 **${posCm} cm**，炉温校准后实际生长温度 **${actualTemp} ℃**。
@@ -2883,7 +3212,7 @@
 
 ---
 
-## 📐 算法二：垂直取向度（Alignment S 值）
+## 📐 算法二：取向性（Alignment 值）
 
 **提取结果：S = ${ali}**
 
@@ -2898,9 +3227,9 @@
 
 ---
 
-## 📏 算法三：平均管径估计（Diameter）
+## 📏 算法三：平均管径估计（Diameter Distribution）
 
-**提取结果：${dia} nm**
+**提取结果：均值 ${diaMean} nm ± ${diaStd} nm，范围 ${diaMin}-${diaMax} nm**
 
 **处理流程：**
 
@@ -2991,26 +3320,22 @@
                     return;
                 }
 
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    for (const line of decoder.decode(value).split('\n')) {
-                        if (!line.startsWith('data:')) continue;
-                        try {
-                            const m = JSON.parse(line.slice(5).trim());
-                            if (m.type === 'content') {
-                                fullReply += m.text;
-                                aiEl.classList.remove('typing-cursor');
-                                aiEl.innerHTML = marked.parse(fullReply);
-                                scrollChatToBottom();
-                            } else if (m.type === 'done') {
-                                chatHistory.push({ role: 'assistant', content: fullReply });
-                            }
-                        } catch (_) {}
+                await consumeSseJsonStream(res, async (m) => {
+                    if (m.type === 'content') {
+                        fullReply += m.text || '';
+                        aiEl.classList.remove('typing-cursor');
+                        aiEl.innerHTML = marked.parse(fullReply);
+                        scrollChatToBottom();
+                    } else if (m.type === 'error') {
+                        aiEl.classList.remove('typing-cursor');
+                        aiEl.innerHTML = `<span class="text-red-500">请求失败: ${escapeHtml(m.detail || '上游模型流异常中断')}</span>`;
+                    } else if (m.type === 'done') {
+                        aiEl.classList.remove('typing-cursor');
+                        if (fullReply.trim()) {
+                            chatHistory.push({ role: 'assistant', content: fullReply });
+                        }
                     }
-                }
+                });
             } catch (err) {
                 aiEl.innerHTML = `<span class="text-red-500">请求失败: ${err.message}</span>`;
                 aiEl.classList.remove('typing-cursor');
@@ -3120,6 +3445,49 @@
             el.scrollTop = el.scrollHeight;
         }
 
+        async function consumeSseJsonStream(response, onMessage) {
+            const reader = response.body?.getReader();
+            if (!reader) {
+                throw new Error('当前浏览器不支持流式读取');
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const flushBlock = async (block) => {
+                const trimmed = block.trim();
+                if (!trimmed) return;
+                const payloadText = trimmed
+                    .split('\n')
+                    .filter(line => line.startsWith('data:'))
+                    .map(line => line.slice(5).trim())
+                    .join('\n');
+                if (!payloadText) return;
+                try {
+                    await onMessage(JSON.parse(payloadText));
+                } catch (_) {}
+            };
+
+            while (true) {
+                const { done, value } = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+                let boundary = buffer.indexOf('\n\n');
+                while (boundary !== -1) {
+                    const block = buffer.slice(0, boundary);
+                    buffer = buffer.slice(boundary + 2);
+                    await flushBlock(block);
+                    boundary = buffer.indexOf('\n\n');
+                }
+
+                if (done) break;
+            }
+
+            if (buffer.trim()) {
+                await flushBlock(buffer);
+            }
+        }
+
         function clearChat() {
             chatHistory = [];
             document.getElementById('chat-history').innerHTML = `
@@ -3204,33 +3572,41 @@
         }
 
         function switchRagSubPage(page) {
-            const target = page === 'manage' ? 'manage' : 'success';
-            const success = document.getElementById('rag-subpage-success');
-            const manage = document.getElementById('rag-subpage-manage');
-            if (success) success.classList.toggle('hidden', target !== 'success');
-            if (manage) manage.classList.toggle('hidden', target !== 'manage');
+            const allowed = ['overview', 'graph', 'performance', 'manage'];
+            const target = allowed.includes(page) ? page : 'overview';
 
-            const btnSuccess = document.getElementById('rag-tab-success-btn');
-            const btnManage = document.getElementById('rag-tab-manage-btn');
-            if (btnSuccess) btnSuccess.classList.toggle('active', target === 'success');
-            if (btnManage) btnManage.classList.toggle('active', target === 'manage');
+            allowed.forEach(name => {
+                const panel = document.getElementById(`rag-subpage-${name}`);
+                const btn = document.getElementById(`rag-tab-${name}-btn`);
+                if (panel) panel.classList.toggle('hidden', name !== target);
+                if (btn) btn.classList.toggle('active', name === target);
+            });
 
-            if (target === 'success') {
-                loadRagSuccessStats();
-                loadRagLinks();
-            } else {
+            if (target === 'manage') {
                 loadRagDocs();
+                return;
             }
+
+            if (target === 'graph') {
+                renderRagGraphFilterState();
+                if (ragState.currentChain) {
+                    renderRagGraph(ragState.currentChain, ragState.currentQuery || '');
+                    return;
+                }
+            }
+
+            loadRagSuccessStats();
+            loadRagLinks();
         }
 
-        function renderChainList(containerId, items) {
+        function renderChainList(containerId, items, limit = 8) {
             const el = document.getElementById(containerId);
             if (!el) return;
             if (!items || items.length === 0) {
                 el.innerHTML = '<div class="text-slate-300">暂无关联</div>';
                 return;
             }
-            el.innerHTML = items.slice(0, 8).map(it => `
+            el.innerHTML = items.slice(0, limit).map(it => `
                 <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
                     <div class="font-bold text-slate-700">${it.source_node || '--'} → ${it.target_node || '--'}</div>
                     <div class="text-[10px] text-slate-500 mt-1">
@@ -3243,14 +3619,12 @@
             `).join('');
         }
 
-        function renderLinkSummary(chain) {
-            const summaryEl = document.getElementById('rag-link-summary');
-            if (!summaryEl) return;
+        function buildRagLinkSummaryMarkup(chain) {
             const p2m = (chain?.process_to_morphology || []).length;
             const m2p = (chain?.morphology_to_performance || []).length;
             const p2p = (chain?.process_to_performance || []).length;
             const mech = (chain?.mechanism_evidence || []).length;
-            summaryEl.innerHTML = `
+            return `
                 <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
                     <div class="text-slate-500">工艺→形貌</div>
                     <div class="text-indigo-700 font-black text-lg mt-1">${p2m}</div>
@@ -3270,12 +3644,232 @@
             `;
         }
 
+        function renderLinkSummary(chain) {
+            const markup = buildRagLinkSummaryMarkup(chain);
+            ['rag-toolbar-summary', 'rag-overview-link-summary', 'rag-graph-link-summary'].forEach(id => {
+                const summaryEl = document.getElementById(id);
+                if (summaryEl) summaryEl.innerHTML = markup;
+            });
+        }
+
         function relationTypeLabel(type) {
             if (type === 'process_to_morphology') return '工艺→形貌';
             if (type === 'morphology_to_performance') return '形貌→性能';
             if (type === 'process_to_performance') return '工艺→性能';
             if (type === 'mechanism_evidence') return '机理证据';
             return type || '关联';
+        }
+
+        function getFilteredRagGraphItems(chain, filter) {
+            const buckets = {
+                process_to_morphology: chain?.process_to_morphology || [],
+                morphology_to_performance: chain?.morphology_to_performance || [],
+                process_to_performance: chain?.process_to_performance || [],
+                mechanism_evidence: chain?.mechanism_evidence || [],
+            };
+            if (!filter || filter === 'all') {
+                return [
+                    ...buckets.process_to_morphology,
+                    ...buckets.morphology_to_performance,
+                    ...buckets.process_to_performance,
+                    ...buckets.mechanism_evidence,
+                ];
+            }
+            return buckets[filter] || [];
+        }
+
+        function renderRagGraphFilterState() {
+            ['all', 'process_to_morphology', 'morphology_to_performance', 'process_to_performance', 'mechanism_evidence'].forEach((filter) => {
+                const btn = document.getElementById(`rag-graph-filter-${filter}`);
+                if (btn) btn.classList.toggle('active', ragState.graphFilter === filter);
+            });
+        }
+
+        function setRagGraphFilter(filter) {
+            ragState.graphFilter = filter || 'all';
+            renderRagGraphFilterState();
+            if (ragState.currentChain) {
+                renderRagGraph(ragState.currentChain, ragState.currentQuery || '');
+            }
+        }
+
+        function ragFactorLabel(value) {
+            const labels = {
+                alignment: '取向度',
+                density: '密度',
+                diameter: '直径',
+                curvature: '曲率',
+                tortuosity: '波曲度',
+                conductivity: '导电性',
+                resistivity: '电阻率',
+                sheet_resistance: '方阻',
+                tensile_strength: '拉伸强度',
+                modulus: '模量',
+                growth_temp: '温度',
+                growth_time: '时间',
+                fe_thickness: 'Fe厚度',
+                h2_flow: 'H2流量',
+                ar_flow: 'Ar流量',
+                c2h4_flow: 'C2H4流量',
+            };
+            const raw = String(value || '');
+            if (!raw) return '--';
+            const key = raw.includes(':') ? raw.split(':').pop() : raw;
+            return labels[key] || key.replace(/_/g, ' ');
+        }
+
+        function buildGraphInsightList(chain) {
+            const buckets = getFilteredRagGraphItems(chain, ragState.graphFilter);
+
+            if (buckets.length === 0) {
+                return `<div class="text-slate-300">暂无图谱摘要</div>`;
+            }
+
+            const nodeWeights = {};
+            buckets.forEach(item => {
+                [item.source_node, item.target_node].forEach(node => {
+                    if (!node) return;
+                    nodeWeights[node] = (nodeWeights[node] || 0) + 1;
+                });
+            });
+
+            const topNodes = Object.entries(nodeWeights)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6);
+
+            return `
+                <div class="rag-mini-card">
+                    <div class="text-[10px] text-slate-400 mb-2">当前筛选：${ragState.graphFilter === 'all' ? '全部关系' : relationTypeLabel(ragState.graphFilter)}</div>
+                    <div class="text-slate-500 mb-2">高频节点</div>
+                    <div class="space-y-2">
+                        ${topNodes.map(([node, count]) => `
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-slate-700 truncate">${ragFactorLabel(node)}</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500 mb-2">页面说明</div>
+                    <div class="text-[11px] leading-5 text-slate-500">
+                        该页专门用于查看关系图谱。可拖拽节点、缩放结构，适合答辩时单独展示“工艺-形貌-性能-机理”的主链。
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGraphGlance(chain) {
+            const el = document.getElementById('rag-graph-glance');
+            if (!el) return;
+
+            const buckets = [
+                ...(chain?.process_to_morphology || []),
+                ...(chain?.morphology_to_performance || []),
+                ...(chain?.process_to_performance || []),
+                ...(chain?.mechanism_evidence || []),
+            ];
+
+            const uniqueNodes = new Set();
+            buckets.forEach(item => {
+                if (item.source_node) uniqueNodes.add(item.source_node);
+                if (item.target_node) uniqueNodes.add(item.target_node);
+            });
+
+            el.innerHTML = `
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">图谱节点数</div>
+                    <div class="text-slate-800 font-black text-xl mt-1">${uniqueNodes.size}</div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">图谱边数</div>
+                    <div class="text-slate-800 font-black text-xl mt-1">${buckets.length}</div>
+                </div>
+                <div class="rag-mini-card col-span-2">
+                    <div class="text-slate-500 mb-2">图谱使用建议</div>
+                    <div class="text-[11px] text-slate-500 leading-5">
+                        当前总览页只保留图谱速览，完整知识图谱已拆分到单独子页，避免一屏挤不下。
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRagPerformanceView(chain, query) {
+            const summaryEl = document.getElementById('rag-performance-summary');
+            const listEl = document.getElementById('rag-performance-list');
+            if (!summaryEl || !listEl) return;
+
+            const morphItems = chain?.morphology_to_performance || [];
+            const processItems = chain?.process_to_performance || [];
+            const perfItems = [...morphItems, ...processItems];
+
+            if (perfItems.length === 0) {
+                summaryEl.innerHTML = `
+                    <div class="col-span-2 bg-white border border-slate-200 rounded-xl p-3 text-slate-300">
+                        当前查询暂无性能关联统计
+                    </div>
+                `;
+                listEl.innerHTML = `<div class="text-slate-300">没有检索到与“${query}”相关的性能证据链</div>`;
+                return;
+            }
+
+            const factorCounts = {};
+            perfItems.forEach(item => {
+                const factor = item.performance_factor || (item.target_node || '').split(':').pop() || 'unknown';
+                factorCounts[factor] = (factorCounts[factor] || 0) + 1;
+            });
+            const topFactors = Object.entries(factorCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+            summaryEl.innerHTML = `
+                <div class="bg-white border border-emerald-100 rounded-xl p-3">
+                    <div class="text-slate-500">性能关系数</div>
+                    <div class="text-emerald-700 font-black text-lg mt-1">${perfItems.length}</div>
+                </div>
+                <div class="bg-white border border-amber-100 rounded-xl p-3">
+                    <div class="text-slate-500">性能指标数</div>
+                    <div class="text-amber-700 font-black text-lg mt-1">${Object.keys(factorCounts).length}</div>
+                </div>
+                <div class="bg-white border border-indigo-100 rounded-xl p-3">
+                    <div class="text-slate-500">形貌驱动</div>
+                    <div class="text-indigo-700 font-black text-lg mt-1">${morphItems.length}</div>
+                </div>
+                <div class="bg-white border border-sky-100 rounded-xl p-3">
+                    <div class="text-slate-500">工艺直达</div>
+                    <div class="text-sky-700 font-black text-lg mt-1">${processItems.length}</div>
+                </div>
+                <div class="col-span-2 bg-white border border-slate-200 rounded-xl p-3">
+                    <div class="text-slate-500 mb-2">当前性能热点</div>
+                    <div class="flex flex-wrap gap-2">
+                        ${topFactors.map(([factor, count]) => `
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold">
+                                ${ragFactorLabel(factor)}
+                                <span class="text-[10px] text-slate-400">${count}</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            listEl.innerHTML = perfItems.slice(0, 8).map(item => `
+                <div class="bg-white border border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="font-bold text-slate-700">
+                            ${ragFactorLabel(item.source_node)} → ${ragFactorLabel(item.target_node)}
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${item.relation_type === 'morphology_to_performance' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}">
+                            ${relationTypeLabel(item.relation_type)}
+                        </span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                        方向: ${item.effect_direction || '--'} · 置信度 ${(Number(item.confidence || 0)).toFixed(2)}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(item.title || '').replace(/"/g, '&quot;')}">
+                        ${item.title || '--'}
+                    </div>
+                </div>
+            `).join('');
         }
 
         function nodeCategoryById(nodeId) {
@@ -3287,21 +3881,21 @@
         }
 
         function renderRagGraph(chain, query) {
+            const chartHost = document.getElementById('rag-graph-chart');
+            const insightsEl = document.getElementById('rag-graph-insights');
+            if (insightsEl) insightsEl.innerHTML = buildGraphInsightList(chain);
+            if (!chartHost || chartHost.clientWidth === 0 || chartHost.clientHeight === 0) return;
+
             const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
             if (!chart) return;
 
-            const buckets = [
-                ...(chain?.process_to_morphology || []),
-                ...(chain?.morphology_to_performance || []),
-                ...(chain?.process_to_performance || []),
-                ...(chain?.mechanism_evidence || []),
-            ];
+            const buckets = getFilteredRagGraphItems(chain, ragState.graphFilter);
 
             if (buckets.length === 0) {
                 chart.clear();
                 chart.setOption({
                     title: {
-                        text: `当前查询暂无可视化关联：${query}`,
+                        text: `当前筛选暂无可视化关联：${ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
                         left: 'center',
                         top: 'middle',
                         textStyle: { color: '#94a3b8', fontSize: 12, fontWeight: 700 },
@@ -3406,6 +4000,7 @@
                     },
                 ],
             });
+
         }
 
         async function loadRagLinks() {
@@ -3423,16 +4018,24 @@
                 });
                 const data = await res.json();
                 const chain = data.chain || {};
+                ragState.currentChain = chain;
+                ragState.currentQuery = query;
                 renderLinkSummary(chain);
-                renderChainList('rag-chain-p2m', chain.process_to_morphology || []);
-                renderChainList('rag-chain-m2p', chain.morphology_to_performance || []);
-                renderChainList('rag-chain-p2p', chain.process_to_performance || []);
-                renderChainList('rag-chain-mech', chain.mechanism_evidence || []);
+                renderGraphGlance(chain);
+                renderChainList('rag-chain-p2m', chain.process_to_morphology || [], 2);
+                renderChainList('rag-chain-m2p', chain.morphology_to_performance || [], 2);
+                renderChainList('rag-chain-p2p', chain.process_to_performance || [], 2);
+                renderChainList('rag-chain-mech', chain.mechanism_evidence || [], 2);
+                renderRagPerformanceView(chain, query);
                 renderRagGraph(chain, query);
             } catch (err) {
-                ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech'].forEach(id => {
+                ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech', 'rag-performance-list', 'rag-performance-summary', 'rag-graph-insights', 'rag-graph-glance'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.innerHTML = `<div class="text-red-300">加载失败: ${err.message}</div>`;
+                });
+                ['rag-toolbar-summary', 'rag-overview-link-summary', 'rag-graph-link-summary'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = `<div class="col-span-2 lg:col-span-4 text-red-300">加载失败: ${err.message}</div>`;
                 });
                 const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
                 if (chart) {
@@ -3505,7 +4108,7 @@
             document.getElementById('d-actual-temp').innerText = item.actual_temp ? (Number(item.actual_temp).toFixed(1) + ' ℃') : '--';
             document.getElementById('d-pos-cm').innerText = item.membrane_pos_cm != null ? (Number(item.membrane_pos_cm).toFixed(1) + ' cm') : '--';
 
-            document.getElementById('f-dia').innerText = item.diameter != null ? Number(item.diameter).toFixed(1) : '--';
+            document.getElementById('f-dia').innerText = item.diameter_mean != null ? Number(item.diameter_mean).toFixed(1) + '±' + (item.diameter_std != null ? Number(item.diameter_std).toFixed(1) : '--') : '--';
             document.getElementById('f-ali').innerText = item.alignment != null ? Number(item.alignment).toFixed(3) : '--';
             document.getElementById('f-den').innerText = item.density != null ? Number(item.density).toFixed(2) : '--';
             document.getElementById('f-cur').innerText = (item.curvature != null && !isNaN(item.curvature)) ? Number(item.curvature).toFixed(3) : (item.curvature ?? '--');
@@ -3529,8 +4132,18 @@
             document.getElementById('details-panel').classList.remove('open');
         }
 
+        function repairOverlayMounts() {
+            ['details-panel', 'interpret-panel', 'config-modal', 'clean-lightbox'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && el.parentElement !== document.body) {
+                    document.body.appendChild(el);
+                }
+            });
+        }
+
         // ─── 页面切换（SPA 路由） ───
         function showPage(name, el) {
+            const mainHeader = document.getElementById('main-header');
             const dataPage = document.getElementById('data-page');
             const mlPage = document.getElementById('ml-page');
             const cleanPage = document.getElementById('clean-page');
@@ -3550,8 +4163,9 @@
                 setRagHeaderMode(true);
                 closeInterpretPanel();
                 closeDetails();
-                switchRagSubPage('success');
+                switchRagSubPage('overview');
             } else if (name === 'ml') {
+                if (mainHeader) mainHeader.classList.remove('hidden');
                 dataPage.classList.add('hidden');
                 if (cleanPage) cleanPage.classList.add('hidden');
                 ragPage.classList.add('hidden');
@@ -3565,6 +4179,7 @@
                 switchMlSubPage(mlSubPage);
                 loadXrMlPage();
             } else if (name === 'clean') {
+                if (mainHeader) mainHeader.classList.add('hidden');
                 dataPage.classList.add('hidden');
                 mlPage.classList.add('hidden');
                 ragPage.classList.add('hidden');
@@ -3577,6 +4192,7 @@
                 closeDetails();
                 loadCleanPage();
             } else {
+                if (mainHeader) mainHeader.classList.remove('hidden');
                 dataPage.classList.remove('hidden');
                 mlPage.classList.add('hidden');
                 if (cleanPage) cleanPage.classList.add('hidden');
@@ -3590,6 +4206,7 @@
 
         // 初始化
         window.onload = () => {
+            repairOverlayMounts();
             // 设置默认配置（仅当不存在时）
             if (!localStorage.getItem('CNTA_KEY_glm')) {
                 localStorage.setItem('CNTA_KEY_glm', '37b04c1d931b4ae8b8e8a04da8127e66.nixWPPYNKwW4FHHM');
