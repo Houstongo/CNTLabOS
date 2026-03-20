@@ -521,6 +521,10 @@
                     <option value="XR">XR 梯度实验序列</option>
                     <option value="ZZY">ZZY 工艺参数序列</option>
                 </select>
+                <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2">
+                    <i class="fas fa-list-alt text-[10px]"></i>
+                    查看已删除
+                </button>
                 <button onclick="openEditModal(null)" class="bg-[#3699ff] hover:bg-[#2d82d8] text-white px-5 py-2 rounded-lg text-xs font-bold shadow-lg shadow-blue-200">
                     <i class="fas fa-plus mr-1"></i> 新增实验记录
                 </button>
@@ -748,15 +752,6 @@
                             <option value="0">未提取</option>
                         </select>
                         <input id="clean-keyword-filter" oninput="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[180px] outline-none placeholder:text-slate-400 focus:border-blue-400" placeholder="搜索样品/批次/文件名">
-                        <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all">
-                            <i class="fas fa-list-alt mr-1"></i>查看已删除
-                        </button>
-                        <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all">
-                            <i class="fas fa-list-alt mr-1"></i>查看已删除
-                        </button>
-                        <button onclick="restartBackend()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-black shadow-lg shadow-red-500/20 transition-all">
-                            <i class="fas fa-redo mr-1"></i>重启后端
-                        </button>
                     </div>
                 </div>
             </div>
@@ -772,42 +767,8 @@
                     <div id="clean-sample-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
                 </div>
 
-                <!-- Center: Viewing Stage -->
-                <div id="clean-viewer-stage" class="flex-1 flex flex-col min-w-0 border-r border-slate-200 bg-slate-100 relative">
-                    <!-- Main image pane -->
-                    <div id="clean-image-panel" class="flex-1 flex flex-col min-h-0 relative p-4 group justify-center items-center">
-                        <div class="absolute top-4 left-4 right-4 flex justify-between items-center z-10 pointer-events-none">
-                            <div id="clean-current-label" class="pointer-events-auto px-4 py-2 bg-white/90 backdrop-blur rounded-lg border border-slate-200 font-black text-slate-700 text-[11px] shadow-sm">请在左侧选择样品</div>
-                            <button id="clean-open-original" type="button" onclick="openCleanOriginal()" class="pointer-events-auto px-4 py-2 bg-white hover:bg-slate-50 text-blue-600 border border-slate-200 rounded-lg text-xs font-black transition-colors shadow-sm">
-                                <i class="fas fa-expand mr-1.5"></i>放大图像
-                            </button>
-                        </div>
-                        <img id="clean-original-image" class="hidden max-w-full max-h-full object-contain cursor-zoom-in rounded-lg shadow-sm bg-white" alt="大舞台原图" onclick="openCleanOriginal()">
-                        <div id="clean-original-placeholder" class="absolute inset-0 flex items-center justify-center text-sm font-black text-slate-400 uppercase tracking-widest">尚未选择样品</div>
-                    </div>
-                    
-                    <!-- Quick Note Strip under image -->
-                    <div class="px-5 py-3 border-t border-b border-slate-200 bg-white/80 shrink-0 backdrop-blur">
-                        <div class="flex items-center gap-3">
-                            <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest whitespace-nowrap"><i class="fas fa-bolt mr-1"></i>快速结论</span>
-                            <div id="clean-quick-note" class="text-xs text-slate-600 w-full truncate font-bold">请选择样品查看分析摘要。</div>
-                        </div>
-                    </div>
-
-                    <!-- Step Strip Toolbar -->
-                    <div id="clean-step-strip" class="py-3 px-5 flex flex-col shrink-0 bg-white z-10">
-                        <div class="flex justify-between items-center shrink-0 mb-2">
-                            <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">处理步骤视图切换</span>
-                            <span class="text-[10px] text-slate-400">点击按钮在上方主区域显示对应步骤的图像</span>
-                        </div>
-                        <div id="clean-step-grid" class="flex flex-wrap gap-2">
-                            <!-- JS injected step buttons -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Sidebar: Review Panel -->
-                <div id="clean-review-panel" class="w-[360px] flex flex-col bg-slate-50 shrink-0 z-10 box-border">
+                <!-- Review Panel: Now taking the rest of the space -->
+                <div id="clean-review-panel" class="flex-1 flex flex-col bg-slate-50 z-10 box-border overflow-hidden border-l border-slate-200">
                     <div class="p-6 border-b border-slate-200 bg-white shrink-0 relative overflow-hidden">
                         <div class="absolute -right-4 -bottom-4 opacity-[0.03]"><i class="fas fa-microscope text-9xl text-blue-900"></i></div>
                         <h3 class="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-clipboard-check"></i> 清洗判定中心</h3>
@@ -2432,84 +2393,74 @@
 
         function renderCleanReview(item) {
             const panel = document.getElementById('clean-review-content');
-            const label = document.getElementById('clean-current-label');
-            const quick = document.getElementById('clean-quick-note');
-            const image = document.getElementById('clean-original-image');
-            const placeholder = document.getElementById('clean-original-placeholder');
-            if (!panel || !quick || !label || !image || !placeholder) return;
-            // 清空面板内容
+            if (!panel) return;
             panel.innerHTML = '';
-            const quickNoteEl = document.getElementById('clean-quick-note');
-            if (quickNoteEl) quickNoteEl.style.display = 'none';
 
             if (!item) {
-                label.innerText = '请选择样品';
-                quick.innerText = '这里会显示当前样品的快速结论和主要风险点。';
-                image.classList.add('hidden');
-                image.removeAttribute('src');
-                placeholder.classList.remove('hidden');
-                const openBtn = document.getElementById('clean-open-original');
-                if (openBtn) openBtn.disabled = true;
+                panel.innerHTML = '<div class="text-center text-xs text-slate-500 font-bold mt-10">👈 选择左侧样品以显示其特征</div>';
                 return;
             }
-            label.innerText = `${item.source || '--'} / ${item.sample_id || item.id}`;
-            const originalUrl = getCleanOriginalImageUrl(item);
-            if (originalUrl) {
-                image.src = originalUrl;
-                window.currentLightboxTitle = `${item.source || '--'} / ${item.sample_id || item.id} 原图`;
-                image.classList.remove('hidden');
-                placeholder.classList.add('hidden');
-            }
-            const openBtn = document.getElementById('clean-open-original');
-            if (openBtn) openBtn.disabled = !originalUrl;
-            quick.innerText = item.assessment.reasons[0]?.text || '当前样品没有明显异常。';
+
             const reasons = item.assessment.reasons || [];
             panel.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-[11px] text-slate-400 font-black uppercase">可信度</div>
-                        <div class="mt-1"><span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span></div>
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-sm font-black text-slate-800">${item.sample_id || item.id}</h4>
+                        <span class="text-[10px] text-slate-400 font-bold tracking-widest uppercase">${item.source || '--'}</span>
                     </div>
-                    <div class="text-right">
-                        <div class="text-[11px] text-slate-400 font-black uppercase">清洗分数</div>
-                        <div class="text-2xl font-black text-slate-800 mt-1">${item.assessment.score}</div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 gap-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">density</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.density, 1)} <span class="text-sm text-slate-400">%</span></div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">alignment</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.alignment, 3)}</div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">diameter</div><div class="text-lg font-black text-slate-800 mt-1">${item.diameter_mean ? fmtMl(item.diameter_mean, 1) : '--'}±${item.diameter_std ? fmtMl(item.diameter_std, 1) : '--'} <span class="text-sm text-slate-400">nm</span></div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">curvature</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.curvature, 3)}</div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">tortuosity</div><div class="text-lg font-black text-slate-800 mt-1">${fmtMl(item.tortuosity, 3)}</div></div>
-                        <div class="feature-box"><div class="text-[10px] uppercase text-slate-400 font-black">倍率 / 状态</div><div class="text-lg font-black text-slate-800 mt-1">${item.magnification || '--'}x / ${Number(item.processed) === 1 ? '已提取' : '未提取'}</div></div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-black uppercase">可信度评分</div>
+                            <div class="mt-1"><span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[11px] text-slate-400 font-black uppercase">综合分数</div>
+                            <div class="text-3xl font-black text-slate-800 mt-1">${item.assessment.score}</div>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <div class="text-[11px] text-slate-400 font-black uppercase mb-2">关键风险命中</div>
-                    <div class="space-y-2">
-                        ${reasons.slice(0, 3).map(reason => `
-                            <div class="clean-flag ${reason.level === 'bad' ? 'bad' : reason.level === 'warn' ? 'warn' : ''}">${escapeHtml(String(reason.text || ''))}</div>
-                        `).join('')}
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="text-[10px] uppercase text-slate-400 font-black">密度 (Density)</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${fmtMl(item.density, 1)} <span class="text-sm text-slate-400">%</span></div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="text-[10px] uppercase text-slate-400 font-black">取向 (Alignment)</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${fmtMl(item.alignment, 3)}</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="text-[10px] uppercase text-slate-400 font-black">直径 (Diameter)</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${item.diameter_mean ? fmtMl(item.diameter_mean, 1) : '--'} <span class="text-sm text-slate-400">nm</span></div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <div class="text-[10px] uppercase text-slate-400 font-black">曲率 (Curvature)</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${fmtMl(item.curvature, 3)}</div>
                     </div>
                 </div>
-                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div class="text-[11px] text-slate-400 font-black uppercase mb-2">基础信息</div>
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
-                        <div class="text-slate-500">样品</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.sample_id || '--'))}</div>
-                        <div class="text-slate-500">来源</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.source || '--'))}</div>
-                        <div class="text-slate-500">位置</div><div class="text-right font-bold text-slate-700">${escapeHtml(String(item.position_label || item.horizontal_pos || '--'))}</div>
-                        <div class="text-slate-500">温度</div><div class="text-right font-bold text-slate-700">${fmtMl(item.actual_temp ?? item.growth_temp, 1)}</div>
+
+                <div class="space-y-4">
+                    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                        <div class="text-[11px] text-slate-400 font-black uppercase mb-4 tracking-widest">质控风险评估</div>
+                        <div class="space-y-3">
+                            ${reasons.map(reason => `
+                                <div class="p-3 rounded-lg border ${reason.level === 'bad' ? 'border-red-100 bg-red-50 text-red-700' : reason.level === 'warn' ? 'border-amber-100 bg-amber-50 text-amber-700' : 'border-slate-100 bg-slate-50 text-slate-600'} text-xs font-bold leading-relaxed">
+                                    <i class="fas ${reason.level === 'bad' ? 'fa-exclamation-circle' : reason.level === 'warn' ? 'fa-exclamation-triangle' : 'fa-check-circle'} mr-2"></i>
+                                    ${escapeHtml(String(reason.text || ''))}
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-slate-200">
-                        <div class="text-[11px] text-slate-400 font-black uppercase mb-2">操作</div>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="softDeleteCleanItem(${item.id})" class="flex-1 px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-black transition-colors shadow-sm">
-                                <i class="fas fa-trash-alt mr-1.5"></i>标记删除
+
+                    <div class="bg-slate-800 rounded-2xl p-6 shadow-lg">
+                        <div class="text-[11px] text-slate-400 font-black uppercase mb-4 tracking-widest text-indigo-300">数据治理操作</div>
+                        <div class="flex gap-3">
+                            <button type="button" onclick="softDeleteCleanItem(${item.id})" class="flex-1 h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-red-500/20">
+                                <i class="fas fa-trash-alt mr-2"></i> 标记异常删除
                             </button>
                             ${item.is_deleted ? `
-                            <button type="button" onclick="restoreDeletedItem(${item.id})" class="flex-1 px-4 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-black transition-colors shadow-sm">
-                                <i class="fas fa-undo mr-1.5"></i>恢复删除
+                            <button type="button" onclick="restoreDeletedItem(${item.id})" class="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-500/20">
+                                <i class="fas fa-undo mr-2"></i> 恢复此记录
                             </button>
                             ` : ''}
                         </div>
@@ -2526,18 +2477,24 @@
             await loadCleanVisualizations(item);
         }
 
-        async function restartBackend() {
-            if (!confirm('确认重启后端服务？')) return;
+// Function removed as button was deleted
+
+        async function loadDeletedBatches() {
+            const source = document.getElementById('clean-source-filter')?.value || '';
+            let url = `http://127.0.0.1:8000/api/images?limit=400&offset=0&source=${encodeURIComponent(source)}`;
+            url += '&is_deleted=1';
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/restart', { method: 'POST' });
-                if (res.ok) {
-                    alert('后端服务已重启，请等待5-10秒后刷新页面');
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.images && data.images.length > 0) {
+                    const items = data.images.map(img => `ID:${img.id} ${img.source} ${img.file_name}`).join('\n');
+                    alert(`已删除批次列表（共${data.images.length}条）：\n\n${items}`);
                 } else {
-                    alert('重启失败');
+                    alert('当前没有已删除的数据');
                 }
             } catch (err) {
-                console.error('重启失败:', err);
-                alert('重启失败: ' + err.message);
+                console.error('加载已删除数据失败:', err);
+                alert('加载失败: ' + err.message);
             }
         }
 
