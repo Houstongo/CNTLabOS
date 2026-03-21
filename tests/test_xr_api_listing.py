@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+from fastapi import HTTPException
 
 from backend import main as api_main
 
@@ -44,7 +45,8 @@ class XRApiListingTests(unittest.IsolatedAsyncioTestCase):
                 alignment REAL,
                 curvature REAL,
                 tortuosity REAL,
-                processed INTEGER DEFAULT 0
+                processed INTEGER DEFAULT 0,
+                is_deleted INTEGER DEFAULT 0
             )
             """
         )
@@ -154,6 +156,84 @@ class XRApiListingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item["actual_temp"], 801.7)
         self.assertEqual(item["diameter"], 55.2)
         self.assertEqual(item["density"], 52.1)
+
+    async def test_xr_list_excludes_logically_deleted_images(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (self.legacy_image_id,))
+        conn.commit()
+        conn.close()
+
+        with patch.object(api_main, "DB_PATH", self.db_path), patch.object(api_main, "IMAGE_ROOT", self.image_root):
+            result = await api_main.get_image_list(source="XR", limit=10, offset=0, sort_by="id", order="desc")
+
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["items"], [])
+
+    async def test_xr_list_can_show_deleted_view(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (self.legacy_image_id,))
+        conn.commit()
+        conn.close()
+
+        with patch.object(api_main, "DB_PATH", self.db_path), patch.object(api_main, "IMAGE_ROOT", self.image_root):
+            result = await api_main.get_image_list(
+                source="XR",
+                deletion_view="deleted",
+                limit=10,
+                offset=0,
+                sort_by="id",
+                order="desc",
+            )
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["items"][0]["id"], self.legacy_image_id)
+        self.assertEqual(result["items"][0]["is_deleted"], 1)
+
+    async def test_xr_list_can_show_all_view(self):
+        with patch.object(api_main, "DB_PATH", self.db_path), patch.object(api_main, "IMAGE_ROOT", self.image_root):
+            baseline = await api_main.get_image_list(source="XR", limit=10, offset=0, sort_by="id", order="desc")
+
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("INSERT INTO images (file_path, source, sample_id, magnification, is_deleted) VALUES (?, 'XR', 'C4-A2', 20000, 1)", (self.xr_file + '.deleted',))
+        conn.commit()
+        conn.close()
+
+        with patch.object(api_main, "DB_PATH", self.db_path), patch.object(api_main, "IMAGE_ROOT", self.image_root):
+            result = await api_main.get_image_list(
+                source="XR",
+                deletion_view="all",
+                limit=10,
+                offset=0,
+                sort_by="id",
+                order="desc",
+            )
+
+        self.assertEqual(baseline["total"], 1)
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(sorted(item["is_deleted"] for item in result["items"]), [0, 1])
+
+    async def test_hard_delete_rejects_active_record(self):
+        with patch.object(api_main, "DB_PATH", self.db_path):
+            with self.assertRaises(HTTPException) as ctx:
+                await api_main.delete_image(self.legacy_image_id)
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    async def test_hard_delete_removes_deleted_record(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (self.legacy_image_id,))
+        conn.commit()
+        conn.close()
+
+        with patch.object(api_main, "DB_PATH", self.db_path):
+            result = await api_main.delete_image(self.legacy_image_id)
+
+        self.assertEqual(result["status"], "success")
+
+        conn = sqlite3.connect(self.db_path)
+        remaining = conn.execute("SELECT COUNT(*) FROM images WHERE id = ?", (self.legacy_image_id,)).fetchone()[0]
+        conn.close()
+        self.assertEqual(remaining, 0)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,13 @@ index.broken-*.html
 plan.md
 test_output.txt
 xr_batch_output.txt
+_tmp_*.html
+tmp-inline.js
+.claude/
+.edge-headless/
+output/
+rag-graph-*.png
+rag-doc-manage-*.png
 
 data/raw/
 data/temp/

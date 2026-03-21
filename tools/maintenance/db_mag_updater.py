@@ -5,9 +5,15 @@ from PIL import Image
 import re
 from tqdm import tqdm
 
+from backend.core.sem_magnification import extract_magnification_from_png_metadata
+
 DB_PATH = r'd:\CNTDATA\CNTA_ML_Project\database\cnta_experiments.sqlite'
 
 def extract_mag(image_path):
+    metadata_mag = extract_magnification_from_png_metadata(image_path)
+    if metadata_mag is not None:
+        return metadata_mag
+
     try:
         import cv2
         import numpy as np

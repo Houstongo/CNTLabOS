@@ -83,124 +83,214 @@ async def view_tif(path: str):
 from src.analysis.feature_extractor import FeatureExtractor
 import cv2
 
+
+def _read_grayscale_image(image_path: str):
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is not None:
+        return img
+
+    try:
+        data = np.fromfile(image_path, dtype=np.uint8)
+        if data.size == 0:
+            return None
+        return cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+    except Exception:
+        return None
+
+
+class BatchImageActionRequest(BaseModel):
+    image_ids: List[int]
+
+
+def _validate_batch_ids(image_ids: List[int]) -> List[int]:
+    normalized = []
+    seen = set()
+    for image_id in image_ids or []:
+        try:
+            value = int(image_id)
+        except (TypeError, ValueError):
+            continue
+        if value not in seen:
+            seen.add(value)
+            normalized.append(value)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="image_ids must contain at least one valid id")
+    return normalized
+
+
+def _analyze_image_with_cursor(cursor: sqlite3.Cursor, image_id: int) -> Dict[str, Any]:
+    active_clause = _active_images_clause(cursor)
+    cursor.execute(f"SELECT * FROM images WHERE id = ? AND {active_clause}", (image_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    img_path = row["file_path"]
+    mag = row["magnification"]
+
+    if not os.path.exists(img_path):
+        raise HTTPException(status_code=404, detail="Physical file missing")
+
+    img = _read_grayscale_image(img_path)
+    if img is None:
+        raise HTTPException(status_code=400, detail="Failed to read image")
+
+    extractor = FeatureExtractor(
+        magnification=int(mag) if mag else None,
+        diameter_method="enhanced",
+    )
+    results = extractor.extract_all(img)
+
+    update_values = {
+        "diameter": results.get("diameter"),
+        "density": results.get("density"),
+        "alignment": results.get("alignment"),
+        "curvature": results.get("curvature_nm"), # 存储数值型曲率 (nm^-1) 用于机器学习
+        "processed": 1,
+    }
+    for column in (
+        "tortuosity",
+        "waviness_ratio",
+        "waviness_height_nm",
+        "waviness_wavelength_nm",
+        "waviness_branches",
+    ):
+        if _images_has_column(cursor, column):
+            update_values[column] = results.get(column)
+
+    assignments = ", ".join(f"{column} = ?" for column in update_values)
+    cursor.execute(
+        f"UPDATE images SET {assignments} WHERE id = ?",
+        tuple(update_values.values()) + (image_id,),
+    )
+    return results
+
+
+@app.post("/api/images/batch/analyze")
+async def batch_analyze_images(req: BatchImageActionRequest):
+    image_ids = _validate_batch_ids(req.image_ids)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    items = []
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    try:
+        for image_id in image_ids:
+            cursor.execute(
+                "SELECT id, COALESCE(is_deleted, 0) AS is_deleted FROM images WHERE id = ?",
+                (image_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "failed", "detail": "Image not found"})
+                continue
+
+            if int(row["is_deleted"] or 0) == 1:
+                skipped_count += 1
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "skipped", "detail": "Image is logically deleted"})
+                continue
+
+            try:
+                results = _analyze_image_with_cursor(cursor, image_id)
+                success_count += 1
+                items.append({"image_id": image_id, "status": "success", "results": results})
+            except HTTPException as exc:
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "failed", "detail": exc.detail})
+            except Exception as exc:
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "failed", "detail": str(exc)})
+
+        conn.commit()
+        return {
+            "status": "success",
+            "summary": {
+                "requested_count": len(image_ids),
+                "success_count": success_count,
+                "failed_count": failed_count,
+                "skipped_count": skipped_count,
+            },
+            "items": items,
+        }
+    finally:
+        conn.close()
+
+
+@app.put("/api/images/batch/delete")
+async def batch_soft_delete_images(req: BatchImageActionRequest):
+    image_ids = _validate_batch_ids(req.image_ids)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    if not _images_has_column(cursor, "is_deleted"):
+        conn.close()
+        raise HTTPException(status_code=400, detail="is_deleted column is not available")
+
+    items = []
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    try:
+        for image_id in image_ids:
+            cursor.execute(
+                "SELECT id, COALESCE(is_deleted, 0) AS is_deleted FROM images WHERE id = ?",
+                (image_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "failed", "detail": "Image not found"})
+                continue
+
+            if int(row["is_deleted"] or 0) == 1:
+                skipped_count += 1
+                failed_count += 1
+                items.append({"image_id": image_id, "status": "skipped", "detail": "Image already in trash"})
+                continue
+
+            cursor.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (image_id,))
+            success_count += 1
+            items.append({"image_id": image_id, "status": "success"})
+
+        conn.commit()
+        return {
+            "status": "success",
+            "summary": {
+                "requested_count": len(image_ids),
+                "success_count": success_count,
+                "failed_count": failed_count,
+                "skipped_count": skipped_count,
+            },
+            "items": items,
+        }
+    finally:
+        conn.close()
+
 @app.post("/api/images/{image_id}/analyze")
 async def analyze_image_v2(image_id: int):
     """
-    手动触发 AI 重新分析（混合方案：快速响应 + 高精度可视化）
+    ?????? AI ??????????????????????+ ???????????
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
-    row = cursor.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    img_path = row['file_path']
-    mag = row['magnification']
-
-    if not os.path.exists(img_path):
-        raise HTTPException(status_code=404, detail="Physical file missing")
-
     try:
-        img = cv2.imread(img_path, 0)
-
-        # 快速特征提取
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(img)
-        smoothed = cv2.GaussianBlur(enhanced, (3, 3), 0)
-        _, thresh = cv2.threshold(smoothed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # 距离变换
-        dist = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
-        diameter_px = np.median(dist[dist > 1.5]) * 2
-
-        # 密度计算
-        density = np.count_nonzero(thresh) / thresh.size * 100
-
-        # 对齐计算（结构张量）
-        Ix = cv2.Scharr(enhanced, cv2.CV_64F, 1, 0)
-        Iy = cv2.Scharr(enhanced, cv2.CV_64F, 0, 1)
-        Jxx = cv2.GaussianBlur(Ix * Ix, (3, 3), 0)
-        Jyy = cv2.GaussianBlur(Iy * Iy, (3, 3), 0)
-        trace = Jxx + Jyy + 1e-10
-        coherence = np.abs(Jxx - Jyy) / trace
-        hof = float(np.clip(np.mean(coherence), 0, 1))
-        mean_phi_deg = float(np.degrees(np.arccos(np.sqrt(np.clip(np.mean(coherence), 0, 1)))))
-
-        # 骨架追踪曲率计算
-        from skimage.morphology import skeletonize
-        from skimage.measure import label
-        from scipy.ndimage import convolve
-
-        # 完整骨架
-        skel_full = skeletonize(thresh > 0)
-
-        # 提取最长骨架
-        longest_skel = _extract_longest_skeleton(skel_full).astype(np.uint8) * 255
-        labeled = label(longest_skel, connectivity=2)
-
-        px_per_nm = 0.05 if mag and mag == 50000 else 0.1  # 像素转nm系数
-        all_curvatures = []
-
-        n_regions = labeled.max()
-        if n_regions > 0:
-            for rid in range(1, min(n_regions + 1, 15)):
-                region_mask = (labeled == rid).astype(np.uint8)
-                coords = np.argwhere(region_mask).astype(float)
-
-                if len(coords) < 10:
-                    continue
-
-                # 找端点
-                kernel = np.ones((3, 3), dtype=np.uint8)
-                kernel[1, 1] = 0
-                neighbor_count = convolve(region_mask, kernel, mode='constant', cval=0)
-                endpoints = np.argwhere((region_mask > 0) & (neighbor_count == 1))
-
-                if len(endpoints) >= 2:
-                    # 追踪路径并计算曲率
-                    path = _trace_skeleton(region_mask, endpoints[0], endpoints[1])
-                    if len(path) > 5:
-                        for i in range(2, min(len(path) - 2, 50)):
-                            p0, p1, p2, p3, p4 = path[i-2], path[i-1], path[i], path[i+1], path[i+2]
-                            v1 = p2 - p0
-                            v2 = p4 - p2
-                            angle1 = np.arctan2(v1[0], v1[1])
-                            angle2 = np.arctan2(v2[0], v2[1])
-                            d_theta = abs(angle2 - angle1)
-                            ds = np.linalg.norm(p4 - p0)
-                            if ds > 0:
-                                curvature_px = d_theta / ds
-                                curvature_nm = curvature_px / px_per_nm
-                                if curvature_nm < 2.0:
-                                    all_curvatures.append(curvature_nm)
-
-        avg_curvature_nm = float(np.median(all_curvatures)) if all_curvatures else 0.0
-
-        # 转换直径为nm
-        px_per_um = 50.0 if mag and mag == 50000 else 100.0
-        diameter_nm = diameter_px / px_per_um * 1000.0
-
-        results = {
-            'diameter': float(diameter_nm),
-            'density': float(density),
-            'alignment': float(hof),
-            'curvature': float(avg_curvature_nm),  # 骨架追踪曲率
-            'mean_phi_deg': float(mean_phi_deg),
-            'px_per_um': float(px_per_um)
-        }
-
-        # 更新数据库（修改curvature说明为平均曲率）
-        cursor.execute("""
-            UPDATE images
-            SET diameter = ?, density = ?, alignment = ?, curvature = ?, processed = 1
-            WHERE id = ?
-        """, (results['diameter'], results['density'], results['alignment'], results['curvature'], image_id))
-
+        results = _analyze_image_with_cursor(cursor, image_id)
         conn.commit()
         return {"status": "success", "results": results}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error in analyze: {e}")
         import traceback
@@ -293,27 +383,48 @@ async def update_image(image_id: int, image: ImageDetail):
 @app.delete("/api/images/{image_id}")
 async def delete_image(image_id: int):
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
+    if _images_has_column(cursor, "is_deleted"):
+        cursor.execute("SELECT id, COALESCE(is_deleted, 0) AS is_deleted FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Image not found")
+        if int(row["is_deleted"] or 0) != 1:
+            conn.close()
+            raise HTTPException(status_code=409, detail="Image must be moved to trash before permanent deletion")
+
     cursor.execute("DELETE FROM images WHERE id = ?", (image_id,))
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Image not found")
+
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "deleted_id": image_id, "mode": "hard"}
 
 @app.post("/api/images/{image_id}/features")
 async def update_features(image_id: int, features: Dict[str, Any]):
     # 保持兼容性，允许手动修正数值
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # 优先获取数值型曲率，如果前端传来的是旧版标签字符串，尝试解析或设为 None
+    curv = features.get('curvature_nm') or features.get('curvature')
+    try:
+        curv = float(curv)
+    except (TypeError, ValueError):
+        curv = None
+
     cursor.execute("""
         UPDATE images 
         SET diameter = ?, density = ?, alignment = ?, curvature = ?, tortuosity = ?, processed = 1
         WHERE id = ?
-    """, (features.get('diameter'), features.get('density'), features.get('alignment'), features.get('curvature'), features.get('tortuosity'), image_id))
+    """, (features.get('diameter'), features.get('density'), features.get('alignment'), curv, features.get('tortuosity'), image_id))
     conn.commit()
     conn.close()
     return {"status": "success"}
-
-@app.get("/api/summary")
 
 # 标记图像为已删除
 @app.put("/api/images/{image_id}/delete")
@@ -360,14 +471,16 @@ async def restore_deleted_image(image_id: int):
     return {"status": "success", "restored_id": image_id}
 
 
+@app.get("/api/summary")
 async def get_summary():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT source, COUNT(*) FROM images GROUP BY source")
+    active_clause = _active_images_clause(cursor)
+    cursor.execute(f"SELECT source, COUNT(*) FROM images WHERE {active_clause} GROUP BY source")
     source_counts = dict(cursor.fetchall())
     
-    cursor.execute("SELECT COUNT(*) FROM images WHERE processed = 1")
+    cursor.execute(f"SELECT COUNT(*) FROM images WHERE {active_clause} AND processed = 1")
     processed_count = cursor.fetchone()[0]
     
     conn.close()
@@ -381,7 +494,7 @@ from backend.core.database_helpers import resolve_sort
 
 
 _XR_SAMPLE_PATTERN = re.compile(r"([A-Za-z])\s*(\d+)\s*-?\s*([A-Za-z])\s*(\d+)")
-_XR_TARGET_KEYS = ("diameter", "density", "alignment", "curvature")
+_XR_TARGET_KEYS = ("diameter", "density", "alignment", "curvature", "tortuosity")
 _XR_FEATURE_KEYS = ("actual_temp", "flow_rate", "catalyst_concentration")
 
 
@@ -396,6 +509,38 @@ def _safe_float(value: Any) -> Optional[float]:
 
 def _sse_payload(payload: Dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _images_has_column(cursor: sqlite3.Cursor, column_name: str) -> bool:
+    rows = cursor.execute("PRAGMA table_info(images)").fetchall()
+    return any(row[1] == column_name for row in rows)
+
+
+def _active_images_clause(cursor: sqlite3.Cursor, alias: Optional[str] = None) -> str:
+    if not _images_has_column(cursor, "is_deleted"):
+        return "1=1"
+    prefix = f"{alias}." if alias else ""
+    return f"COALESCE({prefix}is_deleted, 0) = 0"
+
+
+def _deleted_images_clause(cursor: sqlite3.Cursor, alias: Optional[str] = None) -> str:
+    if not _images_has_column(cursor, "is_deleted"):
+        return "1=0"
+    prefix = f"{alias}." if alias else ""
+    return f"COALESCE({prefix}is_deleted, 0) = 1"
+
+
+def _image_visibility_clause(
+    cursor: sqlite3.Cursor,
+    deletion_view: str = "active",
+    alias: Optional[str] = None,
+) -> str:
+    normalized = (deletion_view or "active").strip().lower()
+    if normalized == "deleted":
+        return _deleted_images_clause(cursor, alias)
+    if normalized == "all":
+        return "1=1"
+    return _active_images_clause(cursor, alias)
 
 
 def _stream_with_error_boundary(stream_factory):
@@ -438,7 +583,6 @@ def _fit_linear_model(rows: List[Dict[str, Any]], target_field: str) -> Dict[str
             continue
         x_rows.append([1.0] + [float(v) for v in x])
         y_vals.append(float(y))
-
     n_train = len(y_vals)
     if n_train == 0:
         return {
@@ -495,19 +639,20 @@ async def get_xr_simple_model_data(limit: int = 2000):
     XR 简易建模数据接口：
     - 仅保留首字母 C 的样本
     - 样本定义：run + 第一个数字
-    - 输出字段：样本号/拍摄部位/拍摄编号 + 工艺变量 + 4个形貌特征(实际/预测)
+    - 输出字段：样本号/拍摄部位/拍摄编号 + 工艺变量 + 5个形貌特征(实际/预测)
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    active_clause = _active_images_clause(cursor)
     cursor.execute(
         """
         SELECT
             id, file_path, sample_id, actual_temp, growth_temp,
             ar_flow, catalyst_weight,
-            diameter, density, alignment, curvature
+            diameter, density, alignment, curvature, tortuosity
         FROM images
-        WHERE source = 'XR'
+        WHERE source = 'XR' AND """ + active_clause + """
         ORDER BY id DESC
         LIMIT ?
         """,
@@ -542,6 +687,7 @@ async def get_xr_simple_model_data(limit: int = 2000):
             "density_actual": _safe_float(db_row["density"]),
             "alignment_actual": _safe_float(db_row["alignment"]),
             "curvature_actual": _safe_float(db_row["curvature"]),
+            "tortuosity_actual": _safe_float(db_row["tortuosity"]),
         }
         rows.append(row)
 
@@ -632,6 +778,8 @@ async def get_image_list(
     min_temp: Optional[float] = None,
     max_temp: Optional[float] = None,
     processed: Optional[int] = None,
+    is_deleted: Optional[int] = None,
+    deletion_view: str = "active",
     limit: int = 15, 
     offset: int = 0,
     sort_by: str = "id",
@@ -641,10 +789,14 @@ async def get_image_list(
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
+    effective_view = deletion_view
+    if is_deleted is not None:
+        effective_view = "deleted" if int(is_deleted) == 1 else "active"
+
     if source == "XR" and _has_xr_schema(cursor):
         _, sort_col, sort_order = resolve_sort(sort_by, order)
 
-        where_clauses = ["i.source = 'XR'"]
+        where_clauses = ["i.source = 'XR'", _image_visibility_clause(cursor, effective_view, "i")]
         params = []
         if min_temp is not None:
             where_clauses.append("COALESCE(r.set_temp_c, i.growth_temp) >= ?")
@@ -694,7 +846,8 @@ async def get_image_list(
                 t.alignment AS alignment,
                 t.curvature AS curvature,
                 t.tortuosity AS tortuosity,
-                COALESCE(xi.processed, i.processed, 0) AS processed
+                COALESCE(xi.processed, i.processed, 0) AS processed,
+                COALESCE(i.is_deleted, 0) AS is_deleted
             FROM images i
             LEFT JOIN xr_images xi ON xi.file_path = i.file_path
             LEFT JOIN xr_runs r ON r.run_id = xi.run_id
@@ -740,7 +893,7 @@ async def get_image_list(
     params = []
 
     # 始终排除已删除的数据
-    where_clauses.append("COALESCE(is_deleted, 0) = 0")
+    where_clauses.append(_image_visibility_clause(cursor, effective_view))
 
     if source:
         where_clauses.append("source = ?")
@@ -796,9 +949,9 @@ class ChatRequest(BaseModel):
 
 
 def _get_interpreter(x_provider: str, x_api_key: str, x_model: Optional[str] = None) -> AIInterpreter:
-    """从请求头构建 AIInterpreter，支持指定模型"""
+    """?????? AIInterpreter????????"""
     if not x_api_key:
-        raise HTTPException(status_code=401, detail="缺少 X-Api-Key 请求头")
+        raise HTTPException(status_code=401, detail="?? X-Api-Key ???")
     provider = (x_provider or "glm").lower()
     try:
         return AIInterpreter(provider=provider, api_key=x_api_key, model=x_model)
@@ -822,7 +975,8 @@ async def interpret_image(
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
+    active_clause = _active_images_clause(cursor)
+    cursor.execute(f"SELECT * FROM images WHERE id = ? AND {active_clause}", (image_id,))
     row = cursor.fetchone()
     conn.close()
 
@@ -885,7 +1039,8 @@ async def chat_with_ai(
     if req.image_id is not None:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM images WHERE id = ?", (req.image_id,)).fetchone()
+        active_clause = _active_images_clause(conn.cursor())
+        row = conn.execute(f"SELECT * FROM images WHERE id = ? AND {active_clause}", (req.image_id,)).fetchone()
         conn.close()
         if row:
             row_dict = dict(row)
@@ -988,6 +1143,21 @@ async def search_rag_links(req: RAGSearchRequest):
             query=req.query,
             top_k=max(req.top_k, 20),
         ),
+        "subgraph": rag_retriever.knowledge_base.retrieve_local_relation_subgraph(
+            query=req.query,
+            top_k=max(req.top_k, 20),
+            max_hops=1,
+            max_expanded_edges=60,
+        ),
+        "constrained_chain": rag_retriever.knowledge_base.generate_constrained_evidence_chain(
+            query=req.query,
+            top_k=max(3, min(req.top_k, 8)),
+            min_confidence=0.45,
+        ),
+        "theme_aggregation": rag_retriever.knowledge_base.get_theme_level_aggregation(
+            query=req.query,
+            top_k=max(req.top_k, 30),
+        ),
     }
 
 
@@ -1021,7 +1191,11 @@ async def visualize_image_analysis(image_id: int):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT file_path, magnification FROM images WHERE id = ?", (image_id,))
+    active_clause = _active_images_clause(cursor)
+    cursor.execute(
+        f"SELECT file_path, magnification FROM images WHERE id = ? AND {active_clause}",
+        (image_id,),
+    )
     result = cursor.fetchone()
     conn.close()
 
@@ -1035,7 +1209,7 @@ async def visualize_image_analysis(image_id: int):
         raise HTTPException(status_code=404, detail="Image file not found")
 
     # 读取图像
-    img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
+    img = _read_grayscale_image(filepath)
     if img is None:
         raise HTTPException(status_code=400, detail="Failed to read image")
     img = prepare_visualization_image(img, max_side=1280)

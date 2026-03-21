@@ -443,6 +443,68 @@
         .clean-step-thumb { width: 100%; height: 220px; object-fit: contain; display: block; background: #f8fafc; cursor: zoom-in; }
         .clean-lightbox { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); z-index: 180; display: flex; align-items: center; justify-content: center; padding: 32px; }
         .clean-lightbox img { max-width: min(92vw, 1800px); max-height: 82vh; object-fit: contain; display: block; margin: 0 auto; background: #fff; }
+
+        /* Batch Mode UI */
+        :root { --batch-col-w: 0px; }
+        .batch-active { --batch-col-w: 44px !important; }
+        .table-header, .table-row {
+            grid-template-columns: var(--batch-col-w) 70px 130px 1.4fr 1.4fr 1fr 1fr 1fr 1.2fr 1.1fr 0.8fr 1.1fr 1fr 50px !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .table-header > div:first-child, .table-row > div:first-child { 
+            overflow: hidden; 
+            transition: opacity 0.2s;
+            opacity: 0;
+        }
+        .batch-active .table-header > div:first-child, .batch-active .table-row > div:first-child {
+            opacity: 1;
+        }
+
+        /* 可视化标签页样式 */
+        .step-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px 8px 0 0;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid #e2e8f0;
+            border-bottom: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            margin-right: 2px;
+            white-space: nowrap;
+        }
+        .step-tab:hover {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .step-tab.active {
+            background: #ffffff;
+            color: #3b82f6;
+            border-color: #cbd5e1;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.03);
+            z-index: 1;
+        }
+        .step-tab i {
+            font-size: 10px;
+        }
+        .step-tab .feature-tag {
+            font-size: 8px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: #3b82f6;
+            color: white;
+            margin-left: 4px;
+            font-weight: 600;
+        }
+        .step-tab.active .feature-tag {
+            background: #2563eb;
+        }
     </style>
 </head>
 <body class="flex">
@@ -521,9 +583,34 @@
                     <option value="XR">XR 梯度实验序列</option>
                     <option value="ZZY">ZZY 工艺参数序列</option>
                 </select>
-                <button onclick="loadDeletedBatches()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2">
-                    <i class="fas fa-list-alt text-[10px]"></i>
-                    查看已删除
+                
+                <!-- Batch Controls Area -->
+                <div id="batch-init-group" class="flex items-center">
+                    <button id="batch-init-btn" onclick="toggleBatchMode()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-black transition-all flex items-center gap-2 border border-slate-200">
+                        <i class="fas fa-tasks"></i> 批量管理
+                    </button>
+                </div>
+                
+                <div id="batch-action-group" class="hidden flex items-center gap-2 bg-blue-50/50 p-1 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-right-4">
+                    <div class="px-3 text-[10px] font-black text-blue-500 uppercase tracking-widest border-r border-blue-100 mr-1">
+                        已选 <span id="header-batch-count" class="text-blue-700">0</span>
+                    </div>
+                    <button id="data-batch-analyze-btn" onclick="runDataBatchAnalyze()" disabled class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-black shadow-md shadow-blue-200 disabled:opacity-40 transition-all flex items-center gap-1.5">
+                        <i class="fas fa-microscope text-[10px]"></i> 批量分析
+                    </button>
+                    <button id="data-batch-delete-btn" onclick="runDataBatchDelete()" disabled class="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-[11px] font-black shadow-md shadow-rose-200 disabled:opacity-40 transition-all flex items-center gap-1.5">
+                        <i class="fas fa-trash-alt text-[10px]"></i> 批量删除
+                    </button>
+                    <button onclick="toggleBatchMode()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-500 rounded-lg text-[11px] font-bold border border-slate-200 transition-all">
+                        退出
+                    </button>
+                </div>
+
+                <div class="h-8 w-px bg-slate-200 mx-1"></div>
+
+                <button id="data-trash-toggle" onclick="toggleDataTrashView()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2">
+                    <i class="fas fa-trash-restore text-[10px]"></i>
+                    查看回收站
                 </button>
                 <button onclick="openEditModal(null)" class="bg-[#3699ff] hover:bg-[#2d82d8] text-white px-5 py-2 rounded-lg text-xs font-bold shadow-lg shadow-blue-200">
                     <i class="fas fa-plus mr-1"></i> 新增实验记录
@@ -536,7 +623,8 @@
 
         <div id="data-page" class="p-4 flex-1 flex flex-col overflow-hidden">
             <div class="data-card flex-1 flex flex-col overflow-hidden">
-                <div class="table-header grid grid-cols-[70px_130px_1.4fr_1.4fr_1fr_1fr_1fr_1.2fr_1.1fr_0.8fr_1.1fr_1fr_50px] items-center px-6 gap-3 shrink-0 select-none border-b border-slate-100 py-4 bg-slate-50/50">
+                <div class="table-header grid items-center px-6 gap-3 shrink-0 select-none border-b border-slate-100 py-4 bg-slate-50/50">
+                    <div class="flex items-center justify-center"><input id="data-select-all" type="checkbox" class="h-4 w-4 accent-blue-600 cursor-pointer" onclick="event.stopPropagation()" onchange="toggleSelectAllDataRows(this.checked)"></div>
                     <div class="text-[11px] uppercase tracking-wider font-bold text-slate-400">预览</div>
                     <div class="text-sm font-bold cursor-pointer hover:text-blue-500" onclick="toggleSort('sample_id')">实验编号</div>
                     <div class="text-center">
@@ -613,31 +701,52 @@
                 <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 mb-6 shadow-inner">
                     <div class="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-4">
                         <div id="ml-target-tabs" class="flex flex-wrap items-center gap-2">
-                            <button type="button" class="ml-target-tab" data-target="diameter" onclick="selectMlVizTarget('diameter')">平均管径模型</button>
-                            <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">覆盖密度模型</button>
-                            <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向性预测</button>
-                            <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">平均曲率推断</button>
-                        </div>
+                             <button type="button" class="ml-target-tab" data-target="diameter" onclick="selectMlVizTarget('diameter')">管径分布模型</button>
+                             <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">覆盖密度模型</button>
+                             <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向度预测</button>
+                             <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">平均曲率推断</button>
+                            <button type="button" class="ml-target-tab" data-target="tortuosity" onclick="selectMlVizTarget('tortuosity')">波浪度分析</button>
+                         </div>
                         <div class="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                             <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">视图设置</span>
                             <div class="h-4 w-px bg-slate-200 mx-1"></div>
                             
                             <select id="ml-viz-mode" onchange="onMlVizOptionChange()" class="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer">
                                 <option value="2d">二维趋势映射</option>
-                                <option value="3d">三维模型渲染</option>
+                                <option value="3d-heatmap">三维特征热力图</option>
+                                <option value="3d-scatter">三维散点分布</option>
                             </select>
-                            <select id="ml-viz-xkey" onchange="onMlVizOptionChange()" class="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer">
-                                <option value="actual_temp">X轴: 实际温度</option>
-                                <option value="flow_rate">X轴: 流速</option>
-                                <option value="catalyst_concentration">X轴: 催化剂浓度</option>
-                                <option value="sample_no">X轴: 样品编号</option>
-                                <option value="shot_no">X轴: 拍摄编号</option>
-                            </select>
-                            <select id="ml-viz-y-mode" onchange="onMlVizOptionChange()" class="text-xs font-bold text-indigo-600 bg-transparent outline-none cursor-pointer">
-                                <option value="pred">Y值: 模型预测</option>
-                                <option value="actual">Y值: 实测标签</option>
-                                <option value="residual">Y值: 偏差(实测-预测)</option>
-                            </select>
+                            
+                            <!-- 3D Axis Controls -->
+                            <div id="ml-viz-axis-3d" class="hidden flex items-center gap-2 border-l border-slate-200 pl-2">
+                                <select id="ml-viz-xkey-3d" onchange="onMlVizOptionChange()" class="text-[10px] font-black text-slate-500 bg-slate-100/50 rounded px-2 py-1 outline-none">
+                                    <option value="actual_temp">X: 实际温度</option>
+                                    <option value="flow_rate">X: 流速</option>
+                                    <option value="catalyst_concentration">X: 催化剂</option>
+                                </select>
+                                <select id="ml-viz-ykey-3d" onchange="onMlVizOptionChange()" class="text-[10px] font-black text-slate-500 bg-slate-100/50 rounded px-2 py-1 outline-none">
+                                    <option value="flow_rate">Y: 流速</option>
+                                    <option value="actual_temp">Y: 实际温度</option>
+                                    <option value="catalyst_concentration">Y: 催化剂</option>
+                                </select>
+                                <div class="text-[10px] font-black text-indigo-400 bg-indigo-50 px-2 py-1 rounded">Z: 实际数据</div>
+                            </div>
+                            
+                            <!-- 2D Controls -->
+                            <div id="ml-viz-axis-2d" class="flex items-center gap-2 border-l border-slate-200 pl-2">
+                                <select id="ml-viz-xkey" onchange="onMlVizOptionChange()" class="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer">
+                                    <option value="actual_temp">X轴: 实际温度</option>
+                                    <option value="flow_rate">X轴: 流速</option>
+                                    <option value="catalyst_concentration">X轴: 催化剂浓度</option>
+                                    <option value="sample_no">X轴: 样品编号</option>
+                                    <option value="shot_no">X轴: 拍摄编号</option>
+                                </select>
+                                <select id="ml-viz-y-mode" onchange="onMlVizOptionChange()" class="text-xs font-bold text-indigo-600 bg-transparent outline-none cursor-pointer">
+                                    <option value="pred">Y值: 模型预测</option>
+                                    <option value="actual" selected>Y值: 实测标签</option>
+                                    <option value="residual">Y值: 偏差(实测-预测)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -713,10 +822,11 @@
                                 <th class="px-3 py-3 text-right">实际温度</th>
                                 <th class="px-3 py-3 text-right">混合流速</th>
                                 <th class="px-3 py-3 text-right">催化剂浓度</th>
-                                <th class="px-3 py-3 text-right text-blue-600">平均管径</th>
+                                <th class="px-3 py-3 text-right text-blue-600">管径分布</th>
                                 <th class="px-3 py-3 text-right text-emerald-600">覆盖密度</th>
-                                <th class="px-3 py-3 text-right text-orange-600">取向性</th>
+                                <th class="px-3 py-3 text-right text-orange-600">取向度</th>
                                 <th class="px-3 py-3 text-right text-purple-600">平均曲率</th>
+                                <th class="px-3 py-3 text-right text-rose-600">波浪度</th>
                             </tr>
                         </thead>
                         <tbody id="ml-table-body" class="divide-y divide-slate-100/60"></tbody>
@@ -752,6 +862,10 @@
                             <option value="0">未提取</option>
                         </select>
                         <input id="clean-keyword-filter" oninput="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[180px] outline-none placeholder:text-slate-400 focus:border-blue-400" placeholder="搜索样品/批次/文件名">
+                        <button id="clean-trash-toggle" type="button" onclick="toggleCleanTrashView()" class="px-3 py-2 rounded-lg bg-slate-700 text-white text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2">
+                            <i class="fas fa-trash-restore text-[10px]"></i>
+                            查看回收站
+                        </button>
                     </div>
                 </div>
             </div>
@@ -767,8 +881,38 @@
                     <div id="clean-sample-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
                 </div>
 
-                <!-- Review Panel: Now taking the rest of the space -->
-                <div id="clean-review-panel" class="flex-1 flex flex-col bg-slate-50 z-10 box-border overflow-hidden border-l border-slate-200">
+                <div id="clean-viewer-stage" class="flex-1 min-w-0 flex flex-col bg-slate-100 border-l border-slate-200 border-r border-slate-200">
+                    <div class="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] font-black uppercase tracking-widest text-slate-400">看片区</div>
+                            <div id="clean-viewer-caption" class="text-sm font-black text-slate-700 mt-1">选择左侧样品开始审查</div>
+                        </div>
+                        <button id="clean-open-original" type="button" onclick="openCleanOriginal()" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-black shadow-lg shadow-slate-900/10 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                            <i class="fas fa-up-right-and-down-left-from-center mr-2"></i> 放大查看
+                        </button>
+                    </div>
+                    <div class="flex-1 min-h-0 p-5">
+                        <div class="h-full rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+                            <div class="flex-1 min-h-0 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_42%),linear-gradient(180deg,_#f8fbff_0%,_#eef3f8_100%)] p-6">
+                                <img id="clean-original-image" class="max-w-full max-h-full object-contain rounded-2xl shadow-xl shadow-slate-900/10 hidden" alt="清洗查看图像">
+                                <div id="clean-viewer-empty" class="text-center text-slate-400">
+                                    <div class="text-5xl mb-4 opacity-40"><i class="fas fa-image"></i></div>
+                                    <div class="text-sm font-black">选择样品后，这里会显示原图和过程步骤</div>
+                                </div>
+                            </div>
+                            <div id="clean-step-strip" class="border-t border-slate-200 bg-slate-100">
+                                <div class="flex items-end px-4 pt-3 overflow-x-auto">
+                                    <div class="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-4 pb-2 self-center whitespace-nowrap">算法步骤</div>
+                                    <div id="clean-step-tabs" class="flex items-end min-h-[36px]">
+                                        <div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="clean-review-panel" class="w-[420px] max-w-[420px] shrink-0 flex flex-col bg-slate-50 z-10 box-border overflow-hidden">
                     <div class="p-6 border-b border-slate-200 bg-white shrink-0 relative overflow-hidden">
                         <div class="absolute -right-4 -bottom-4 opacity-[0.03]"><i class="fas fa-microscope text-9xl text-blue-900"></i></div>
                         <h3 class="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-clipboard-check"></i> 清洗判定中心</h3>
@@ -777,12 +921,6 @@
                     <div class="flex-1 overflow-y-auto">
                         <div id="clean-review-content" class="p-5">
                             <div class="text-center text-xs text-slate-500 font-bold mt-10">👈 选择左侧样品以显示其特征</div>
-                        </div>
-                    </div>
-                    <!-- 删除操作按钮 -->
-                    <div class="p-4 border-t border-slate-200 bg-slate-50">
-                        <div id="clean-delete-actions" class="flex flex-col gap-2">
-                            <!-- JS injected delete/restore buttons -->
                         </div>
                     </div>
                 </div>
@@ -813,8 +951,8 @@
                         <div class="flex-1 flex gap-2">
                             <input id="rag-link-query" type="text"
                                 class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                                placeholder="输入查询词，例如：temperature alignment conductivity mechanism"
-                                value="temperature alignment conductivity mechanism"
+                                placeholder="输入查询词，例如：生长温度 取向度 导电性 生长机理"
+                                value="生长温度 取向度 导电性 生长机理"
                                 onkeydown="if(event.key==='Enter'){event.preventDefault();loadRagLinks();}">
                             <button onclick="loadRagLinks()"
                                 class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shrink-0">
@@ -890,14 +1028,20 @@
                             <div class="text-[10px] text-slate-400">单独查看图谱</div>
                         </div>
                         <div class="space-y-2 mb-3">
-                            <button id="rag-graph-filter-all" class="rag-graph-filter-btn active" onclick="setRagGraphFilter('all')">全部关系</button>
-                            <button id="rag-graph-filter-process_to_morphology" class="rag-graph-filter-btn" onclick="setRagGraphFilter('process_to_morphology')">仅看工艺 → 形貌</button>
-                            <button id="rag-graph-filter-morphology_to_performance" class="rag-graph-filter-btn" onclick="setRagGraphFilter('morphology_to_performance')">仅看形貌 → 性能</button>
-                            <button id="rag-graph-filter-process_to_performance" class="rag-graph-filter-btn" onclick="setRagGraphFilter('process_to_performance')">仅看工艺 → 性能</button>
-                            <button id="rag-graph-filter-mechanism_evidence" class="rag-graph-filter-btn" onclick="setRagGraphFilter('mechanism_evidence')">仅看机理证据</button>
+                            <button id="rag-graph-filter-all" class="rag-graph-filter-btn active flex items-center justify-between gap-2" onclick="setRagGraphFilter('all')"><span>全部关系</span><span id="rag-graph-filter-count-all" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">0</span></button>
+                            <button id="rag-graph-filter-process_to_morphology" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_morphology')"><span>仅看工艺 → 形貌</span><span id="rag-graph-filter-count-process_to_morphology" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">0</span></button>
+                            <button id="rag-graph-filter-morphology_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('morphology_to_performance')"><span>仅看形貌 → 性能</span><span id="rag-graph-filter-count-morphology_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">0</span></button>
+                            <button id="rag-graph-filter-process_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_performance')"><span>仅看工艺 → 性能</span><span id="rag-graph-filter-count-process_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">0</span></button>
+                            <button id="rag-graph-filter-mechanism_evidence" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('mechanism_evidence')"><span>仅看机理证据</span><span id="rag-graph-filter-count-mechanism_evidence" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">0</span></button>
                         </div>
                         <div id="rag-graph-link-summary" class="rag-stat-grid text-xs mb-3"></div>
                         <div id="rag-graph-insights" class="space-y-2 text-xs rag-panel-scroll"></div>
+                        <div class="mt-3 pt-3 border-t border-slate-100">
+                            <div class="rag-subpage-title mb-2">局部子图检索</div>
+                            <div id="rag-subgraph-summary" class="grid grid-cols-3 gap-2 text-xs mb-3"></div>
+                            <div class="rag-subpage-title mb-2">约束证据链（工艺→机理→形貌）</div>
+                            <div id="rag-constrained-chain" class="space-y-2 text-xs"></div>
+                        </div>
                     </div>
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between mb-3">
@@ -917,6 +1061,10 @@
                             <div class="text-[10px] text-slate-400">聚焦导电 / 强度 / 模量</div>
                         </div>
                         <div id="rag-performance-summary" class="grid grid-cols-2 gap-2 text-xs"></div>
+                        <div class="mt-3 pt-3 border-t border-slate-100">
+                            <div class="rag-subpage-title mb-2">主题聚合（轻量）</div>
+                            <div id="rag-theme-aggregation" class="space-y-2 text-xs"></div>
+                        </div>
                     </div>
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between mb-3">
@@ -1002,14 +1150,14 @@
                 <!-- 量化核心指标 (2x2) -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 flex flex-col justify-center">
-                        <div class="text-[10px] text-indigo-500 font-black uppercase tracking-wider mb-2">平均管径 (Diameter)</div>
+                        <div class="text-[10px] text-indigo-500 font-black uppercase tracking-wider mb-2">管径分布 (Diameter)</div>
                         <div class="flex items-baseline gap-1">
                             <span id="f-dia" class="text-3xl font-black text-indigo-900 leading-none">--</span>
                             <span class="text-sm font-bold text-indigo-400">nm</span>
                         </div>
                     </div>
                     <div class="bg-orange-50/50 p-5 rounded-2xl border border-orange-100 flex flex-col justify-center">
-                        <div class="text-[10px] text-orange-500 font-black uppercase tracking-wider mb-2">取向性 (Alignment)</div>
+                        <div class="text-[10px] text-orange-500 font-black uppercase tracking-wider mb-2">取向度 (Orientation Degree)</div>
                         <div id="f-ali" class="text-3xl font-black text-orange-900 leading-none">--</div>
                     </div>
                     <div class="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 flex flex-col justify-center">
@@ -1022,6 +1170,13 @@
                     <div class="bg-purple-50/50 p-5 rounded-2xl border border-purple-100 flex flex-col justify-center">
                         <div class="text-[10px] text-purple-500 font-black uppercase tracking-wider mb-2">平均曲率 (Curvature)</div>
                         <div id="f-cur" class="text-xl font-black text-purple-900 leading-tight">--</div>
+                    </div>
+                </div>
+                <!-- Extra metrics -->
+                <div class="grid grid-cols-1 gap-4 mt-4">
+                    <div class="bg-rose-50/50 p-5 rounded-2xl border border-rose-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-rose-500 font-black uppercase tracking-wider mb-2">波浪度 (Tortuosity)</div>
+                        <div id="f-tor" class="text-xl font-black text-rose-900 leading-none">--</div>
                     </div>
                 </div>
 
@@ -1070,10 +1225,7 @@
                         修参数
                     </button>
                 </div>
-                <button onclick="deleteRecord(currentItem.id)"
-                    class="w-full h-10 bg-red-50 text-red-500 border border-red-100 rounded-xl font-bold text-xs hover:bg-red-500 hover:text-white transition-all group">
-                    <i class="fas fa-trash-alt mr-2 group-hover:shake"></i> 彻底移除该实验记录
-                </button>
+                <div id="detail-delete-actions"></div>
             </div>
         </div>
     </div>
@@ -1378,6 +1530,9 @@
     </div>
 
     <script>
+        // API 基础路径（自动检测，支持前端独立运行）
+        const API_BASE = window.location.origin || 'http://127.0.0.1:8000';
+
         // --- Sidebar Logic ---
         function toggleSidebar() {
             const side = document.getElementById('sidebar');
@@ -1486,30 +1641,212 @@
             await loadData();
         }
 
+        function getVisibleDataIds() {
+            return Object.keys(currentListItemsById || {}).map(id => Number(id)).filter(id => Number.isFinite(id));
+        }
+
+        function isDataRowSelected(id) {
+            return selectedDataIds.has(Number(id));
+        }
+
+        function reconcileDataSelection(items) {
+            const visibleIds = new Set((items || []).map(item => Number(item.id)));
+            selectedDataIds = new Set([...selectedDataIds].filter(id => visibleIds.has(Number(id))));
+        }
+
+        function updateDataRowSelectionState(id) {
+            const row = document.getElementById(`data-row-${id}`);
+            if (row) {
+                row.classList.toggle('bg-blue-50/70', isDataRowSelected(id));
+                row.classList.toggle('ring-1', isDataRowSelected(id));
+                row.classList.toggle('ring-blue-100', isDataRowSelected(id));
+            }
+        }
+
+        function updateDataSelectAllState() {
+            const checkbox = document.getElementById('data-select-all');
+            if (!checkbox) return;
+            const visibleIds = getVisibleDataIds();
+            const selectedVisibleCount = visibleIds.filter(id => selectedDataIds.has(id)).length;
+            checkbox.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+            checkbox.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+        }
+
+        let batchMode = false;
+        function toggleBatchMode() {
+            batchMode = !batchMode;
+            const dataPage = document.getElementById('data-page');
+            const initBtn = document.getElementById('batch-init-btn');
+            const actionGroup = document.getElementById('batch-action-group');
+            if (dataPage) dataPage.classList.toggle('batch-active', batchMode);
+            if (initBtn) initBtn.classList.toggle('hidden', batchMode);
+            if (actionGroup) actionGroup.classList.toggle('hidden', !batchMode);
+            
+            if (!batchMode) {
+                clearDataSelection();
+            }
+        }
+
+        function renderDataBatchToolbar() {
+            const countEl = document.getElementById('header-batch-count');
+            const analyzeBtn = document.getElementById('data-batch-analyze-btn');
+            const deleteBtn = document.getElementById('data-batch-delete-btn');
+            if (!countEl || !analyzeBtn || !deleteBtn) return;
+
+            const count = selectedDataIds.size;
+            countEl.innerText = String(count);
+            
+            analyzeBtn.disabled = count === 0;
+            deleteBtn.disabled = count === 0 || dataViewMode === 'deleted';
+            deleteBtn.classList.toggle('hidden', dataViewMode === 'deleted');
+        }
+
+        function toggleDataRowSelection(id, checked) {
+            const value = Number(id);
+            if (checked) {
+                selectedDataIds.add(value);
+            } else {
+                selectedDataIds.delete(value);
+            }
+            updateDataRowSelectionState(value);
+            updateDataSelectAllState();
+            renderDataBatchToolbar();
+        }
+
+        function toggleSelectAllDataRows(checked) {
+            const visibleIds = getVisibleDataIds();
+            visibleIds.forEach(id => {
+                if (checked) {
+                    selectedDataIds.add(id);
+                } else {
+                    selectedDataIds.delete(id);
+                }
+                const checkbox = document.querySelector(`.data-row-checkbox[data-id="${id}"]`);
+                if (checkbox) checkbox.checked = checked;
+                updateDataRowSelectionState(id);
+            });
+            updateDataSelectAllState();
+            renderDataBatchToolbar();
+        }
+
+        function clearDataSelection() {
+            selectedDataIds = new Set();
+            document.querySelectorAll('.data-row-checkbox').forEach(el => {
+                el.checked = false;
+            });
+            getVisibleDataIds().forEach(updateDataRowSelectionState);
+            updateDataSelectAllState();
+            renderDataBatchToolbar();
+        }
+
+        function describeBatchActionResult(actionLabel, payload) {
+            const summary = payload?.summary || {};
+            const success = Number(summary.success_count || 0);
+            const skipped = Number(summary.skipped_count || 0);
+            const failed = Number(summary.failed_count || 0);
+            const effectiveFailed = Math.max(0, failed - skipped);
+            const skippedText = skipped > 0 ? `, skipped ${skipped}` : '';
+            const failedText = effectiveFailed > 0 ? `, failed ${effectiveFailed}` : '';
+            return `${actionLabel} complete: success ${success}${skippedText}${failedText}`;
+        }
+
+        async function runDataBatchAnalyze() {
+            const imageIds = [...selectedDataIds];
+            if (!imageIds.length) return;
+            if (!confirm(`确认对选中的 ${imageIds.length} 项进行批量分析？`)) return;
+            const button = document.getElementById('data-batch-analyze-btn');
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Running';
+            try {
+                const res = await fetch(`${API_BASE}/api/images/batch/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_ids: imageIds }),
+                });
+                const payload = await res.json();
+                if (!res.ok) {
+                    throw new Error(payload.detail || `HTTP ${res.status}`);
+                }
+                alert(describeBatchActionResult('Batch analyze', payload));
+                await loadData();
+                if (currentItem && currentListItemsById[String(currentItem.id)]) {
+                    openDetailsById(currentItem.id);
+                }
+            } catch (err) {
+                console.error('Batch analyze failed:', err);
+                alert('Batch analyze failed: ' + err.message);
+            } finally {
+                button.innerHTML = original;
+                renderDataBatchToolbar();
+            }
+        }
+
+        async function runDataBatchDelete() {
+            const imageIds = [...selectedDataIds];
+            if (!imageIds.length) return;
+            if (!confirm(`确认将选中的 ${imageIds.length} 项移入回收站？`)) return;
+            const button = document.getElementById('data-batch-delete-btn');
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Deleting';
+            try {
+                const res = await fetch(`${API_BASE}/api/images/batch/delete`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_ids: imageIds }),
+                });
+                const payload = await res.json();
+                if (!res.ok) {
+                    throw new Error(payload.detail || `HTTP ${res.status}`);
+                }
+                alert(describeBatchActionResult('Batch delete', payload));
+                if (currentItem && imageIds.includes(Number(currentItem.id))) {
+                    closeDetails();
+                }
+                await loadData();
+            } catch (err) {
+                console.error('Batch delete failed:', err);
+                alert('Batch delete failed: ' + err.message);
+            } finally {
+                button.innerHTML = original;
+                renderDataBatchToolbar();
+            }
+        }
+
         async function loadData() {
             try {
                 const source = document.getElementById('source-filter').value;
-                let url = `http://127.0.0.1:8000/api/images?limit=${LIMIT}&offset=${offset}&sort_by=${currentSort}&order=${currentOrder}`;
+                let url = `${API_BASE}/api/images?limit=${LIMIT}&offset=${offset}&sort_by=${currentSort}&order=${currentOrder}`;
                 if (source) url += `&source=${source}`;
+                url += `&deletion_view=${encodeURIComponent(dataViewMode)}`;
 
                 const res = await fetch(url);
                 const data = await res.json();
                 totalItems = data.total;
-                
-                // 更新统计信息
-                document.getElementById('total-count').innerText = `共 ${totalItems} 条实验记录`;
-                document.getElementById('page-display').innerText = `${Math.floor(offset / LIMIT) + 1} / ${Math.ceil(totalItems / LIMIT)}`;
+                renderDataTrashToggle();
+
+                document.getElementById('total-count').innerText = dataViewMode === 'deleted'
+                    ? `Trash view: ${totalItems} records`
+                    : `Total ${totalItems} records`;
+                document.getElementById('page-display').innerText = `${Math.floor(offset / LIMIT) + 1} / ${Math.max(1, Math.ceil(totalItems / LIMIT))}`;
                 document.getElementById('prev-btn').disabled = offset === 0;
                 document.getElementById('next-btn').disabled = offset + LIMIT >= totalItems;
 
+                currentListItemsById = Object.fromEntries((data.items || []).map(item => [String(item.id), item]));
+                reconcileDataSelection(data.items || []);
                 const body = document.getElementById('data-body');
-                body.innerHTML = data.items.map(item => {
-                    const fileName = item.file_path.split('\\').pop();
+                body.innerHTML = (data.items || []).map(item => {
                     const isTif = item.url.toLowerCase().endsWith('.tif') || item.url.toLowerCase().endsWith('.tiff');
-                    const thumbUrl = isTif ? `http://127.0.0.1:8000/api/view/tif?path=${item.url.replace('/images/', '')}` : `http://127.0.0.1:8000${item.url}`;
-                    
+                    const thumbUrl = isTif ? `${API_BASE}/api/view/tif?path=${item.url.replace('/images/', '')}` : `${API_BASE}${item.url}`;
+                    const checked = isDataRowSelected(item.id) ? 'checked' : '';
+                    const selectedClass = isDataRowSelected(item.id) ? ' bg-blue-50/70 ring-1 ring-blue-100' : '';
+
                     return `
-                    <div class="grid grid-cols-[70px_130px_1.4fr_1.4fr_1fr_1fr_1fr_1.2fr_1.1fr_0.8fr_1.1fr_1fr_50px] items-center px-6 table-row text-[14px] hover:bg-blue-50/40 transition-all gap-3 h-[calc(100%/10)]" onclick='openDetails(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
+                    <div id="data-row-${item.id}" class="grid items-center px-6 table-row text-[14px] hover:bg-blue-50/40 transition-all gap-3 h-[calc(100%/10)]${selectedClass}" onclick="openDetailsById(${item.id})">
+                        <div class="flex items-center justify-center">
+                            <input type="checkbox" class="data-row-checkbox h-4 w-4 accent-blue-600 cursor-pointer" data-id="${item.id}" ${checked} onclick="event.stopPropagation()" onchange="toggleDataRowSelection(${item.id}, this.checked)">
+                        </div>
                         <div class="h-10 w-14 border border-slate-100 rounded overflow-hidden shadow-sm">
                             <img src="${thumbUrl}" class="w-full h-full object-cover">
                         </div>
@@ -1531,25 +1868,27 @@
                         <div class="text-center text-slate-700 font-bold text-[13px]">${item.h2_flow ?? '--'}<span class="text-[8px] text-slate-300 ml-0.5">s</span></div>
                         <div class="text-center text-slate-700 font-bold text-[13px]">${item.c2h4_flow ?? '--'}<span class="text-[8px] text-slate-300 ml-0.5">s</span></div>
                         <div class="text-center">
-                            <div class="font-black text-slate-700 text-[13px]">${item.anneal_temp || '--'}<sub class="text-[9px]">℃</sub></div>
+                            <div class="font-black text-slate-700 text-[13px]">${item.anneal_temp || '--'}<sub class="text-[9px]">C</sub></div>
                             <div class="text-[9px] text-slate-400 font-bold">${item.anneal_time || '--'}m</div>
                         </div>
-                        <div class="text-center font-black text-blue-700 bg-blue-50/50 py-1 rounded mx-1 text-[13px]">${item.growth_temp || '--'}<sub class="text-[9px]">℃</sub></div>
+                        <div class="text-center font-black text-blue-700 bg-blue-50/50 py-1 rounded mx-1 text-[13px]">${item.growth_temp || '--'}<sub class="text-[9px]">C</sub></div>
                         <div class="text-center font-black text-blue-500 text-[13px]">${item.growth_time ? item.growth_time.toFixed(1) : '--'}<span class="text-[9px] ml-0.5">h</span></div>
                         <div class="text-center">
                             <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-black uppercase border border-slate-200">${item.position_label || '--'}</span>
                         </div>
                         <div class="text-center text-slate-600 font-black text-[13px]">${item.magnification || '--'}<span class="text-[9px] ml-0.5 text-slate-300">x</span></div>
                         <div class="text-center">
-                            <span class="${item.processed ? 'text-emerald-500' : 'text-slate-300'} inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-slate-100 transition cursor-pointer" title="打开详情" onclick='event.stopPropagation(); openDetails(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
+                            <span class="${item.processed ? 'text-emerald-500' : 'text-slate-300'} inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-slate-100 transition cursor-pointer" title="Open details" onclick="event.stopPropagation(); openDetailsById(${item.id})">
                                 <i class="fas ${item.processed ? 'fa-check-circle' : 'fa-clock'} text-lg"></i>
                             </span>
                         </div>
                     </div>
                     `;
                 }).join('');
+                renderDataBatchToolbar();
+                updateDataSelectAllState();
             } catch (err) {
-                console.error("加载失败:", err);
+                console.error("Load data failed:", err);
             }
         }
 
@@ -1580,10 +1919,11 @@
         }
 
         const ML_TARGET_META = {
-            diameter: { label: '平均管径', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
+            diameter: { label: '管径分布', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
             density: { label: '覆盖密度', predKey: 'density_pred', actualKey: 'density_actual' },
-            alignment: { label: '取向性', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
+            alignment: { label: '取向度', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
             curvature: { label: '平均曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
+            tortuosity: { label: '波浪度', predKey: 'tortuosity_pred', actualKey: 'tortuosity_actual' },
         };
         const ML_X_META = {
             actual_temp: { label: '实际温度', unit: 'C' },
@@ -1772,15 +2112,25 @@
             applyXrMlView({ skipTable: true });
         }
 
+        
+
         function onMlVizOptionChange() {
-            const modeSel = document.getElementById('ml-viz-mode');
-            const xSel = document.getElementById('ml-viz-xkey');
-            const ySel = document.getElementById('ml-viz-y-mode');
-            if (modeSel) mlVizState.mode = modeSel.value || '2d';
-            if (xSel) mlVizState.xKey = xSel.value || 'actual_temp';
-            if (ySel) mlVizState.yMode = ySel.value || 'pred';
+            const modeVal = document.getElementById('ml-viz-mode')?.value || '2d';
+            const isMulti = modeVal.startsWith('3d');
+            
+            mlVizState.mode = modeVal;
+            mlVizState.xKey = document.getElementById('ml-viz-xkey')?.value || 'actual_temp';
+            mlVizState.yMode = document.getElementById('ml-viz-y-mode')?.value || 'pred';
+            mlVizState.xKey3d = document.getElementById('ml-viz-xkey-3d')?.value || 'actual_temp';
+            mlVizState.yKey3d = document.getElementById('ml-viz-ykey-3d')?.value || 'flow_rate';
+
+            const axis2d = document.getElementById('ml-viz-axis-2d');
+            const axis3d = document.getElementById('ml-viz-axis-3d');
+            if (axis2d) axis2d.classList.toggle('hidden', isMulti);
+            if (axis3d) axis3d.classList.toggle('hidden', !isMulti);
+
             if (mlUiPerfState.vizTimer) clearTimeout(mlUiPerfState.vizTimer);
-            mlUiPerfState.vizTimer = setTimeout(() => applyXrMlView({ skipTable: true }), 70);
+            mlUiPerfState.vizTimer = setTimeout(() => applyXrMlView({ skipTable: true }), 100);
         }
 
         function switchMlInfoTab(tab) {
@@ -1810,106 +2160,159 @@
                     <div class="text-slate-500">实际温度</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.actual_temp, 2)}</div>
                     <div class="text-slate-500">流速</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.flow_rate, 2)}</div>
                     <div class="text-slate-500">催化剂浓度</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.catalyst_concentration, 3)}</div>
-                    <div class="text-slate-500">平均管径(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
+                    <div class="text-slate-500">管径分布(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
                     <div class="text-slate-500">覆盖密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
-                    <div class="text-slate-500">取向性(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
+                    <div class="text-slate-500">取向度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
                     <div class="text-slate-500">平均曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
+                    <div class="text-slate-500">波浪度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.tortuosity_actual, 3)} / ${fmtMl(r.tortuosity_pred, 3)}</div>
                 </div>
             `;
         }
 
         function renderMl3D(rows, target, yMode) {
-            const chart = document.getElementById('ml-chart-3d');
-            const title = document.getElementById('ml-3d-title');
-            if (!chart) return;
-            if (title) title.innerText = `三维变量模型（温度-流速-催化剂，颜色=${ML_TARGET_META[target]?.label || target} ${ML_Y_MODE_META[yMode] || yMode}）`;
+            const chartDom = document.getElementById('ml-chart-3d');
+            const titleDom = document.getElementById('ml-3d-title');
+            if (!chartDom) return;
+
+            const mode = mlVizState.mode;
+            const xKey = mlVizState.xKey3d || 'actual_temp';
+            const yKey = mlVizState.yKey3d || 'flow_rate';
+            const xLabel = ML_X_META[xKey]?.label || xKey;
+            const yLabel = ML_X_META[yKey]?.label || yKey;
+            const zLabel = ML_TARGET_META[target]?.label || target;
+
+            if (titleDom) titleDom.innerText = `三维空间模型（X=${xLabel}, Y=${yLabel}, Z=${zLabel} · ${ML_Y_MODE_META[yMode] || yMode}）`;
+
             const chart3d = ensureMlChart('chart3d', 'ml-chart-3d');
-            if (!chart3d) {
-                chart.innerHTML = '<div class="text-xs text-amber-600 font-bold p-3">ECharts-GL 未加载，请刷新页面重试</div>';
-                return;
-            }
+            if (!chart3d) return;
+
             const pts = [];
             rows.forEach(r => {
-                const t = Number(r.actual_temp);
-                const f = Number(r.flow_rate);
-                const c = Number(r.catalyst_concentration);
-                const m = getMlYValue(r, target, yMode);
-                if (!Number.isFinite(t) || !Number.isFinite(f) || !Number.isFinite(c) || !Number.isFinite(m)) return;
-                pts.push({ t, f, c, m, row: r });
+                const x = Number(r[xKey]);
+                const y = Number(r[yKey]);
+                const z = getMlYValue(r, target, yMode);
+                if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+                    pts.push({ x, y, z, row: r });
+                }
             });
+
             if (!pts.length) {
-                chart3d.setOption({
-                    animation: false,
-                    title: { text: '当前筛选无可绘制三维数据', left: 8, top: 6, textStyle: { fontSize: 12, color: '#64748b' } },
-                    xAxis3D: { show: false, type: 'value' },
-                    yAxis3D: { show: false, type: 'value' },
-                    zAxis3D: { show: false, type: 'value' },
-                    grid3D: { show: false },
-                    series: [],
-                }, true);
+                chart3d.clear();
                 return;
             }
-            const mValues = pts.map(p => p.m);
-            let mMin = Math.min(...mValues);
-            let mMax = Math.max(...mValues);
-            if (mMin === mMax) {
-                mMin -= 1;
-                mMax += 1;
+
+            const zValues = pts.map(p => p.z);
+            let zMin = Math.min(...zValues), zMax = Math.max(...zValues);
+            if (zMin === zMax) { zMin -= 0.1; zMax += 0.1; }
+
+            const common3d = {
+                animation: false,
+                tooltip: { formatter: p => {
+                    const v = p.value || [];
+                    return `${xLabel}: ${fmtMl(v[0],2)}<br>${yLabel}: ${fmtMl(v[1],2)}<br>${zLabel}: ${fmtMl(v[2],3)}`;
+                }},
+                visualMap: {
+                    min: zMin, max: zMax, dimension: 2, calculable: true, orient: 'vertical', right: 10, top: 40,
+                    text: ['高', '低'], textStyle: { color: '#475569', fontSize: 10 },
+                    inRange: { color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'] }
+                },
+                xAxis3D: { type: 'value', name: xLabel },
+                yAxis3D: { type: 'value', name: yLabel },
+                zAxis3D: { type: 'value', name: zLabel },
+                grid3D: {
+                    boxWidth: 100, boxHeight: 60, boxDepth: 100,
+                    viewControl: { projection: 'perspective', autoRotate: false, beta: 30, alpha: 20 },
+                    light: { main: { intensity: 1.2 }, ambient: { intensity: 0.4 } }
+                }
+            };
+
+            if (mode === '3d-heatmap') {
+                const gridN = 25;
+                const xMin = Math.min(...pts.map(p => p.x)), xMax = Math.max(...pts.map(p => p.x));
+                const yMin = Math.min(...pts.map(p => p.y)), yMax = Math.max(...pts.map(p => p.y));
+                const xS = (xMax-xMin)/gridN || 1, yS = (yMax-yMin)/gridN || 1;
+                const heatData = [];
+                for(let i=0; i<=gridN; i++){
+                    for(let j=0; j<=gridN; j++){
+                        const gx = xMin+i*xS, gy = yMin+j*yS;
+                        let sZ=0, sW=0;
+                        pts.forEach(p => {
+                            const dSq = Math.pow((p.x-gx)/xS,2)+Math.pow((p.y-gy)/yS,2);
+                            if(dSq<0.0001){ sZ=p.z; sW=1; return; }
+                            const w = 1.0/(dSq+0.1); sZ+=p.z*w; sW+=w;
+                        });
+                        if(sW>0) heatData.push([gx, gy, sZ/sW]);
+                    }
+                }
+                chart3d.setOption({...common3d, series:[{type:'bar3D', data:heatData, shading:'lambert'}]}, true);
+            } else {
+                chart3d.setOption({...common3d, series:[{type:'scatter3D', data:pts.map(p=>({value:[p.x,p.y,p.z],row:p.row})), symbolSize:8}]}, true);
+                chart3d.off('click');
+                chart3d.on('click', p => { if(p.data?.row) renderMlPointDetail({row: p.data.row}); });
             }
-            const option = {
+        }
+
+        function renderMlCorrMatrix(rows) {
+            const chartDom = document.getElementById('ml-chart-corr-matrix');
+            if (!chartDom || !rows.length) return;
+            const vars = [
+                { key: 'actual_temp', label: '实际温度' },
+                { key: 'flow_rate', label: '混合流速' },
+                { key: 'catalyst_concentration', label: '催化剂' },
+                { key: 'diameter_actual', label: '管径分布' },
+                { key: 'density_actual', label: '密度' },
+                { key: 'alignment_actual', label: '取向度' },
+                { key: 'curvature_actual', label: '曲率' },
+                { key: 'tortuosity_actual', label: '波浪度' }
+            ];
+            const chart = ensureMlChart('corrMatrix', 'ml-chart-corr-matrix');
+            if (!chart) return;
+            const matrix = [], labels = vars.map(v => v.label);
+            vars.forEach((v1, i) => {
+                vars.forEach((v2, j) => {
+                    if (i === j) { matrix.push([i, j, 1]); return; }
+                    const data1 = [], data2 = [];
+                    rows.forEach(r => {
+                        const val1 = Number(r[v1.key]), val2 = Number(r[v2.key]);
+                        if (Number.isFinite(val1) && Number.isFinite(val2)) { data1.push(val1); data2.push(val2); }
+                    });
+                    if (data1.length < 3) matrix.push([i, j, 0]);
+                    else matrix.push([i, j, calculateCorrelation(data1, data2)]);
+                });
+            });
+            chart.setOption({
                 animation: false,
                 tooltip: {
-                    formatter: params => {
-                        const d = params?.data || {};
-                        const row = d.row || {};
-                        return [
-                            `${escapeHtml(String(row.run_name || '--'))}`,
-                            `样品: C${row.sample_no ?? '--'} / ${row.position ?? '--'} / ${row.shot_no ?? '--'}`,
-                            `温度: ${fmtMl(d.value?.[0], 2)}`,
-                            `流速: ${fmtMl(d.value?.[1], 2)}`,
-                            `催化剂浓度: ${fmtMl(d.value?.[2], 3)}`,
-                            `${ML_TARGET_META[target]?.label || target}: ${fmtMl(d.value?.[3], 3)}`,
-                        ].join('<br/>');
-                    },
+                    position: 'top',
+                    formatter: p => `${vars[p.value[0]].label} ↔ ${vars[p.value[1]].label}<br/>相关系数: <b>${p.value[2].toFixed(3)}</b>`
                 },
+                grid: { top: 30, bottom: 60, left: 80, right: 30 },
+                xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, rotate: 30, fontSize: 10 } },
+                yAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10 } },
                 visualMap: {
-                    min: mMin,
-                    max: mMax,
-                    dimension: 3,
-                    calculable: true,
-                    orient: 'vertical',
-                    right: 8,
-                    top: 8,
-                    text: ['高', '低'],
-                    textStyle: { color: '#475569', fontSize: 11 },
-                    inRange: { color: ['#60a5fa', '#22c55e', '#eab308'] },
-                },
-                xAxis3D: { type: 'value', name: '实际温度' },
-                yAxis3D: { type: 'value', name: '流速' },
-                zAxis3D: { type: 'value', name: '催化剂浓度' },
-                grid3D: {
-                    boxWidth: 120,
-                    boxDepth: 90,
-                    axisLine: { lineStyle: { color: '#94a3b8' } },
-                    axisPointer: { lineStyle: { color: '#38bdf8' } },
-                    viewControl: { projection: 'perspective', alpha: 20, beta: 35 },
-                    light: { main: { intensity: 1.2 }, ambient: { intensity: 0.45 } },
+                    min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
+                    textStyle: { fontSize: 10 },
+                    inRange: { color: ['#3b82f6', '#f8fafc', '#ef4444'] }
                 },
                 series: [{
-                    type: 'scatter3D',
-                    symbolSize: 7,
-                    data: pts.map(p => ({
-                        value: [p.t, p.f, p.c, p.m],
-                        row: p.row,
-                    })),
-                    itemStyle: { opacity: 0.88 },
-                }],
-            };
-            chart3d.setOption(option, true);
-            chart3d.off('click');
-            chart3d.on('click', params => {
-                if (params?.data?.row) renderMlPointDetail({ row: params.data.row });
-            });
+                    name: 'Correlation', type: 'heatmap', data: matrix,
+                    label: { show: true, fontSize: 9, formatter: p => p.value[2].toFixed(2) },
+                    emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
+                }]
+            }, true);
+        }
+
+        function calculateCorrelation(x, y) {
+            const n = x.length; if (n < 2) return 0;
+            const avgX = x.reduce((a, b) => a + b) / n;
+            const avgY = y.reduce((a, b) => a + b) / n;
+            let num = 0, den1 = 0, den2 = 0;
+            for (let i = 0; i < n; i++) {
+                const dx = x[i] - avgX, dy = y[i] - avgY;
+                num += dx * dy; den1 += dx * dx; den2 += dy * dy;
+            }
+            if (den1 === 0 || den2 === 0) return 0;
+            return num / Math.sqrt(den1 * den2);
         }
 
         function renderXrMlCharts(rows) {
@@ -1932,134 +2335,87 @@
                 if (hasActual) actualCount += 1;
                 points.push({ x, y, hasActual, row: r });
             });
+            const isMultiVar = mode.startsWith('3d');
+            if (panel2d) panel2d.classList.toggle('hidden', isMultiVar);
+            if (panel3d) panel3d.classList.toggle('hidden', !isMultiVar);
+            if (isMultiVar) renderMl3D(rows, target, yMode);
+            renderMlCorrMatrix(rows);
 
-            if (panel2d) panel2d.classList.toggle('hidden', mode === '3d');
-            if (panel3d) panel3d.classList.toggle('hidden', mode !== '3d');
-            if (mode === '3d') {
-                renderMl3D(rows, target, yMode);
-            }
-
-            const uniqueX = [...new Set(points.map(p => p.x))].sort((a, b) => a - b);
+            const uniqueX = [...new Set(points.map(p => p.x))].sort((a,b)=>a-b);
             const shouldJitter = uniqueX.length > 0 && uniqueX.length <= 12;
-            let jitter = 0;
             if (shouldJitter) {
-                if (uniqueX.length > 1) {
-                    const gaps = [];
-                    for (let i = 1; i < uniqueX.length; i += 1) gaps.push(uniqueX[i] - uniqueX[i - 1]);
-                    const minGap = Math.min(...gaps.filter(g => g > 0));
-                    jitter = Number.isFinite(minGap) ? minGap * 0.08 : 0.2;
-                } else {
-                    jitter = 0.2;
-                }
-                points.forEach((p, i) => {
-                    const offset = ((i % 7) - 3) * jitter;
-                    p.xPlot = p.x + offset;
-                });
+                const jitter = uniqueX.length > 1 ? (Math.min(...uniqueX.slice(1).map((v,i)=>v-uniqueX[i])) * 0.08 || 0.2) : 0.2;
+                points.forEach((p, i) => { p.xPlot = p.x + ((i % 7) - 3) * jitter; });
             }
-
             const yTitle = `${targetMeta.label} · ${ML_Y_MODE_META[yMode] || yMode}`;
             const mainTitle = document.getElementById('ml-main-chart-title');
             const trendTitle = document.getElementById('ml-trend-chart-title');
-            if (mode !== '3d') {
-                if (mainTitle) mainTitle.innerText = `${targetMeta.label} vs ${xMeta.label}（${ML_Y_MODE_META[yMode] || yMode}，唯一值 ${uniqueX.length}）`;
-                if (trendTitle) trendTitle.innerText = `${targetMeta.label} 分箱趋势（按 ${xMeta.label}）`;
+            if (!isMultiVar) {
+                if (mainTitle) mainTitle.innerText = `${targetMeta.label} vs ${xMeta.label} (${ML_Y_MODE_META[yMode] || yMode})`;
+                if (trendTitle) trendTitle.innerText = `${targetMeta.label} 分箱趋势 (${xMeta.label})`;
                 drawMlScatter('ml-chart-main', points, xMeta.label, yTitle, xMeta.unit);
                 drawMlTrend('ml-chart-trend', points, xMeta.label, targetMeta.label);
-            } else {
-                mlVizState.mainPoints = [];
             }
-
             const panel = document.getElementById('ml-viz-summary');
             if (panel) {
                 const ys = points.map(p => p.y);
-                const yAvg = ys.length ? ys.reduce((s, v) => s + v, 0) / ys.length : null;
-                const yMin = ys.length ? Math.min(...ys) : null;
-                const yMax = ys.length ? Math.max(...ys) : null;
-                const uniquePreview = uniqueX.slice(0, 8).map(v => fmtMl(v, 2)).join(', ') + (uniqueX.length > 8 ? ' ...' : '');
+                const yAvg = ys.length ? ys.reduce((s,v)=>s+v,0)/ys.length : 0;
                 panel.innerHTML = `
                     <div class="flex items-center justify-between"><span class="text-slate-500">指标</span><span class="font-bold text-slate-700">${targetMeta.label}</span></div>
                     <div class="flex items-center justify-between"><span class="text-slate-500">横轴</span><span class="font-bold text-slate-700">${xMeta.label}</span></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 值来源</span><span class="font-bold text-slate-700">${ML_Y_MODE_META[yMode] || yMode}</span></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">视图模式</span><span class="font-bold text-slate-700">${mode === '3d' ? '三维模型' : '二维趋势'}</span></div>
-                    <div class="h-px bg-slate-100 my-1"></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">绘图点数</span><span class="font-bold text-slate-700">${points.length}</span></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">含实测标签点</span><span class="font-bold text-slate-700">${actualCount}</span></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 均值</span><span class="font-bold text-slate-700">${fmtMl(yAvg, 3)}</span></div>
-                    <div class="flex items-center justify-between"><span class="text-slate-500">Y 范围</span><span class="font-bold text-slate-700">${fmtMl(yMin, 3)} ~ ${fmtMl(yMax, 3)}</span></div>
-                    <div class="flex items-start justify-between gap-2"><span class="text-slate-500 shrink-0">横轴唯一值</span><span class="font-bold text-slate-700 text-right">${uniqueX.length}</span></div>
-                    <div class="text-[11px] text-slate-500 leading-5">取值预览：${uniquePreview || '--'}</div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">Y来源</span><span class="font-bold text-slate-700">${ML_Y_MODE_META[yMode] || yMode}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">点数</span><span class="font-bold text-slate-700">${points.length}</span></div>
+                    <div class="flex items-center justify-between"><span class="text-slate-500">均值</span><span class="font-bold text-slate-700">${fmtMl(yAvg, 3)}</span></div>
                 `;
             }
             mlVizState.selectedPoint = null;
             renderMlPointDetail(null);
         }
-
         function renderXrMlSummary(payload) {
             const el = document.getElementById('ml-summary');
             if (!el) return;
-            const s = payload.summary || {};
-            const labels = s.label_counts || {};
-            el.innerHTML = [
-                ['总数据行数', s.total_rows ?? 0],
-                ['批次数', s.n_runs ?? 0],
-                ['样品数', s.n_samples ?? 0],
-                ['已标注(径/密/向/曲)', `${labels.diameter ?? 0}/${labels.density ?? 0}/${labels.alignment ?? 0}/${labels.curvature ?? 0}`],
-            ].map(([k, v]) => `
-                <div class="bg-white/95 border border-white/20 rounded-xl px-3 py-2">
-                    <div class="text-[10px] font-black text-slate-500 uppercase">${k}</div>
-                    <div class="text-lg font-black text-slate-800 mt-1">${v}</div>
+            const items = [
+                { label: '模型数据总量', value: payload.total_rows || 0, icon: 'fa-database', color: 'blue' },
+                { label: '实验涉及批次', value: payload.run_count || 0, icon: 'fa-layer-group', color: 'indigo' },
+                { label: '特征维度 (Input)', value: 5, icon: 'fa-vial', color: 'emerald' },
+                { label: '目标标签 (Output)', value: 5, icon: 'fa-bullseye', color: 'orange' }
+            ];
+            el.innerHTML = items.map(i => `
+                <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-${i.color}-50 flex items-center justify-center text-${i.color}-500">
+                        <i class="fas ${i.icon}"></i>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${i.label}</div>
+                        <div class="text-lg font-black text-slate-800 leading-none mt-1">${i.value}</div>
+                    </div>
                 </div>
             `).join('');
         }
 
         function renderXrMlPanels(payload) {
             const coefPanel = document.getElementById('ml-coef-panel');
-            const corrPanel = document.getElementById('ml-corr-panel');
-            if (!coefPanel || !corrPanel) return;
-            const coef = payload.coefficients || {};
-            const corr = payload.correlations || {};
-            const targets = ['diameter', 'density', 'alignment', 'curvature'];
+            if (!coefPanel) return;
+            const coefs = payload.coefficients || {};
             const targetLabel = {
-                diameter: '平均管径',
-                density: '覆盖密度',
-                alignment: '取向性',
-                curvature: '平均曲率',
+                diameter: '管径分布模型系数',
+                density: '覆盖密度模型系数',
+                alignment: '取向度模型系数',
+                curvature: '平均曲率模型系数',
+                tortuosity: '波浪度模型系数'
             };
-
-            coefPanel.innerHTML = targets.map(t => {
-                const c = coef[t] || {};
-                return `
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <div class="font-black text-slate-800 text-sm">${targetLabel[t] || t}</div>
-                        <div class="text-slate-500 mt-1 text-xs">训练样本 n=${c.n_train ?? 0}，方法 ${c.method || '--'}</div>
-                        <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2 text-[13px] text-slate-700">
-                            <div>截距: <span class="font-black">${fmtMl(c.intercept, 3)}</span></div>
-                            <div>温度系数: <span class="font-black">${fmtMl(c.coef_temp, 4)}</span></div>
-                            <div>流速系数: <span class="font-black">${fmtMl(c.coef_flow, 4)}</span></div>
-                            <div>催化剂系数: <span class="font-black">${fmtMl(c.coef_catalyst, 4)}</span></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            corrPanel.innerHTML = targets.map(t => {
-                const c = corr[t] || {};
-                const entries = [
-                    ['实际温度', c.actual_temp],
-                    ['流速', c.flow_rate],
-                    ['催化剂浓度', c.catalyst_concentration],
-                ];
+            coefPanel.innerHTML = Object.entries(coefs).map(([t, entries]) => {
                 return `
                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <div class="font-black text-slate-800 text-sm">${targetLabel[t] || t}</div>
                         <div class="mt-2 space-y-1.5">
-                            ${entries.map(([k, v]) => `
+                            ${Object.entries(entries).map(([k, v]) => `
                                 <div class="flex items-center gap-2">
-                                    <div class="w-[132px] text-slate-600 text-xs">${k}</div>
-                                    <div class="flex-1 h-2 rounded bg-slate-200 overflow-hidden">
-                                        <div class="h-2 ${Number(v) >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}" style="width:${Math.min(100, Math.round(Math.abs(Number(v || 0)) * 100))}%"></div>
+                                    <div class="w-32 text-slate-600 text-[10px] font-bold truncate">${k}</div>
+                                    <div class="flex-1 h-1.5 rounded bg-slate-200 overflow-hidden">
+                                        <div class="h-1.5 ${Number(v) >= 0 ? 'bg-indigo-500' : 'bg-rose-500'}" style="width:${Math.min(100, Math.round(Math.abs(Number(v || 0)) * 100))}%"></div>
                                     </div>
-                                    <div class="w-12 text-right font-black text-slate-800 text-[13px]">${fmtMl(v, 3)}</div>
+                                    <div class="w-10 text-right font-black text-slate-800 text-[11px]">${fmtMl(v, 3)}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -2102,8 +2458,9 @@
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.catalyst_concentration, 2)}</td>
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.diameter_actual, 2)}</td>
                     <td class="px-2 py-1.5 text-right">${fmtMl(r.density_actual, 2)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.alignment_actual, 3)}</td>
-                    <td class="px-2 py-1.5 text-right">${fmtMl(r.curvature_actual, 3)}</td>
+                    <td class="px-2 py-1.5 text-right text-orange-600/80 font-bold">${fmtMl(r.alignment_actual, 3)}</td>
+                    <td class="px-2 py-1.5 text-right text-purple-600/80 font-bold">${fmtMl(r.curvature_actual, 3)}</td>
+                    <td class="px-2 py-1.5 text-right text-rose-600/80 font-bold">${fmtMl(r.tortuosity_actual, 3)}</td>
                 </tr>
             `).join('');
         }
@@ -2122,8 +2479,7 @@
 
         async function loadXrMlPage() {
             try {
-                const apiBase = window.location.origin || 'http://127.0.0.1:8000';
-                const res = await fetch(`${apiBase}/api/ml/xr/simple-model?limit=2500`);
+                const res = await fetch(`${API_BASE}/api/ml/xr/simple-model?limit=2500`);
                 if (!res.ok) throw new Error(`API ${res.status}: /api/ml/xr/simple-model unavailable`);
                 const payload = await res.json();
                 xrMlPayload = payload;
@@ -2151,9 +2507,9 @@
             const lower = rawPath.toLowerCase();
             if (lower.endsWith('.tif') || lower.endsWith('.tiff')) {
                 const rel = rawPath.replace(/^d:\\CNTDATA[\\/]/i, '').replace(/\\/g, '/');
-                return `http://127.0.0.1:8000/api/view/tif?path=${encodeURIComponent(rel)}`;
+                return `${API_BASE}/api/view/tif?path=${encodeURIComponent(rel)}`;
             }
-            return item.url ? `http://127.0.0.1:8000${item.url}` : '';
+            return item.url ? `${API_BASE}${item.url}` : '';
         }
 
         function computeCleanAssessment(item) {
@@ -2245,7 +2601,7 @@
 
         function normalizeCleanItem(item) {
             const assessment = computeCleanAssessment(item);
-            return { ...item, assessment, is_deleted: item.is_deleted || 0 };
+            return { ...item, assessment, is_deleted: Number(item.is_deleted || 0) };
         }
 
         function renderCleanSummary(items) {
@@ -2275,8 +2631,6 @@
 
         function getFilteredCleanItems() {
             let rows = [...(cleanState.items || [])];
-            // 过滤掉已删除的数据
-            rows = rows.filter(x => x.is_deleted !== 1);
             const confidence = document.getElementById('clean-confidence-filter')?.value || '';
             const processed = document.getElementById('clean-processed-filter')?.value || '';
             const keyword = (document.getElementById('clean-keyword-filter')?.value || '').trim().toLowerCase();
@@ -2333,9 +2687,12 @@
             if (!list) return;
             const rows = getFilteredCleanItems();
             cleanState.filteredItems = rows;
-            if (meta) meta.innerText = `显示 ${rows.length} / ${cleanState.items.length}`;
+            if (meta) {
+                const scopeText = cleanState.view === 'deleted' ? '回收站显示' : '显示';
+                meta.innerText = `${scopeText} ${rows.length} / ${cleanState.items.length}`;
+            }
             if (!rows.length) {
-                list.innerHTML = '<div class="text-sm text-slate-400 font-bold py-8 text-center">没有符合筛选条件的样品</div>';
+                list.innerHTML = `<div class="text-sm text-slate-400 font-bold py-8 text-center">${cleanState.view === 'deleted' ? '回收站中没有符合筛选条件的样品' : '没有符合筛选条件的样品'}</div>`;
                 return;
             }
             list.innerHTML = rows.map(item => `
@@ -2363,32 +2720,107 @@
         }
 
         async function loadCleanVisualizations(item) {
-            const stepGrid = document.getElementById('clean-step-grid');
-            if (!stepGrid || !item?.id) return;
-            stepGrid.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-1">正在加载算法步骤...</div>';
+            const tabsContainer = document.getElementById('clean-step-tabs');
+            if (!tabsContainer || !item?.id) return;
+            tabsContainer.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">加载中...</div>';
+
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${item.id}/visualize`);
+                const res = await fetch(`${API_BASE}/api/images/${item.id}/visualize`);
                 const data = await res.json();
                 const steps = Array.isArray(data.steps) ? data.steps : [];
-                
-                let buttonsHtml = '';
+
+                // 步骤对应的图标和特征标签
+                const stepMeta = {
+                    '原始图像': { icon: 'fa-image', feature: null },
+                    'CLAHE增强': { icon: 'fa-sun', feature: null },
+                    '高斯模糊': { icon: 'fa-circle-dot', feature: null },
+                    '二值化': { icon: 'fa-circle-half-stroke', feature: null },
+                    '密度计算': { icon: 'fa-chart-pie', feature: 'density' },
+                    '完整骨架': { icon: 'fa-shapes', feature: null },
+                    '对齐方向场': { icon: 'fa-arrows-up-down', feature: 'alignment' },
+                    '直径测量': { icon: 'fa-ruler', feature: 'diameter' },
+                    '骨架追踪曲率': { icon: 'fa-bezier-curve', feature: 'curvature' },
+                    '波曲度分析': { icon: 'fa-wave-square', feature: 'tortuosity' }
+                };
+
+                let tabsHtml = '';
                 steps.forEach((step, idx) => {
                     let sName = String(step.name || '');
-                    if (sName.includes('最大骨架') || sName.includes('原始图像') || sName.includes('原始图')) return;
-                    
+                    // 只过滤"最大骨架"步骤，保留"原始图像"
+                    if (sName.includes('最大骨架')) return;
+
                     let b64 = 'data:image/jpeg;base64,' + step.image;
                     let stepName = escapeHtml(String(step.name || '步骤 ' + (idx+1)));
-                    buttonsHtml += `<button type="button" onclick="document.getElementById('clean-original-image').src='${b64}'; window.currentLightboxTitle='${stepName}'" class="px-4 py-2 rounded-lg bg-white text-slate-600 border border-slate-200 text-[11px] font-bold shadow-sm hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-slate-300 outline-none">${stepName}</button>`;
+                    let meta = stepMeta[stepName] || { icon: 'fa-gear', feature: null };
+
+                    let featureTag = meta.feature ? `<span class="feature-tag">${meta.feature}</span>` : '';
+
+                    tabsHtml += `<button type="button"
+                        data-step-image="${b64}"
+                        data-step-name="${stepName}"
+                        onclick="switchStepTab(this)"
+                        class="step-tab">
+                        <i class="fas ${meta.icon}"></i>
+                        <span>${stepName}</span>
+                        ${featureTag}
+                    </button>`;
                 });
-                
-                if(!buttonsHtml) {
-                    stepGrid.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-1">当前样品无其他过程步骤</div>';
+
+                if (!tabsHtml) {
+                    tabsContainer.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">暂无过程数据</div>';
                 } else {
-                    stepGrid.innerHTML = buttonsHtml;
+                    tabsContainer.innerHTML = tabsHtml;
                 }
             } catch (err) {
-                stepGrid.innerHTML = `<div class="text-[11px] text-rose-500 font-bold px-2 py-1">过程数据加载失败</div>`;
+                tabsContainer.innerHTML = '<div class="text-[11px] text-rose-500 font-bold px-2 py-2">加载失败</div>';
             }
+        }
+
+        function switchStepTab(btn) {
+            document.querySelectorAll('.step-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+
+            const img = document.getElementById('clean-original-image');
+            const b64 = btn.dataset.stepImage;
+            const name = btn.dataset.stepName;
+            if (img && b64) {
+                img.src = b64;
+                window.currentLightboxTitle = name;
+            }
+        }
+
+        function renderCleanViewer(item) {
+            const img = document.getElementById('clean-original-image');
+            const empty = document.getElementById('clean-viewer-empty');
+            const caption = document.getElementById('clean-viewer-caption');
+            const openBtn = document.getElementById('clean-open-original');
+            const stepTabs = document.getElementById('clean-step-tabs');
+            if (!img || !empty || !caption || !openBtn || !stepTabs) return;
+
+            if (!item) {
+                img.removeAttribute('src');
+                img.classList.add('hidden');
+                empty.classList.remove('hidden');
+                caption.innerText = '选择左侧样品开始审查';
+                openBtn.disabled = true;
+                window.currentLightboxTitle = '图像放大查看';
+                stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
+                return;
+            }
+
+            const rawUrl = String(item.url || '');
+            const isTif = rawUrl.toLowerCase().endsWith('.tif') || rawUrl.toLowerCase().endsWith('.tiff');
+            const previewUrl = isTif
+                ? `${API_BASE}/api/view/tif?path=${rawUrl.replace('/images/', '')}`
+                : `${API_BASE}${rawUrl}`;
+            const title = `${item.sample_id || item.id} · ${item.source || '--'}`;
+
+            img.src = previewUrl;
+            img.classList.remove('hidden');
+            empty.classList.add('hidden');
+            caption.innerText = title;
+            openBtn.disabled = false;
+            window.currentLightboxTitle = title;
         }
 
         function renderCleanReview(item) {
@@ -2402,6 +2834,26 @@
             }
 
             const reasons = item.assessment.reasons || [];
+            const deleted = isDeletedItem(item);
+            const inTrashView = cleanState.view === 'deleted';
+            const actionButtons = inTrashView || deleted
+                ? `
+                        <div class="flex gap-3">
+                            <button type="button" onclick="restoreDeletedItem(${item.id})" class="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-500/20">
+                                <i class="fas fa-undo mr-2"></i> 恢复此记录
+                            </button>
+                            <button type="button" onclick="permanentlyDeleteCleanItem(${item.id})" class="flex-1 h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-red-500/20">
+                                <i class="fas fa-trash-alt mr-2"></i> 彻底删除
+                            </button>
+                        </div>
+                    `
+                : `
+                        <div class="flex gap-3">
+                            <button type="button" onclick="softDeleteCleanItem(${item.id})" class="flex-1 h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-red-500/20">
+                                <i class="fas fa-trash-alt mr-2"></i> 移入回收站
+                            </button>
+                        </div>
+                    `;
             panel.innerHTML = `
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
                     <div class="flex items-center justify-between mb-4">
@@ -2454,16 +2906,7 @@
 
                     <div class="bg-slate-800 rounded-2xl p-6 shadow-lg">
                         <div class="text-[11px] text-slate-400 font-black uppercase mb-4 tracking-widest text-indigo-300">数据治理操作</div>
-                        <div class="flex gap-3">
-                            <button type="button" onclick="softDeleteCleanItem(${item.id})" class="flex-1 h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-red-500/20">
-                                <i class="fas fa-trash-alt mr-2"></i> 标记异常删除
-                            </button>
-                            ${item.is_deleted ? `
-                            <button type="button" onclick="restoreDeletedItem(${item.id})" class="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-500/20">
-                                <i class="fas fa-undo mr-2"></i> 恢复此记录
-                            </button>
-                            ` : ''}
-                        </div>
+                        ${actionButtons}
                     </div>
                 </div>
             `;
@@ -2473,40 +2916,17 @@
             cleanState.selectedId = id;
             const item = cleanState.items.find(x => x.id === id) || null;
             renderCleanList();
+            renderCleanViewer(item);
             renderCleanReview(item);
             await loadCleanVisualizations(item);
         }
 
-// Function removed as button was deleted
-
-        async function loadDeletedBatches() {
-            const source = document.getElementById('clean-source-filter')?.value || '';
-            let url = `http://127.0.0.1:8000/api/images?limit=400&offset=0&source=${encodeURIComponent(source)}`;
-            url += '&is_deleted=1';
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.images && data.images.length > 0) {
-                    const items = data.images.map(img => `ID:${img.id} ${img.source} ${img.file_name}`).join('\n');
-                    alert(`已删除批次列表（共${data.images.length}条）：\n\n${items}`);
-                } else {
-                    alert('当前没有已删除的数据');
-                }
-            } catch (err) {
-                console.error('加载已删除数据失败:', err);
-                alert('加载失败: ' + err.message);
-            }
-        }
-
         async function softDeleteCleanItem(id) {
-            if (!confirm('确认标记此图像为已删除？删除后不会显示在系统中，也不会参与建模。')) return;
+            if (!confirm('确认将此图像移入回收站？移入后它不会显示在主列表中，也不会参与建模。')) return;
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${id}/delete`, { method: 'PUT' });
+                const res = await fetch(`${API_BASE}/api/images/${id}/delete`, { method: 'PUT' });
                 if (res.ok) {
-                    cleanState.items = cleanState.items.filter(x => x.id !== id);
-                    cleanState.selectedId = null;
-                    renderCleanList();
-                    renderCleanReview(null);
+                    await loadCleanPage();
                 } else {
                     alert('删除失败');
                 }
@@ -2519,7 +2939,7 @@
         async function restoreDeletedItem(id) {
             if (!confirm('确认恢复此已删除的图像？')) return;
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${id}/restore`, { method: 'PUT' });
+                const res = await fetch(`${API_BASE}/api/images/${id}/restore`, { method: 'PUT' });
                 if (res.ok) {
                     await loadCleanPage();
                     const item = cleanState.items.find(x => x.id === id);
@@ -2535,13 +2955,30 @@
             }
         }
 
+        async function permanentlyDeleteCleanItem(id) {
+            if (!confirm('确认彻底删除此图像？此操作不可恢复。')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/images/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (res.ok && result.status === 'success') {
+                    await loadCleanPage();
+                } else {
+                    alert(result.detail || '彻底删除失败');
+                }
+            } catch (err) {
+                console.error('彻底删除失败:', err);
+                alert('彻底删除失败: ' + err.message);
+            }
+        }
+
         function onCleanFilterChange() {
             renderCleanList();
             const rows = cleanState.filteredItems || [];
             if (!rows.length) {
+                renderCleanViewer(null);
                 renderCleanReview(null);
-                const stepGrid = document.getElementById('clean-step-grid');
-                if (stepGrid) stepGrid.innerHTML = '';
+                const stepTabs = document.getElementById('clean-step-tabs');
+                if (stepTabs) stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
                 return;
             }
             if (!rows.some(x => x.id === cleanState.selectedId)) {
@@ -2554,7 +2991,8 @@
         async function loadCleanPage() {
             const source = document.getElementById('clean-source-filter')?.value || 'XR';
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images?limit=400&offset=0${source ? `&source=${encodeURIComponent(source)}` : ''}`);
+                renderCleanTrashToggle();
+                const res = await fetch(`${API_BASE}/api/images?limit=400&offset=0&deletion_view=${encodeURIComponent(cleanState.view)}${source ? `&source=${encodeURIComponent(source)}` : ''}`);
                 const data = await res.json();
                 cleanState.items = (data.items || []).map(normalizeCleanItem);
                 renderCleanSummary(cleanState.items);
@@ -2563,9 +3001,10 @@
                 if (first) {
                     await selectCleanItem(first.id);
                 } else {
+                    renderCleanViewer(null);
                     renderCleanReview(null);
-                    const stepGrid = document.getElementById('clean-step-grid');
-                    if (stepGrid) stepGrid.innerHTML = '';
+                    const stepTabs = document.getElementById('clean-step-tabs');
+                    if (stepTabs) stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
                 }
             } catch (err) {
                 const list = document.getElementById('clean-sample-list');
@@ -2575,14 +3014,25 @@
 
         // ─── 全局状态 ───
         let currentItem = null;
+        let currentListItemsById = {};
+        let selectedDataIds = new Set();
         let chatHistory = [];
         let xrMlPayload = null;
         let mlSubPage = 'visual';
-        let mlVizState = { target: 'diameter', mode: '2d', xKey: 'actual_temp', yMode: 'actual', infoTab: 'coef', mainPoints: [], selectedPoint: null };
+        let mlVizState = { target: 'diameter', mode: '2d', xKey: 'actual_temp', yMode: 'pred', xKey3d: 'actual_temp', yKey3d: 'flow_rate', infoTab: 'coef', mainPoints: [], selectedPoint: null };
         let mlUiPerfState = { vizTimer: null };
         let mlChartInstances = {};
-        let cleanState = { items: [], filteredItems: [], selectedId: null };
-        let ragState = { currentChain: null, currentQuery: '', graphFilter: 'all' };
+        let cleanState = { items: [], filteredItems: [], selectedId: null, view: 'active' };
+        let dataViewMode = 'active';
+        let ragState = {
+            currentChain: null,
+            currentQuery: '',
+            graphFilter: 'all',
+            allStats: null,
+            currentSubgraph: null,
+            currentConstrainedChain: null,
+            currentThemeAggregation: null,
+        };
 
         // ─── 工具：获取当前选择的模型和 API Key ───
         function getApiHeaders() {
@@ -2803,7 +3253,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>提取中...';
             btn.disabled = true;
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${currentItem.id}/analyze`, { method: 'POST' });
+                const res = await fetch(`${API_BASE}/api/images/${currentItem.id}/analyze`, { method: 'POST' });
                 const data = await res.json();
                 if (!res.ok) {
                     throw new Error(data.detail || data.message || `HTTP ${res.status}`);
@@ -2898,7 +3348,7 @@
         async function loadAlgorithmVisualization() {
             if (!currentItem) return;
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${currentItem.id}/visualize`);
+                const res = await fetch(`${API_BASE}/api/images/${currentItem.id}/visualize`);
                 const data = await res.json();
                 if (data.steps && data.steps.length > 0) {
                     visualizationSteps = data.steps;
@@ -3070,7 +3520,7 @@
 
             let fullText = '';
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${currentItem.id}/interpret`, {
+                const res = await fetch(`${API_BASE}/api/images/${currentItem.id}/interpret`, {
                     method: 'POST',
                     headers: {
                         'X-Provider': provider, 'X-Api-Key': key,
@@ -3253,7 +3703,7 @@
 
             let fullReply = '';
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/chat', {
+                const res = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3356,7 +3806,7 @@
             });
 
             const method = id ? 'PUT' : 'POST';
-            const url = id ? `http://127.0.0.1:8000/api/images/${id}` : `http://127.0.0.1:8000/api/images`;
+            const url = id ? `${API_BASE}/api/images/${id}` : `${API_BASE}/api/images`;
 
             try {
                 const res = await fetch(url, {
@@ -3382,19 +3832,12 @@
         }
 
         async function deleteRecord(id) {
-            if (!confirm("确定要删除这条记录吗？此操作不可撤销。")) return;
-            
-            try {
-                const res = await fetch(`http://127.0.0.1:8000/api/images/${id}`, { method: 'DELETE' });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    alert("删除成功");
-                    closeDetails();
-                    loadData();
-                }
-            } catch (err) {
-                alert("删除失败");
+            const item = currentItem && currentItem.id === id ? currentItem : currentListItemsById[String(id)];
+            if (isDeletedItem(item)) {
+                await permanentlyDeleteRecord(id);
+                return;
             }
+            await moveRecordToTrash(id);
         }
 
         function scrollChatToBottom() {
@@ -3467,25 +3910,136 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function isDeletedItem(item) {
+            return Number(item?.is_deleted || 0) === 1;
+        }
+
+        function renderDataTrashToggle() {
+            const btn = document.getElementById('data-trash-toggle');
+            if (!btn) return;
+            btn.innerHTML = dataViewMode === 'deleted'
+                ? '<i class="fas fa-arrow-left text-[10px]"></i> 返回主列表'
+                : '<i class="fas fa-trash-restore text-[10px]"></i> 查看回收站';
+            btn.className = dataViewMode === 'deleted'
+                ? 'px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-black shadow-lg shadow-amber-200 transition-all flex items-center gap-2'
+                : 'px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2';
+        }
+
+        function renderCleanTrashToggle() {
+            const btn = document.getElementById('clean-trash-toggle');
+            if (!btn) return;
+            btn.innerHTML = cleanState.view === 'deleted'
+                ? '<i class="fas fa-arrow-left text-[10px]"></i> 返回主列表'
+                : '<i class="fas fa-trash-restore text-[10px]"></i> 查看回收站';
+            btn.className = cleanState.view === 'deleted'
+                ? 'px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-black shadow-lg shadow-amber-200 transition-all flex items-center gap-2'
+                : 'px-3 py-2 rounded-lg bg-slate-700 text-white text-xs font-black shadow-lg shadow-slate-500/20 transition-all flex items-center gap-2';
+        }
+
+        async function toggleDataTrashView() {
+            dataViewMode = dataViewMode === 'deleted' ? 'active' : 'deleted';
+            offset = 0;
+            closeDetails();
+            await loadData();
+        }
+
+        async function toggleCleanTrashView() {
+            cleanState.view = cleanState.view === 'deleted' ? 'active' : 'deleted';
+            cleanState.selectedId = null;
+            await loadCleanPage();
+        }
+
+        function renderDetailDeleteActions(item) {
+            const mount = document.getElementById('detail-delete-actions');
+            if (!mount) return;
+            const deleted = isDeletedItem(item);
+            mount.innerHTML = deleted
+                ? `
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" onclick="restoreRecord(${item.id})" class="w-full h-10 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl font-bold text-xs hover:bg-emerald-500 hover:text-white transition-all">
+                            <i class="fas fa-undo mr-2"></i> 恢复记录
+                        </button>
+                        <button type="button" onclick="permanentlyDeleteRecord(${item.id})" class="w-full h-10 bg-red-50 text-red-500 border border-red-100 rounded-xl font-bold text-xs hover:bg-red-500 hover:text-white transition-all group">
+                            <i class="fas fa-trash-alt mr-2 group-hover:shake"></i> 彻底删除
+                        </button>
+                    </div>
+                `
+                : `
+                    <button type="button" onclick="moveRecordToTrash(${item.id})" class="w-full h-10 bg-red-50 text-red-500 border border-red-100 rounded-xl font-bold text-xs hover:bg-red-500 hover:text-white transition-all group">
+                        <i class="fas fa-trash-alt mr-2 group-hover:shake"></i> 移入回收站
+                    </button>
+                `;
+        }
+
+        async function moveRecordToTrash(id) {
+            if (!confirm('确定将这条记录移入回收站吗？')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/images/${id}/delete`, { method: 'PUT' });
+                const result = await res.json();
+                if (res.ok && result.status === 'success') {
+                    closeDetails();
+                    await loadData();
+                } else {
+                    alert(result.detail || '移入回收站失败');
+                }
+            } catch (err) {
+                alert('移入回收站失败');
+            }
+        }
+
+        async function restoreRecord(id) {
+            if (!confirm('确定恢复这条记录吗？')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/images/${id}/restore`, { method: 'PUT' });
+                const result = await res.json();
+                if (res.ok && result.status === 'success') {
+                    closeDetails();
+                    await loadData();
+                } else {
+                    alert(result.detail || '恢复失败');
+                }
+            } catch (err) {
+                alert('恢复失败');
+            }
+        }
+
+        async function permanentlyDeleteRecord(id) {
+            if (!confirm('确定彻底删除这条记录吗？此操作不可恢复。')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/images/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (res.ok && result.status === 'success') {
+                    closeDetails();
+                    await loadData();
+                } else {
+                    alert(result.detail || '彻底删除失败');
+                }
+            } catch (err) {
+                alert('彻底删除失败');
+            }
+        }
+
         // ─── RAG 文献管理 ───
         async function loadRagDocs() {
             const listEl = document.getElementById('rag-doc-list');
             if (!listEl) return;
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/rag/documents');
+                const res = await fetch(`${API_BASE}/api/rag/documents`);
                 const docs = await res.json();
                 if (docs.length === 0) {
                     listEl.innerHTML = '<span class="text-slate-300">暂无文献，上传PDF后可用于RAG检索</span>';
                     return;
                 }
-                listEl.innerHTML = docs.map(d => `
+                listEl.innerHTML = docs.map(d => {
+                    const displayName = d.title || d.filename || ((d.file_path || '').split(/[\\/]/).pop()) || `文献 #${d.id}`;
+                    return `
                     <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-slate-200 transition">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-file-pdf text-red-400 text-sm"></i>
                             </div>
                             <div class="min-w-0">
-                                <div class="font-bold text-slate-700 text-sm truncate">${d.filename}</div>
+                                <div class="font-bold text-slate-700 text-sm truncate" title="${String(displayName).replace(/"/g, '&quot;')}">${displayName}</div>
                                 <div class="text-[10px] text-slate-400">${d.chunk_count} 个文本块 · ${d.created_at ? d.created_at.slice(0,10) : ''}</div>
                             </div>
                         </div>
@@ -3493,7 +4047,7 @@
                             <i class="fas fa-trash-alt text-sm"></i>
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
             } catch (_) {
                 listEl.innerHTML = '<span class="text-red-300">加载失败</span>';
             }
@@ -3503,8 +4057,135 @@
             const el = document.getElementById('rag-success-kpis');
             if (!el) return;
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/rag/stats');
+                const res = await fetch(`${API_BASE}/api/rag/stats`);
                 const stats = await res.json();
+                ragState.allStats = stats;
+                el.innerHTML = `
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">文献数</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${stats.document_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">文本块</div>
+                        <div class="text-xl font-black text-slate-800 mt-1">${stats.chunk_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">关系条目</div>
+                        <div class="text-xl font-black text-indigo-700 mt-1">${stats.link_count || 0}</div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3">
+                        <div class="text-[11px] text-slate-500">核心文献</div>
+                        <div class="text-xl font-black text-emerald-700 mt-1">${stats.core_document_count || 0}</div>
+                    </div>
+                        <div class="text-[11px] text-slate-500">来源类型数</div>
+                        <div class="text-[10px] text-slate-400 mt-1">候选文献: ${candidateDocCount}</div>
+                `;
+                if (!ragState.currentChain) {
+                    renderGlobalRagSummary(stats);
+                    renderRagDefaultState();
+                    renderRagGraphAdvanced(null, null, '');
+                    renderRagThemeAggregation(null);
+                }
+            } catch (err) {
+                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${err.message}</div>`;
+            }
+        }
+
+        function renderRagSourceStats(stats) {
+            const el = document.getElementById('rag-source-stats');
+            if (!el) return;
+
+            const typeCounts = stats?.candidate_download_status_counts || stats?.source_type_counts || {};
+            const domainCounts = stats?.candidate_source_domain_counts || stats?.source_domain_counts || {};
+            const typeEntries = Object.entries(typeCounts).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+            const domainEntries = Object.entries(domainCounts).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+
+            if (typeEntries.length === 0 && domainEntries.length === 0) {
+                el.innerHTML = '<div class="data-card p-3 text-slate-300">暂无来源统计</div>';
+                return;
+            }
+
+            const typeHtml = typeEntries.slice(0, 6).map(([name, count]) => `
+                <div class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <span class="text-[11px] font-bold text-slate-600">${name}</span>
+                    <span class="text-[11px] font-black text-indigo-700">${count}</span>
+                </div>
+            `).join('');
+            const domainHtml = domainEntries.slice(0, 8).map(([name, count]) => `
+                <div class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <span class="text-[11px] font-bold text-slate-600">${name}</span>
+                    <span class="text-[11px] font-black text-emerald-700">${count}</span>
+                </div>
+            `).join('');
+
+            el.innerHTML = `
+                <div class="data-card p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="rag-subpage-title">文献来源：类型</div>
+                        <div class="text-[10px] text-slate-400">共 ${typeEntries.length} 类</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">${typeHtml || '<span class="text-slate-300 text-xs">暂无</span>'}</div>
+                </div>
+                <div class="data-card p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="rag-subpage-title">文献来源：域名</div>
+                        <div class="text-[10px] text-slate-400">Top ${Math.min(8, domainEntries.length)}</div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">${domainHtml || '<span class="text-slate-300 text-xs">暂无</span>'}</div>
+                </div>
+            `;
+        }
+
+        function renderGlobalRagSummary(stats) {
+            const relationCounts = stats?.relation_counts || {};
+            const chain = {
+                process_to_morphology: new Array(Number(relationCounts.process_to_morphology || 0)),
+                morphology_to_performance: new Array(Number(relationCounts.morphology_to_performance || 0)),
+                process_to_performance: new Array(Number(relationCounts.process_to_performance || 0)),
+                mechanism_evidence: new Array(Number(relationCounts.mechanism_evidence || 0)),
+            };
+            renderLinkSummary(chain);
+        }
+
+        function renderRagDefaultState() {
+            ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<div class="text-slate-300">点击“查询”后显示当前结果</div>';
+            });
+            const perfSummaryEl = document.getElementById('rag-performance-summary');
+            if (perfSummaryEl) {
+                perfSummaryEl.innerHTML = `
+                    <div class="col-span-2 bg-white border border-slate-200 rounded-xl p-3 text-slate-400">
+                        当前为全库统计，点击“查询”后显示性能关联详情
+                    </div>
+                `;
+            }
+            const perfListEl = document.getElementById('rag-performance-list');
+            if (perfListEl) {
+                perfListEl.innerHTML = '<div class="text-slate-300">点击“查询”后显示性能证据链</div>';
+            }
+            const subgraphEl = document.getElementById('rag-subgraph-summary');
+            if (subgraphEl) {
+                subgraphEl.innerHTML = '<div class="col-span-3 text-slate-300">默认展示全库统计，查询后显示局部子图检索结果</div>';
+            }
+            const constrainedEl = document.getElementById('rag-constrained-chain');
+            if (constrainedEl) {
+                constrainedEl.innerHTML = '<div class="text-slate-300">点击“查询”后显示约束证据链</div>';
+            }
+            const themeAggEl = document.getElementById('rag-theme-aggregation');
+            if (themeAggEl) {
+                themeAggEl.innerHTML = '<div class="text-slate-300">点击“查询”后显示主题聚合摘要</div>';
+            }
+        }
+
+        // Override: keep overview compact and hide source-stat display block.
+        async function loadRagSuccessStats() {
+            const el = document.getElementById('rag-success-kpis');
+            if (!el) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/rag/stats`);
+                const stats = await res.json();
+                ragState.allStats = stats;
                 el.innerHTML = `
                     <div class="bg-white border border-slate-200 rounded-xl p-3">
                         <div class="text-[11px] text-slate-500">文献数</div>
@@ -3523,6 +4204,10 @@
                         <div class="text-xl font-black text-emerald-700 mt-1">${stats.core_document_count || 0}</div>
                     </div>
                 `;
+                if (!ragState.currentChain) {
+                    renderGlobalRagSummary(stats);
+                    renderRagDefaultState();
+                }
             } catch (err) {
                 el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${err.message}</div>`;
             }
@@ -3547,13 +4232,23 @@
             if (target === 'graph') {
                 renderRagGraphFilterState();
                 if (ragState.currentChain) {
+                    renderRagGraphAdvanced(
+                        ragState.currentSubgraph,
+                        ragState.currentConstrainedChain,
+                        ragState.currentQuery || '',
+                    );
                     renderRagGraph(ragState.currentChain, ragState.currentQuery || '');
                     return;
                 }
             }
 
+            if (target === 'performance' && ragState.currentChain) {
+                renderRagThemeAggregation(ragState.currentThemeAggregation);
+                renderRagPerformanceView(ragState.currentChain, ragState.currentQuery || '');
+                return;
+            }
+
             loadRagSuccessStats();
-            loadRagLinks();
         }
 
         function renderChainList(containerId, items, limit = 8) {
@@ -3609,12 +4304,105 @@
             });
         }
 
+        const RAG_RELATION_TYPE_LABELS = {
+            process_to_morphology: '工艺→形貌',
+            morphology_to_performance: '形貌→性能',
+            process_to_performance: '工艺→性能',
+            process_to_mechanism: '工艺→机理',
+            mechanism_to_morphology: '机理→形貌',
+            mechanism_evidence: '机理证据',
+        };
+
+        const RAG_DIRECTION_LABELS = {
+            increase: '增强',
+            decrease: '降低',
+            improve: '改善',
+            reduced: '降低',
+            improved: '改善',
+            nonlinear: '非线性',
+            conditional: '条件相关',
+            uncertain: '趋势不确定',
+            unknown: '未说明',
+        };
+
+        const RAG_NODE_CATEGORY_LABELS = {
+            process: '工艺参数',
+            morphology: '形貌特征',
+            performance: '材料性能',
+            mechanism: '生长机理',
+            evidence: '文献证据',
+        };
+
+        const RAG_NODE_LABELS = {
+            alignment: '取向度',
+            density: '面密度',
+            diameter: '表观直径',
+            curvature: '曲率',
+            tortuosity: '波曲度',
+            waviness: '波曲度',
+            conductivity: '导电性',
+            resistivity: '电阻率',
+            sheet_resistance: '方阻',
+            tensile_strength: '拉伸强度',
+            modulus: '弹性模量',
+            strength: '强度',
+            growth_temp: '生长温度',
+            growth_time: '生长时间',
+            anneal_temp: '退火温度',
+            anneal_time: '退火时间',
+            fe_thickness: 'Fe厚度',
+            al2o3_thickness: 'Al2O3厚度',
+            h2_flow: 'H2流量',
+            ar_flow: 'Ar流量',
+            c2h4_flow: 'C2H4流量',
+            catalyst_deactivation: '催化剂失活',
+            catalyst_agglomeration: '催化剂团聚',
+            boundary_layer_effect: '边界层效应',
+            diffusion_limitation: '扩散受限',
+            carbon_supply_imbalance: '碳源供给失衡',
+            stress_induced_bending: '应力诱导弯曲',
+            ostwald_ripening: '奥斯特瓦尔德熟化',
+            growth_mechanism: '生长机理',
+            evidence: '文献证据',
+            unknown: '未知节点',
+        };
+
         function relationTypeLabel(type) {
-            if (type === 'process_to_morphology') return '工艺→形貌';
-            if (type === 'morphology_to_performance') return '形貌→性能';
-            if (type === 'process_to_performance') return '工艺→性能';
-            if (type === 'mechanism_evidence') return '机理证据';
-            return type || '关联';
+            return RAG_RELATION_TYPE_LABELS[type] || type || '关联';
+        }
+
+        function effectDirectionLabel(value) {
+            const raw = String(value || '').trim().toLowerCase();
+            if (!raw) return '未说明';
+            return RAG_DIRECTION_LABELS[raw] || value;
+        }
+
+        function normalizeRagNodeId(nodeId) {
+            const raw = String(nodeId || '').trim();
+            if (!raw) return { category: '', key: '' };
+            const [category, ...rest] = raw.split(':');
+            if (rest.length > 0) {
+                return { category, key: rest.join(':').trim().toLowerCase() };
+            }
+            return { category: '', key: raw.toLowerCase() };
+        }
+
+        function ragNodeLabelOnly(nodeId) {
+            const { key } = normalizeRagNodeId(nodeId);
+            if (!key) return '--';
+            return RAG_NODE_LABELS[key] || key.replace(/_/g, ' ');
+        }
+
+        function formatRagNodeLabel(nodeId, withCategory = true) {
+            const { category } = normalizeRagNodeId(nodeId);
+            const label = ragNodeLabelOnly(nodeId);
+            if (!withCategory || !category) return label;
+            const prefix = RAG_NODE_CATEGORY_LABELS[category];
+            return prefix ? `${prefix}：${label}` : label;
+        }
+
+        function ragNodeShortLabel(nodeId) {
+            return formatRagNodeLabel(nodeId, false);
         }
 
         function getFilteredRagGraphItems(chain, filter) {
@@ -3651,28 +4439,21 @@
         }
 
         function ragFactorLabel(value) {
-            const labels = {
-                alignment: '取向度',
-                density: '密度',
-                diameter: '直径',
-                curvature: '曲率',
-                tortuosity: '波曲度',
-                conductivity: '导电性',
-                resistivity: '电阻率',
-                sheet_resistance: '方阻',
-                tensile_strength: '拉伸强度',
-                modulus: '模量',
-                growth_temp: '温度',
-                growth_time: '时间',
-                fe_thickness: 'Fe厚度',
-                h2_flow: 'H2流量',
-                ar_flow: 'Ar流量',
-                c2h4_flow: 'C2H4流量',
+            return formatRagNodeLabel(value, false);
+        }
+
+        function renderRagGraphFilterCounts(chain) {
+            const counts = {
+                all: getFilteredRagGraphItems(chain, 'all').length,
+                process_to_morphology: (chain?.process_to_morphology || []).length,
+                morphology_to_performance: (chain?.morphology_to_performance || []).length,
+                process_to_performance: (chain?.process_to_performance || []).length,
+                mechanism_evidence: (chain?.mechanism_evidence || []).length,
             };
-            const raw = String(value || '');
-            if (!raw) return '--';
-            const key = raw.includes(':') ? raw.split(':').pop() : raw;
-            return labels[key] || key.replace(/_/g, ' ');
+            Object.entries(counts).forEach(([key, count]) => {
+                const el = document.getElementById(`rag-graph-filter-count-${key}`);
+                if (el) el.textContent = String(count);
+            });
         }
 
         function buildGraphInsightList(chain) {
@@ -3749,6 +4530,94 @@
                     </div>
                 </div>
             `;
+        }
+
+        function renderRagGraphAdvanced(subgraph, constrainedChain, query) {
+            const subgraphEl = document.getElementById('rag-subgraph-summary');
+            const constrainedEl = document.getElementById('rag-constrained-chain');
+            if (!subgraphEl || !constrainedEl) return;
+
+            const edgeCount = Number(subgraph?.edge_count || 0);
+            const nodeCount = Number(subgraph?.node_count || 0);
+            const seedCount = Number(subgraph?.seed_count || 0);
+            const relationTypeCounts = subgraph?.relation_type_counts || {};
+            const topRelationTypes = Object.entries(relationTypeCounts)
+                .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+                .slice(0, 3);
+
+            subgraphEl.innerHTML = `
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">种子边</div>
+                    <div class="text-indigo-700 font-black text-lg mt-1">${seedCount}</div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">子图边</div>
+                    <div class="text-slate-800 font-black text-lg mt-1">${edgeCount}</div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">节点数</div>
+                    <div class="text-slate-800 font-black text-lg mt-1">${nodeCount}</div>
+                </div>
+                <div class="col-span-3 text-[10px] text-slate-500">
+                    ${topRelationTypes.length
+                        ? topRelationTypes.map(([type, count]) => `${relationTypeLabel(type)} ${count}`).join(' · ')
+                        : '默认展示全库关系，查询后展示局部子图结果'}
+                </div>
+            `;
+
+            const chainItems = constrainedChain?.items || [];
+            if (chainItems.length === 0) {
+                constrainedEl.innerHTML = `<div class="text-slate-300">${query ? '当前查询未形成完整“工艺→机理→形貌”证据链' : '输入查询词后展示约束证据链'}</div>`;
+                return;
+            }
+
+            constrainedEl.innerHTML = chainItems.slice(0, 4).map((item) => {
+                const steps = Array.isArray(item.steps) ? item.steps : [];
+                const path = steps.map((step) => `${formatRagNodeLabel(step.source_node)} → ${formatRagNodeLabel(step.target_node)}`).join(' → ');
+                const supports = Array.isArray(item.support) ? item.support : [];
+                const supportText = supports.length > 0
+                    ? supports.map((step) => `${formatRagNodeLabel(step.source_node)} → ${formatRagNodeLabel(step.target_node)}`).join('；')
+                    : '无';
+                return `
+                    <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
+                        <div class="font-bold text-slate-700 leading-5">${path || '链路缺失'}</div>
+                        <div class="text-[10px] text-slate-500 mt-1">评分 ${(Number(item.score || 0)).toFixed(2)} · 支撑 ${supportText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderRagThemeAggregation(themeAggregation) {
+            const el = document.getElementById('rag-theme-aggregation');
+            if (!el) return;
+
+            const bucketConfig = [
+                { key: 'process_morphology', label: '工艺→形貌', badge: 'bg-indigo-50 text-indigo-700' },
+                { key: 'process_mechanism', label: '工艺→机理', badge: 'bg-sky-50 text-sky-700' },
+                { key: 'morphology_performance', label: '形貌→性能', badge: 'bg-emerald-50 text-emerald-700' },
+            ];
+
+            if (!themeAggregation) {
+                el.innerHTML = '<div class="text-slate-300">默认展示全库统计，查询后显示主题聚合结果</div>';
+                return;
+            }
+
+            const cards = bucketConfig.map(({ key, label, badge }) => {
+                const bucket = themeAggregation[key] || {};
+                const count = Number(bucket.count || 0);
+                const summary = String(bucket.summary || '').trim();
+                return `
+                    <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold text-slate-700">${label}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full ${badge}">${count}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 mt-1">${summary || '暂无主题聚合结果'}</div>
+                    </div>
+                `;
+            }).join('');
+
+            el.innerHTML = cards;
         }
 
         function renderRagPerformanceView(chain, query) {
@@ -3960,6 +4829,299 @@
 
         }
 
+        function renderChainList(containerId, items, limit = 8) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!items || items.length === 0) {
+                el.innerHTML = '<div class="text-slate-300">暂无关联</div>';
+                return;
+            }
+            el.innerHTML = items.slice(0, limit).map(it => `
+                <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
+                    <div class="font-bold text-slate-700">${formatRagNodeLabel(it.source_node)} → ${formatRagNodeLabel(it.target_node)}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                        方向：${effectDirectionLabel(it.effect_direction)} · 置信度 ${(Number(it.confidence || 0)).toFixed(2)}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(it.title || '').replace(/"/g, '&quot;')}">
+                        ${it.title || '--'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderLinkSummary(chain) {
+            renderRagGraphFilterCounts(chain);
+            const markup = buildRagLinkSummaryMarkup(chain);
+            ['rag-toolbar-summary', 'rag-overview-link-summary', 'rag-graph-link-summary'].forEach(id => {
+                const summaryEl = document.getElementById(id);
+                if (summaryEl) summaryEl.innerHTML = markup;
+            });
+        }
+
+        function buildGraphInsightList(chain) {
+            const buckets = getFilteredRagGraphItems(chain, ragState.graphFilter);
+            if (buckets.length === 0) {
+                return `<div class="text-slate-300">暂无图谱摘要</div>`;
+            }
+            const nodeWeights = {};
+            buckets.forEach(item => {
+                [item.source_node, item.target_node].forEach(node => {
+                    if (!node) return;
+                    nodeWeights[node] = (nodeWeights[node] || 0) + 1;
+                });
+            });
+            const topNodes = Object.entries(nodeWeights).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            return `
+                <div class="rag-mini-card">
+                    <div class="text-[10px] text-slate-400 mb-2">当前筛选：${ragState.graphFilter === 'all' ? '全部关系' : relationTypeLabel(ragState.graphFilter)}</div>
+                    <div class="text-slate-500 mb-2">高频节点</div>
+                    <div class="space-y-2">
+                        ${topNodes.map(([node, count]) => `
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-bold text-slate-700 truncate">${ragNodeShortLabel(node)}</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500 mb-2">页面说明</div>
+                    <div class="text-[11px] leading-5 text-slate-500">
+                        该页用于单独查看知识图谱，可拖拽节点、缩放结构，适合答辩时展示“工艺-形貌-性能-机理”的主链路。
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGraphGlance(chain) {
+            const el = document.getElementById('rag-graph-glance');
+            if (!el) return;
+            const buckets = [
+                ...(chain?.process_to_morphology || []),
+                ...(chain?.morphology_to_performance || []),
+                ...(chain?.process_to_performance || []),
+                ...(chain?.mechanism_evidence || []),
+            ];
+            const uniqueNodes = new Set();
+            buckets.forEach(item => {
+                if (item.source_node) uniqueNodes.add(item.source_node);
+                if (item.target_node) uniqueNodes.add(item.target_node);
+            });
+            el.innerHTML = `
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">图谱节点数</div>
+                    <div class="text-slate-800 font-black text-xl mt-1">${uniqueNodes.size}</div>
+                </div>
+                <div class="rag-mini-card">
+                    <div class="text-slate-500">图谱边数</div>
+                    <div class="text-slate-800 font-black text-xl mt-1">${buckets.length}</div>
+                </div>
+                <div class="rag-mini-card col-span-2">
+                    <div class="text-slate-500 mb-2">图谱使用建议</div>
+                    <div class="text-[11px] text-slate-500 leading-5">
+                        总览页只保留关系速览，完整知识图谱已拆分到独立子页，便于在第一屏完整展示。
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRagPerformanceView(chain, query) {
+            const summaryEl = document.getElementById('rag-performance-summary');
+            const listEl = document.getElementById('rag-performance-list');
+            if (!summaryEl || !listEl) return;
+
+            const morphItems = chain?.morphology_to_performance || [];
+            const processItems = chain?.process_to_performance || [];
+            const perfItems = [...morphItems, ...processItems];
+
+            if (perfItems.length === 0) {
+                summaryEl.innerHTML = `
+                    <div class="col-span-2 bg-white border border-slate-200 rounded-xl p-3 text-slate-300">
+                        当前查询暂无性能关联统计
+                    </div>
+                `;
+                listEl.innerHTML = `<div class="text-slate-300">没有检索到与“${query}”相关的性能证据链。</div>`;
+                return;
+            }
+
+            const factorCounts = {};
+            perfItems.forEach(item => {
+                const factor = item.performance_factor || (item.target_node || '').split(':').pop() || 'unknown';
+                factorCounts[factor] = (factorCounts[factor] || 0) + 1;
+            });
+            const topFactors = Object.entries(factorCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+            summaryEl.innerHTML = `
+                <div class="bg-white border border-emerald-100 rounded-xl p-3">
+                    <div class="text-slate-500">性能关系数</div>
+                    <div class="text-emerald-700 font-black text-lg mt-1">${perfItems.length}</div>
+                </div>
+                <div class="bg-white border border-amber-100 rounded-xl p-3">
+                    <div class="text-slate-500">性能指标数</div>
+                    <div class="text-amber-700 font-black text-lg mt-1">${Object.keys(factorCounts).length}</div>
+                </div>
+                <div class="bg-white border border-indigo-100 rounded-xl p-3">
+                    <div class="text-slate-500">形貌驱动</div>
+                    <div class="text-indigo-700 font-black text-lg mt-1">${morphItems.length}</div>
+                </div>
+                <div class="bg-white border border-sky-100 rounded-xl p-3">
+                    <div class="text-slate-500">工艺直达</div>
+                    <div class="text-sky-700 font-black text-lg mt-1">${processItems.length}</div>
+                </div>
+                <div class="col-span-2 bg-white border border-slate-200 rounded-xl p-3">
+                    <div class="text-slate-500 mb-2">当前性能热点</div>
+                    <div class="flex flex-wrap gap-2">
+                        ${topFactors.map(([factor, count]) => `
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold">
+                                ${ragFactorLabel(factor)}
+                                <span class="text-[10px] text-slate-400">${count}</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            listEl.innerHTML = perfItems.slice(0, 8).map(item => `
+                <div class="bg-white border border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="font-bold text-slate-700">
+                            ${formatRagNodeLabel(item.source_node)} → ${formatRagNodeLabel(item.target_node)}
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${item.relation_type === 'morphology_to_performance' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}">
+                            ${relationTypeLabel(item.relation_type)}
+                        </span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                        方向：${effectDirectionLabel(item.effect_direction)} · 置信度 ${(Number(item.confidence || 0)).toFixed(2)}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(item.title || '').replace(/"/g, '&quot;')}">
+                        ${item.title || '--'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderRagGraph(chain, query) {
+            const chartHost = document.getElementById('rag-graph-chart');
+            const insightsEl = document.getElementById('rag-graph-insights');
+            if (insightsEl) insightsEl.innerHTML = buildGraphInsightList(chain);
+            if (!chartHost || chartHost.clientWidth === 0 || chartHost.clientHeight === 0) return;
+
+            const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
+            if (!chart) return;
+
+            const buckets = getFilteredRagGraphItems(chain, ragState.graphFilter);
+            if (buckets.length === 0) {
+                chart.clear();
+                chart.setOption({
+                    title: {
+                        text: `当前筛选暂无可视化关联：${ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
+                        left: 'center',
+                        top: 'middle',
+                        textStyle: { color: '#94a3b8', fontSize: 12, fontWeight: 700 },
+                    },
+                });
+                return;
+            }
+
+            const nodeMap = new Map();
+            const edges = [];
+            for (const item of buckets) {
+                const source = item.source_node || 'unknown:source';
+                const target = item.target_node || 'unknown:target';
+                if (!nodeMap.has(source)) {
+                    nodeMap.set(source, {
+                        id: source,
+                        name: ragNodeShortLabel(source),
+                        category: nodeCategoryById(source),
+                        value: 1,
+                    });
+                } else {
+                    nodeMap.get(source).value += 1;
+                }
+                if (!nodeMap.has(target)) {
+                    nodeMap.set(target, {
+                        id: target,
+                        name: ragNodeShortLabel(target),
+                        category: nodeCategoryById(target),
+                        value: 1,
+                    });
+                } else {
+                    nodeMap.get(target).value += 1;
+                }
+                edges.push({
+                    source,
+                    target,
+                    value: relationTypeLabel(item.relation_type),
+                    lineStyle: { width: 1 + Math.max(0.5, Number(item.confidence || 0.5) * 3) },
+                });
+            }
+
+            const nodes = Array.from(nodeMap.values()).map(n => ({
+                ...n,
+                symbolSize: Math.min(56, 14 + Math.sqrt(n.value) * 10),
+            }));
+
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: params => {
+                        if (params.dataType === 'edge') {
+                            return `${formatRagNodeLabel(params.data.source)} → ${formatRagNodeLabel(params.data.target)}<br>${params.data.value || ''}`;
+                        }
+                        return `${formatRagNodeLabel(params.data.id)}<br>关联度 ${params.data.value}`;
+                    },
+                },
+                legend: {
+                    data: ['工艺参数', '形貌特征', '材料性能', '证据/其他'],
+                    bottom: 0,
+                    textStyle: { fontSize: 11, color: '#64748b' },
+                },
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'force',
+                        roam: true,
+                        draggable: true,
+                        data: nodes,
+                        links: edges,
+                        categories: [
+                            { name: '工艺参数', itemStyle: { color: '#3b82f6' } },
+                            { name: '形貌特征', itemStyle: { color: '#10b981' } },
+                            { name: '材料性能', itemStyle: { color: '#f59e0b' } },
+                            { name: '证据/其他', itemStyle: { color: '#64748b' } },
+                        ],
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: [4, 8],
+                        label: {
+                            show: true,
+                            position: 'right',
+                            color: '#334155',
+                            fontSize: 10,
+                            formatter: params => ragNodeShortLabel(params.data.id),
+                        },
+                        edgeLabel: {
+                            show: true,
+                            fontSize: 9,
+                            color: '#64748b',
+                            formatter: params => params.data.value || '',
+                        },
+                        lineStyle: {
+                            color: '#94a3b8',
+                            curveness: 0.18,
+                            opacity: 0.9,
+                        },
+                        force: {
+                            repulsion: 260,
+                            edgeLength: [80, 160],
+                            gravity: 0.1,
+                        },
+                        emphasis: { focus: 'adjacency' },
+                    },
+                ],
+            });
+        }
+
         async function loadRagLinks() {
             const queryInput = document.getElementById('rag-link-query');
             const query = (queryInput?.value || '').trim();
@@ -3968,25 +5130,33 @@
                 return;
             }
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/rag/links', {
+                const res = await fetch(`${API_BASE}/api/rag/links`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query, top_k: 20 })
                 });
                 const data = await res.json();
                 const chain = data.chain || {};
+                const subgraph = data.subgraph || null;
+                const constrainedChain = data.constrained_chain || null;
+                const themeAggregation = data.theme_aggregation || null;
                 ragState.currentChain = chain;
                 ragState.currentQuery = query;
+                ragState.currentSubgraph = subgraph;
+                ragState.currentConstrainedChain = constrainedChain;
+                ragState.currentThemeAggregation = themeAggregation;
                 renderLinkSummary(chain);
                 renderGraphGlance(chain);
                 renderChainList('rag-chain-p2m', chain.process_to_morphology || [], 2);
                 renderChainList('rag-chain-m2p', chain.morphology_to_performance || [], 2);
                 renderChainList('rag-chain-p2p', chain.process_to_performance || [], 2);
                 renderChainList('rag-chain-mech', chain.mechanism_evidence || [], 2);
+                renderRagGraphAdvanced(subgraph, constrainedChain, query);
+                renderRagThemeAggregation(themeAggregation);
                 renderRagPerformanceView(chain, query);
                 renderRagGraph(chain, query);
             } catch (err) {
-                ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech', 'rag-performance-list', 'rag-performance-summary', 'rag-graph-insights', 'rag-graph-glance'].forEach(id => {
+                ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech', 'rag-performance-list', 'rag-performance-summary', 'rag-graph-insights', 'rag-graph-glance', 'rag-subgraph-summary', 'rag-constrained-chain', 'rag-theme-aggregation'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.innerHTML = `<div class="text-red-300">加载失败: ${err.message}</div>`;
                 });
@@ -4018,7 +5188,7 @@
             const formData = new FormData();
             formData.append('file', file);
             try {
-                const res = await fetch('http://127.0.0.1:8000/api/rag/upload', {
+                const res = await fetch(`${API_BASE}/api/rag/upload`, {
                     method: 'POST', body: formData
                 });
                 const data = await res.json();
@@ -4038,11 +5208,20 @@
             if (!confirm('确认删除该文献及其所有索引？')) return;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             try {
-                await fetch(`http://127.0.0.1:8000/api/rag/documents/${id}`, { method: 'DELETE' });
+                await fetch(`${API_BASE}/api/rag/documents/${id}`, { method: 'DELETE' });
                 await loadRagDocs();
             } catch (err) {
                 alert('删除失败: ' + err.message);
             }
+        }
+
+        function openDetailsById(id) {
+            const item = currentListItemsById[String(id)];
+            if (!item) {
+                console.warn('找不到对应记录:', id);
+                return;
+            }
+            openDetails(item);
         }
 
         // ─── 打开详情面板 ───
@@ -4055,8 +5234,8 @@
             const fileName = item.file_path.split('\\').pop();
             const isTif = item.url.toLowerCase().endsWith('.tif') || item.url.toLowerCase().endsWith('.tiff');
             const detailUrl = isTif
-                ? `http://127.0.0.1:8000/api/view/tif?path=${item.url.replace('/images/', '')}`
-                : `http://127.0.0.1:8000${item.url}`;
+                ? `${API_BASE}/api/view/tif?path=${item.url.replace('/images/', '')}`
+                : `${API_BASE}${item.url}`;
 
             document.getElementById('detail-img').src = detailUrl;
             document.getElementById('d-name').innerText = fileName;
@@ -4069,11 +5248,13 @@
             document.getElementById('f-ali').innerText = item.alignment != null ? Number(item.alignment).toFixed(3) : '--';
             document.getElementById('f-den').innerText = item.density != null ? Number(item.density).toFixed(2) : '--';
             document.getElementById('f-cur').innerText = (item.curvature != null && !isNaN(item.curvature)) ? Number(item.curvature).toFixed(3) : (item.curvature ?? '--');
+            document.getElementById('f-tor').innerText = (item.tortuosity != null && !isNaN(item.tortuosity)) ? Number(item.tortuosity).toFixed(3) : (item.tortuosity ?? '--');
 
             document.getElementById('d-status').className = item.processed
                 ? "text-[10px] bg-emerald-100 text-emerald-600 px-2 rounded"
                 : "text-[10px] bg-slate-100 text-slate-400 px-2 rounded";
             document.getElementById('d-status').innerText = item.processed ? "解析完成" : "未解析";
+            renderDetailDeleteActions(item);
 
             // 切换到不同图像时才重置对话和关闭解释面板；同一图像重复点击保留状态
             if (!isSameImage) {

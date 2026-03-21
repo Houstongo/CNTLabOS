@@ -52,6 +52,9 @@ class AlgorithmVisualizer:
         self.add_step("二值化", thresh,
             "Otsu自适应阈值分割。原理：自动寻找最佳阈值，使类内方差最小化，将图像分为前景（CNT）和背景。")
 
+        # 步骤4.5：密度计算（基于二值化结果）
+        self._add_density_step(thresh)
+
         # 步骤5：骨架提取（直接提取，不做分割）
         from skimage.morphology import skeletonize
 
@@ -80,6 +83,9 @@ class AlgorithmVisualizer:
 
         # 步骤9：骨架追踪曲率
         self._add_curvature_step(max_skel)
+
+        # 步骤10：波曲度分析
+        self._add_tortuosity_step(max_skel)
 
         return self.steps
 
@@ -270,6 +276,99 @@ class AlgorithmVisualizer:
             f"算法流程：直接提取最长骨架路径，计算曲率κ = dθ/ds。"
             f"优势：自动找到图像中最长的连续CNT骨架。"
             f"颜色编码：绿色=直（κ < 0.05），黄色=波（0.05 ≤ κ < 0.15），红色=卷曲（κ ≥ 0.15）。")
+
+    def _add_density_step(self, thresh):
+        """添加密度分析步骤"""
+        height, width = thresh.shape
+        foreground_pixels = np.sum(thresh > 0)
+        total_pixels = height * width
+        density = foreground_pixels / total_pixels if total_pixels > 0 else 0.0
+
+        # 可视化：用颜色标注前景区域
+        density_display = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+
+        # 给前景区域添加颜色叠加
+        density_display[thresh > 0] = [200, 200, 100]  # 淡黄色前景
+
+        # 添加文字标注
+        cv2.putText(density_display, f"Density = {density:.4f}", (20, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        cv2.putText(density_display, f"= {foreground_pixels}/{total_pixels} pixels", (20, 55),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 80, 80), 1)
+
+        self.add_step("密度计算", density_display,
+            f"密度 density = {density:.4f}。原理：前景像素数 / 总像素数 = {foreground_pixels}/{total_pixels}。"
+            f"此值反映CNT在视野中的覆盖程度，density越大表示CNT填充越密集。")
+
+    def _add_tortuosity_step(self, skel):
+        """添加波曲度分析步骤"""
+        from scipy.ndimage import convolve
+
+        skel_points = np.argwhere(skel > 0)
+        if len(skel_points) < 10:
+            return
+
+        # 找端点
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        kernel[1, 1] = 0
+        neighbor_count = convolve((skel > 0).astype(np.uint8), kernel, mode='constant', cval=0)
+        endpoints = np.argwhere((skel > 0) & (neighbor_count == 1))
+
+        if len(endpoints) < 2:
+            return
+
+        # 计算骨架路径长度（L_real）
+        path = self._trace_skeleton(skel, endpoints[0], endpoints[1])
+        if len(path) < 5:
+            return
+
+        # L_real: 骨架真实路径长度（像素距离累加）
+        L_real = 0.0
+        for i in range(1, len(path)):
+            L_real += np.linalg.norm(path[i] - path[i-1])
+
+        # L_direct: 端点直线距离
+        L_direct = np.linalg.norm(endpoints[0] - endpoints[1])
+
+        if L_direct < 1:
+            return
+
+        tortuosity = L_real / L_direct
+
+        # 可视化
+        tortuosity_display = cv2.cvtColor(skel, cv2.COLOR_GRAY2BGR)
+
+        # 画出骨架路径
+        for point in path:
+            cv2.circle(tortuosity_display, (int(point[1]), int(point[0])), 1, (0, 255, 0), -1)
+
+        # 画出端点直线（红色虚线效果）
+        cv2.line(tortuosity_display,
+                (int(endpoints[0][1]), int(endpoints[0][0])),
+                (int(endpoints[1][1]), int(endpoints[1][0])),
+                (0, 0, 255), 1)
+
+        # 标注端点
+        cv2.circle(tortuosity_display, (int(endpoints[0][1]), int(endpoints[0][0])), 4, (255, 0, 0), -1)
+        cv2.circle(tortuosity_display, (int(endpoints[1][1]), int(endpoints[1][0])), 4, (255, 0, 0), -1)
+
+        # 添加文字标注
+        cv2.putText(tortuosity_display, f"Tortuosity = {tortuosity:.3f}", (20, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(tortuosity_display, f"L_real={L_real:.1f}, L_direct={L_direct:.1f}", (20, 55),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+        # 判定描述
+        if tortuosity < 1.05:
+            tort_label = "笔直"
+        elif tortuosity < 1.2:
+            tort_label = "轻度弯曲"
+        else:
+            tort_label = "显著弯曲"
+
+        self.add_step("波曲度分析", tortuosity_display,
+            f"波曲度 τ = {tortuosity:.3f} ({tort_label})。原理：τ = L_real / L_direct，骨架真实路径长度({L_real:.1f}px) / 端点直线距离({L_direct:.1f}px)。"
+            f"τ = 1 表示完全笔直，τ > 1 表示弯曲程度。红色线为端点直线，绿色为实际骨架路径。")
 
     def _trace_skeleton(self, mask, start, end):
         """追踪骨架路径"""

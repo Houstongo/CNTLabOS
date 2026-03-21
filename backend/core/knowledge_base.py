@@ -1,7 +1,10 @@
 import os
 import re
 import sqlite3
-from typing import Dict, List, Optional
+import csv
+from collections import Counter
+from typing import Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 import numpy as np
 
@@ -406,7 +409,7 @@ class KnowledgeBaseService:
             )
         return results
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> Dict[str, object]:
         conn = self._connect()
         try:
             doc_count = conn.execute("SELECT COUNT(*) FROM kb_documents").fetchone()[0]
@@ -415,14 +418,149 @@ class KnowledgeBaseService:
                 "SELECT COUNT(*) FROM kb_documents WHERE is_core = 1"
             ).fetchone()[0]
             link_count = conn.execute("SELECT COUNT(*) FROM kb_links").fetchone()[0]
+            relation_rows = conn.execute(
+                "SELECT relation_type, COUNT(*) FROM kb_links GROUP BY relation_type"
+            ).fetchall()
+            source_type_rows = conn.execute(
+                "SELECT source_type, COUNT(*) FROM kb_documents GROUP BY source_type"
+            ).fetchall()
+            source_doc_rows = conn.execute(
+                "SELECT source_type, title, file_path FROM kb_documents"
+            ).fetchall()
         finally:
             conn.close()
+
+        relation_counts = {
+            "process_to_morphology": 0,
+            "morphology_to_performance": 0,
+            "process_to_performance": 0,
+            "process_to_mechanism": 0,
+            "mechanism_to_morphology": 0,
+            "mechanism_evidence": 0,
+        }
+        for rel_type, rel_count in relation_rows:
+            key = str(rel_type or "")
+            if key in relation_counts:
+                relation_counts[key] = int(rel_count)
+
+        source_type_counts: Dict[str, int] = {}
+        for source_type, count in source_type_rows:
+            key = str(source_type or "").strip() or "unknown"
+            source_type_counts[key] = int(count)
+        source_type_counts = dict(
+            sorted(source_type_counts.items(), key=lambda item: (-item[1], item[0]))
+        )
+
+        domain_counter: Counter[str] = Counter()
+        for source_type, title, file_path in source_doc_rows:
+            domain_key = self._infer_source_domain(
+                source_type=str(source_type or "").strip(),
+                title=str(title or ""),
+                file_path=str(file_path or ""),
+            )
+            domain_counter[domain_key] += 1
+        source_domain_counts = dict(
+            sorted(domain_counter.items(), key=lambda item: (-item[1], item[0]))[:12]
+        )
+        candidate_stats = self._load_candidate_source_stats()
+
         return {
             "document_count": doc_count,
             "chunk_count": chunk_count,
             "core_document_count": core_count,
             "link_count": link_count,
+            "relation_counts": relation_counts,
+            "source_type_counts": source_type_counts,
+            "source_domain_counts": source_domain_counts,
+            "candidate_document_count": candidate_stats["candidate_document_count"],
+            "candidate_download_status_counts": candidate_stats["candidate_download_status_counts"],
+            "candidate_source_domain_counts": candidate_stats["candidate_source_domain_counts"],
         }
+
+    @staticmethod
+    def _candidate_csv_path() -> str:
+        default_csv = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "RagDocument",
+                "CORE",
+                "13. 工艺-形貌-性能补充",
+                "文献候选清单.csv",
+            )
+        )
+        return os.getenv("CNTA_LITERATURE_CANDIDATE_CSV", default_csv)
+
+    @classmethod
+    def _load_candidate_source_stats(cls) -> Dict[str, object]:
+        csv_path = cls._candidate_csv_path()
+        if not os.path.exists(csv_path):
+            return {
+                "candidate_document_count": 0,
+                "candidate_download_status_counts": {},
+                "candidate_source_domain_counts": {},
+            }
+
+        rows = []
+        for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+            try:
+                with open(csv_path, "r", encoding=encoding, newline="") as handle:
+                    rows = list(csv.DictReader(handle))
+                break
+            except UnicodeDecodeError:
+                continue
+        if not rows:
+            return {
+                "candidate_document_count": 0,
+                "candidate_download_status_counts": {},
+                "candidate_source_domain_counts": {},
+            }
+
+        status_counter: Counter[str] = Counter()
+        domain_counter: Counter[str] = Counter()
+        for row in rows:
+            status = str((row or {}).get("download_status", "")).strip() or "unknown"
+            status_counter[status] += 1
+            source_url = str((row or {}).get("source_url", "")).strip()
+            domain = cls._domain_from_url(source_url) or "unknown"
+            domain_counter[domain] += 1
+
+        return {
+            "candidate_document_count": len(rows),
+            "candidate_download_status_counts": dict(
+                sorted(status_counter.items(), key=lambda item: (-item[1], item[0]))
+            ),
+            "candidate_source_domain_counts": dict(
+                sorted(domain_counter.items(), key=lambda item: (-item[1], item[0]))[:12]
+            ),
+        }
+
+    @staticmethod
+    def _domain_from_url(raw_value: str) -> Optional[str]:
+        value = (raw_value or "").strip()
+        if not value:
+            return None
+        parsed = urlparse(value)
+        host = (parsed.netloc or "").lower().strip()
+        if not host and value.startswith("www."):
+            host = value.lower().split("/")[0]
+        if not host:
+            return None
+        if host.startswith("www."):
+            host = host[4:]
+        return host or None
+
+    @classmethod
+    def _infer_source_domain(cls, source_type: str, title: str, file_path: str) -> str:
+        for candidate in (file_path, title):
+            domain = cls._domain_from_url(candidate)
+            if domain:
+                return domain
+
+        normalized_type = (source_type or "").strip().lower() or "unknown"
+        return f"local_{normalized_type}"
 
     def rebuild_links(self, doc_ids: Optional[List[int]] = None, clear_existing: bool = True) -> Dict[str, int]:
         conn = self._connect()
@@ -498,11 +636,7 @@ class KnowledgeBaseService:
             conn.close()
             self._invalidate_semantic_cache()
 
-    def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
-        query_tokens = set(self._tokenize(query))
-        if not query_tokens:
-            return []
-
+    def _load_link_rows(self) -> List[Dict[str, object]]:
         conn = self._connect()
         try:
             conn.row_factory = sqlite3.Row
@@ -518,10 +652,16 @@ class KnowledgeBaseService:
             ).fetchall()
         finally:
             conn.close()
+        return [dict(row) for row in rows]
+
+    def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
+        query_tokens = self._expand_link_query_tokens(query)
+        if not query_tokens:
+            return []
 
         scored = []
-        for row in rows:
-            row_dict = dict(row)
+        profile = self._build_query_relation_profile(query)
+        for row_dict in self._load_link_rows():
             haystack = " ".join(
                 str(row_dict.get(key) or "")
                 for key in (
@@ -539,11 +679,44 @@ class KnowledgeBaseService:
                 )
             ).lower()
             token_hits = sum(1 for token in query_tokens if token in haystack)
-            if token_hits > 0:
-                scored.append((token_hits, row_dict))
+            if token_hits <= 0:
+                continue
+
+            relation_boost = self._score_link_against_query_profile(row_dict, profile)
+            confidence = float(row_dict.get("confidence") or 0.0)
+            final_score = float(token_hits) + relation_boost + confidence * 0.35
+            enriched = {**row_dict, "_match_score": round(final_score, 4)}
+            scored.append((final_score, enriched))
 
         scored.sort(key=lambda item: item[0], reverse=True)
         return [row for _, row in scored[:top_k]]
+
+    def _expand_link_query_tokens(self, query: str) -> set:
+        tokens = set(self._tokenize(query))
+        if not query:
+            return tokens
+
+        for factor_patterns in (
+            PROCESS_FACTOR_PATTERNS,
+            MORPHOLOGY_FACTOR_PATTERNS,
+            PERFORMANCE_FACTOR_PATTERNS,
+            MECHANISM_FACTOR_PATTERNS,
+        ):
+            tokens.update(self._match_factors(query, factor_patterns))
+
+        profile = self._build_query_relation_profile(query)
+        tokens.update(profile.get("relation_types") or set())
+        if profile.get("process_hits"):
+            tokens.update({"process", "process_factor"})
+        if profile.get("morph_hits"):
+            tokens.update({"morphology", "morphology_factor"})
+        if profile.get("perf_hits"):
+            tokens.update({"performance", "performance_factor"})
+        if profile.get("mechanism_hits") or any(
+            re.search(pattern, query.lower()) for pattern in MECHANISM_PATTERNS
+        ):
+            tokens.update({"mechanism", "mechanism_summary", "evidence", "literature"})
+        return tokens
 
     def get_relation_chain_summary(self, query: str, top_k: int = 20) -> Dict[str, List[Dict[str, object]]]:
         links = self.search_links(query, top_k=top_k)
@@ -560,6 +733,342 @@ class KnowledgeBaseService:
             if rel_type in grouped:
                 grouped[rel_type].append(row)
         return grouped
+
+    @staticmethod
+    def _node_suffix(node_id: str) -> str:
+        raw = str(node_id or "")
+        if ":" not in raw:
+            return raw
+        return raw.split(":", 1)[1]
+
+    @staticmethod
+    def _node_category(node_id: str) -> str:
+        raw = str(node_id or "")
+        if ":" not in raw:
+            return "other"
+        return raw.split(":", 1)[0]
+
+    def retrieve_local_relation_subgraph(
+        self,
+        query: str,
+        top_k: int = 20,
+        max_hops: int = 1,
+        max_expanded_edges: int = 60,
+    ) -> Dict[str, object]:
+        seeds = self.search_links(query, top_k=top_k)
+        if not seeds:
+            return {
+                "query": query,
+                "seed_count": 0,
+                "edge_count": 0,
+                "node_count": 0,
+                "edges": [],
+                "nodes": [],
+                "relation_type_counts": {},
+            }
+
+        profile = self._build_query_relation_profile(query)
+        allowed_relation_types: Set[str] = set(profile.get("relation_types") or [])
+        if not allowed_relation_types:
+            allowed_relation_types = {
+                "process_to_morphology",
+                "morphology_to_performance",
+                "process_to_performance",
+                "process_to_mechanism",
+                "mechanism_to_morphology",
+                "mechanism_evidence",
+            }
+
+        all_rows = self._load_link_rows()
+        adjacency: Dict[str, List[Dict[str, object]]] = {}
+        for row in all_rows:
+            source_node = str(row.get("source_node") or "")
+            target_node = str(row.get("target_node") or "")
+            if source_node:
+                adjacency.setdefault(source_node, []).append(row)
+            if target_node:
+                adjacency.setdefault(target_node, []).append(row)
+
+        selected_edges: Dict[int, Dict[str, object]] = {}
+        visited_nodes: Set[str] = set()
+        frontier: Set[str] = set()
+        for row in seeds:
+            selected_edges[int(row["id"])] = row
+            source_node = str(row.get("source_node") or "")
+            target_node = str(row.get("target_node") or "")
+            if source_node:
+                frontier.add(source_node)
+                visited_nodes.add(source_node)
+            if target_node:
+                frontier.add(target_node)
+                visited_nodes.add(target_node)
+
+        for _ in range(max(0, int(max_hops))):
+            next_frontier: Set[str] = set()
+            for node in list(frontier):
+                for candidate in adjacency.get(node, []):
+                    relation_type = str(candidate.get("relation_type") or "")
+                    if relation_type not in allowed_relation_types:
+                        continue
+                    link_score = self._score_link_against_query_profile(candidate, profile)
+                    if link_score <= 0 and relation_type not in profile.get("relation_types", set()):
+                        continue
+
+                    candidate_id = int(candidate["id"])
+                    if candidate_id not in selected_edges:
+                        selected_edges[candidate_id] = {
+                            **candidate,
+                            "_match_score": round(link_score, 4),
+                        }
+
+                    source_node = str(candidate.get("source_node") or "")
+                    target_node = str(candidate.get("target_node") or "")
+                    if source_node and source_node not in visited_nodes:
+                        next_frontier.add(source_node)
+                    if target_node and target_node not in visited_nodes:
+                        next_frontier.add(target_node)
+
+                    if len(selected_edges) >= max_expanded_edges:
+                        break
+                if len(selected_edges) >= max_expanded_edges:
+                    break
+            if not next_frontier:
+                break
+            visited_nodes.update(next_frontier)
+            frontier = next_frontier
+
+        edges = list(selected_edges.values())
+        edges.sort(
+            key=lambda row: (
+                float(row.get("_match_score") or 0.0),
+                float(row.get("confidence") or 0.0),
+            ),
+            reverse=True,
+        )
+        edges = edges[: max(1, int(max_expanded_edges))]
+
+        relation_counter: Counter[str] = Counter()
+        degree_counter: Counter[str] = Counter()
+        for row in edges:
+            relation_counter[str(row.get("relation_type") or "unknown")] += 1
+            source_node = str(row.get("source_node") or "")
+            target_node = str(row.get("target_node") or "")
+            if source_node:
+                degree_counter[source_node] += 1
+            if target_node:
+                degree_counter[target_node] += 1
+
+        nodes = [
+            {
+                "id": node_id,
+                "category": self._node_category(node_id),
+                "label": self._node_suffix(node_id),
+                "degree": degree_counter[node_id],
+            }
+            for node_id in sorted(degree_counter.keys(), key=lambda value: (-degree_counter[value], value))
+        ]
+
+        return {
+            "query": query,
+            "seed_count": len(seeds),
+            "edge_count": len(edges),
+            "node_count": len(nodes),
+            "edges": edges,
+            "nodes": nodes,
+            "relation_type_counts": dict(
+                sorted(relation_counter.items(), key=lambda item: (-item[1], item[0]))
+            ),
+        }
+
+    def generate_constrained_evidence_chain(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_confidence: float = 0.45,
+    ) -> Dict[str, object]:
+        links = self.search_links(query, top_k=max(40, top_k * 20))
+        if not links:
+            return {"query": query, "path_type": "process_mechanism_morphology", "items": []}
+
+        p2m = [
+            row
+            for row in links
+            if str(row.get("relation_type") or "") == "process_to_mechanism"
+            and float(row.get("confidence") or 0.0) >= min_confidence
+        ]
+        m2m = [
+            row
+            for row in links
+            if str(row.get("relation_type") or "") == "mechanism_to_morphology"
+            and float(row.get("confidence") or 0.0) >= min_confidence
+        ]
+        p2morph = [
+            row
+            for row in links
+            if str(row.get("relation_type") or "") == "process_to_morphology"
+            and float(row.get("confidence") or 0.0) >= min_confidence
+        ]
+
+        m2m_by_mechanism: Dict[str, List[Dict[str, object]]] = {}
+        for row in m2m:
+            mech = self._node_suffix(str(row.get("source_node") or ""))
+            if mech:
+                m2m_by_mechanism.setdefault(mech, []).append(row)
+
+        p2morph_index: Dict[Tuple[str, str], List[Dict[str, object]]] = {}
+        for row in p2morph:
+            process_key = str(row.get("process_factor") or self._node_suffix(str(row.get("source_node") or "")))
+            morph_key = str(row.get("morphology_factor") or self._node_suffix(str(row.get("target_node") or "")))
+            if not process_key or not morph_key:
+                continue
+            p2morph_index.setdefault((process_key, morph_key), []).append(row)
+
+        chain_items = []
+        seen_paths: Set[Tuple[str, str, str]] = set()
+        for row_a in p2m:
+            process_factor = str(row_a.get("process_factor") or self._node_suffix(str(row_a.get("source_node") or "")))
+            mechanism_factor = self._node_suffix(str(row_a.get("target_node") or ""))
+            if not process_factor or not mechanism_factor:
+                continue
+
+            for row_b in m2m_by_mechanism.get(mechanism_factor, []):
+                morphology_factor = str(
+                    row_b.get("morphology_factor") or self._node_suffix(str(row_b.get("target_node") or ""))
+                )
+                if not morphology_factor:
+                    continue
+                signature = (process_factor, mechanism_factor, morphology_factor)
+                if signature in seen_paths:
+                    continue
+                seen_paths.add(signature)
+
+                support_links = p2morph_index.get((process_factor, morphology_factor), [])
+                support_link = support_links[0] if support_links else None
+                scores = [
+                    float(row_a.get("confidence") or 0.0),
+                    float(row_b.get("confidence") or 0.0),
+                ]
+                if support_link is not None:
+                    scores.append(float(support_link.get("confidence") or 0.0))
+                score = sum(scores) / max(1, len(scores))
+
+                chain_items.append(
+                    {
+                        "process_factor": process_factor,
+                        "mechanism_factor": mechanism_factor,
+                        "morphology_factor": morphology_factor,
+                        "score": round(score, 4),
+                        "steps": [
+                            {
+                                "relation_type": "process_to_mechanism",
+                                "source_node": row_a.get("source_node"),
+                                "target_node": row_a.get("target_node"),
+                                "effect_direction": row_a.get("effect_direction"),
+                                "confidence": row_a.get("confidence"),
+                                "title": row_a.get("title"),
+                                "evidence_text": row_a.get("evidence_text"),
+                            },
+                            {
+                                "relation_type": "mechanism_to_morphology",
+                                "source_node": row_b.get("source_node"),
+                                "target_node": row_b.get("target_node"),
+                                "effect_direction": row_b.get("effect_direction"),
+                                "confidence": row_b.get("confidence"),
+                                "title": row_b.get("title"),
+                                "evidence_text": row_b.get("evidence_text"),
+                            },
+                        ],
+                        "support": (
+                            {
+                                "relation_type": "process_to_morphology",
+                                "source_node": support_link.get("source_node"),
+                                "target_node": support_link.get("target_node"),
+                                "effect_direction": support_link.get("effect_direction"),
+                                "confidence": support_link.get("confidence"),
+                                "title": support_link.get("title"),
+                                "evidence_text": support_link.get("evidence_text"),
+                            }
+                            if support_link is not None
+                            else None
+                        ),
+                    }
+                )
+
+        chain_items.sort(key=lambda item: item["score"], reverse=True)
+        return {
+            "query": query,
+            "path_type": "process_mechanism_morphology",
+            "items": chain_items[: max(1, top_k)],
+        }
+
+    def get_theme_level_aggregation(self, query: str, top_k: int = 30) -> Dict[str, object]:
+        links = self.search_links(query, top_k=max(top_k, 20))
+        bucket_map = {
+            "process_to_morphology": "process_morphology",
+            "process_to_mechanism": "process_mechanism",
+            "morphology_to_performance": "morphology_performance",
+        }
+        grouped: Dict[str, Dict[Tuple[str, str, str], Dict[str, object]]] = {
+            "process_morphology": {},
+            "process_mechanism": {},
+            "morphology_performance": {},
+        }
+
+        for row in links:
+            relation_type = str(row.get("relation_type") or "")
+            bucket = bucket_map.get(relation_type)
+            if not bucket:
+                continue
+            source_node = str(row.get("source_node") or "")
+            target_node = str(row.get("target_node") or "")
+            effect_direction = str(row.get("effect_direction") or "unknown")
+            key = (source_node, target_node, effect_direction)
+            unit = grouped[bucket].get(key)
+            if unit is None:
+                unit = {
+                    "source_node": source_node,
+                    "target_node": target_node,
+                    "effect_direction": effect_direction,
+                    "count": 0,
+                    "confidence_sum": 0.0,
+                    "titles": set(),
+                }
+                grouped[bucket][key] = unit
+            unit["count"] += 1
+            unit["confidence_sum"] += float(row.get("confidence") or 0.0)
+            title = str(row.get("title") or "").strip()
+            if title:
+                unit["titles"].add(title)
+
+        def _finalize_bucket(bucket_name: str) -> Dict[str, object]:
+            records = []
+            for unit in grouped[bucket_name].values():
+                count = int(unit["count"])
+                avg_conf = float(unit["confidence_sum"]) / max(1, count)
+                records.append(
+                    {
+                        "source_node": unit["source_node"],
+                        "target_node": unit["target_node"],
+                        "effect_direction": unit["effect_direction"],
+                        "count": count,
+                        "avg_confidence": round(avg_conf, 4),
+                        "evidence_titles": sorted(unit["titles"])[:3],
+                    }
+                )
+            records.sort(key=lambda item: (item["count"], item["avg_confidence"]), reverse=True)
+            top_records = records[:5]
+            summary = (
+                f"{bucket_name} has {len(records)} grouped relation themes; top relation count="
+                f"{top_records[0]['count'] if top_records else 0}."
+            )
+            return {"items": top_records, "summary": summary}
+
+        return {
+            "query": query,
+            "process_morphology": _finalize_bucket("process_morphology"),
+            "process_mechanism": _finalize_bucket("process_mechanism"),
+            "morphology_performance": _finalize_bucket("morphology_performance"),
+        }
 
     def ingest_directory(
         self,

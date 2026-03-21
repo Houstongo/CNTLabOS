@@ -1,4 +1,5 @@
 import os
+import csv
 import sqlite3
 import tempfile
 import unittest
@@ -84,6 +85,109 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
         self.assertGreaterEqual(len(links), 1)
         self.assertIn(links[0].get("effect_direction"), {"increase", "decrease", "nonlinear_or_tradeoff"})
 
+    def test_get_stats_contains_source_type_and_domain_breakdown(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Direct publisher URL document",
+            text="Alignment improves conductivity.",
+            source_type="paper",
+            file_path="https://www.sciencedirect.com/science/article/pii/S0008622321009702",
+        )
+        service.ingest_text(
+            title="Local uploaded PDF",
+            text="Temperature affects alignment.",
+            source_type="pdf",
+            file_path=r"D:\CNTDATA\RagDocument\CORE\sample.pdf",
+        )
+        candidate_csv = os.path.join(self.temp_dir.name, "candidate_docs.csv")
+        with open(candidate_csv, "w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "priority",
+                    "bucket",
+                    "title",
+                    "year",
+                    "journal",
+                    "doi",
+                    "relation_targets",
+                    "notes",
+                    "source_url",
+                    "download_status",
+                ],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "priority": "P0",
+                    "bucket": "02_形貌-性能",
+                    "title": "Doc1",
+                    "year": "2022",
+                    "journal": "Carbon",
+                    "doi": "10.1000/x1",
+                    "relation_targets": "morphology_to_performance",
+                    "notes": "",
+                    "source_url": "https://www.sciencedirect.com/science/article/pii/S0008622321009702",
+                    "download_status": "publisher_page_only",
+                }
+            )
+            writer.writerow(
+                {
+                    "priority": "P0",
+                    "bucket": "01_工艺-机理-形貌",
+                    "title": "Doc2",
+                    "year": "2021",
+                    "journal": "Sensors",
+                    "doi": "10.1000/x2",
+                    "relation_targets": "process_to_mechanism",
+                    "notes": "",
+                    "source_url": "https://www.mdpi.com/1424-8220/16/12/2062/pdf",
+                    "download_status": "direct_pdf_candidate",
+                }
+            )
+
+        with patch.dict(os.environ, {"CNTA_LITERATURE_CANDIDATE_CSV": candidate_csv}):
+            stats = service.get_stats()
+
+        self.assertEqual(stats["source_type_counts"]["paper"], 1)
+        self.assertEqual(stats["source_type_counts"]["pdf"], 1)
+        self.assertEqual(stats["source_domain_counts"]["sciencedirect.com"], 1)
+        self.assertEqual(stats["source_domain_counts"]["local_pdf"], 1)
+        self.assertEqual(stats["candidate_document_count"], 2)
+        self.assertEqual(stats["candidate_download_status_counts"]["publisher_page_only"], 1)
+        self.assertEqual(stats["candidate_download_status_counts"]["direct_pdf_candidate"], 1)
+        self.assertEqual(stats["candidate_source_domain_counts"]["sciencedirect.com"], 1)
+        self.assertEqual(stats["candidate_source_domain_counts"]["mdpi.com"], 1)
+
+    def test_search_links_supports_chinese_query_aliases(self):
+        service = KnowledgeBaseService(self.db_path)
+
+        service.ingest_text(
+            title="Chinese query relation note",
+            text=(
+                "Increasing temperature improves alignment and conductivity in CNT forests. "
+                "Boundary layer effects influence nanotube forest growth kinetics."
+            ),
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+        )
+
+        links = service.search_links("生长温度 取向度 导电性 生长机理", top_k=10)
+        relation_pairs = {
+            (row.get("relation_type"), row.get("source_node"), row.get("target_node"))
+            for row in links
+        }
+
+        self.assertIn(
+            ("process_to_morphology", "process:growth_temp", "morphology:alignment"),
+            relation_pairs,
+        )
+        self.assertIn(
+            ("process_to_performance", "process:growth_temp", "performance:conductivity"),
+            relation_pairs,
+        )
+
     def test_ingest_text_normalizes_performance_factors_for_strength_and_modulus(self):
         service = KnowledgeBaseService(self.db_path)
 
@@ -161,6 +265,87 @@ class KnowledgeBaseServiceTests(unittest.TestCase):
             ("mechanism_to_morphology", "mechanism:catalyst_deactivation", "morphology:alignment"),
             relation_pairs,
         )
+
+    def test_retrieve_local_relation_subgraph_returns_constrained_edges(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Subgraph relation note",
+            text=(
+                "Increasing temperature enhances diffusion and improves alignment in CNT arrays. "
+                "Improved alignment increases conductivity in CNT arrays."
+            ),
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+        )
+
+        subgraph = service.retrieve_local_relation_subgraph(
+            query="temperature diffusion alignment conductivity mechanism",
+            top_k=12,
+            max_hops=1,
+            max_expanded_edges=30,
+        )
+
+        relation_types = {edge.get("relation_type") for edge in subgraph.get("edges", [])}
+        self.assertGreaterEqual(subgraph.get("seed_count", 0), 1)
+        self.assertGreaterEqual(subgraph.get("edge_count", 0), 2)
+        self.assertGreaterEqual(subgraph.get("node_count", 0), 3)
+        self.assertIn("process_to_mechanism", relation_types)
+        self.assertIn("mechanism_to_morphology", relation_types)
+
+    def test_generate_constrained_evidence_chain_builds_process_mechanism_morphology_path(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Chain evidence note",
+            text=(
+                "Higher temperature promotes diffusion and improves alignment in CNT forests. "
+                "Temperature also improves alignment."
+            ),
+            source_type="paper",
+            theme="growth_mechanism",
+            is_core=True,
+        )
+
+        chain = service.generate_constrained_evidence_chain(
+            query="temperature diffusion alignment growth mechanism",
+            top_k=5,
+            min_confidence=0.4,
+        )
+        items = chain.get("items", [])
+        self.assertGreaterEqual(len(items), 1)
+        steps = items[0].get("steps", [])
+        self.assertGreaterEqual(len(steps), 2)
+        self.assertEqual(steps[0].get("relation_type"), "process_to_mechanism")
+        self.assertEqual(steps[1].get("relation_type"), "mechanism_to_morphology")
+        self.assertEqual(items[0].get("process_factor"), "growth_temp")
+        self.assertEqual(items[0].get("mechanism_factor"), "diffusion")
+        self.assertEqual(items[0].get("morphology_factor"), "alignment")
+
+    def test_theme_level_aggregation_returns_lightweight_grouped_summary(self):
+        service = KnowledgeBaseService(self.db_path)
+        service.ingest_text(
+            title="Aggregation note",
+            text=(
+                "Increasing temperature improves alignment and conductivity in CNT arrays. "
+                "Higher temperature enhances diffusion and alignment."
+            ),
+            source_type="paper",
+            theme="process_morphology",
+            is_core=True,
+        )
+
+        aggregation = service.get_theme_level_aggregation(
+            query="temperature alignment conductivity diffusion mechanism",
+            top_k=30,
+        )
+        self.assertIn("process_morphology", aggregation)
+        self.assertIn("process_mechanism", aggregation)
+        self.assertIn("morphology_performance", aggregation)
+        self.assertGreaterEqual(
+            len(aggregation["process_morphology"].get("items", [])),
+            1,
+        )
+        self.assertIsInstance(aggregation["process_mechanism"].get("summary"), str)
 
     def test_ingest_text_derives_conductivity_from_resistivity_metrics(self):
         service = KnowledgeBaseService(self.db_path)

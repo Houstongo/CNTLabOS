@@ -20,3 +20,7 @@ test('data cleaning page containers exist', () => {
   assert.match(html, /id="clean-open-original"/);
   assert.match(html, /id="clean-lightbox"/);
 });
+
+test('data cleaning exposes a recycle-bin entry point', () => {
+  assert.match(html, /id="clean-trash-toggle"/);
+});

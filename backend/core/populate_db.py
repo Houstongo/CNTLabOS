@@ -43,8 +43,11 @@ def populate(clear=False):
                     if source == 'ZZY':
                         data = parser.parse_zzy_filename(file)
                         if data:
-                            data['anneal_time'] = convert_time_to_h(str(data['anneal_time']))
-                            data['growth_time'] = convert_time_to_h(str(data['growth_time']))
+                            if parser.should_include_zzy_record(data):
+                                data['anneal_time'] = convert_time_to_h(str(data['anneal_time']))
+                                data['growth_time'] = convert_time_to_h(str(data['growth_time']))
+                            else:
+                                data = None
                     elif source == 'XR':
                         data = parser.parse_xr_filename(
                             file,

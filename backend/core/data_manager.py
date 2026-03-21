@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 class CNTADataParser:
     def __init__(self):
+        self.zzy_min_magnification = 9000
         self.zzy_position_aliases = {
             "top": "top",
             "mid": "mid",
@@ -41,6 +42,30 @@ class CNTADataParser:
         self.xr_flow_pattern = re.compile(r"[lL]\s*(\d+)")
         self.xr_catalyst_pattern = re.compile(r"(\d+(?:\.\d+)?)\s*g\b", re.IGNORECASE)
 
+    def is_zzy_mid_position(self, position_label: Optional[str]) -> bool:
+        if not position_label:
+            return False
+
+        normalized = position_label.strip().lower()
+        return (
+            normalized == "mid"
+            or normalized.startswith("mid")
+            or normalized.startswith("middle")
+            or normalized.startswith("position-mid")
+        )
+
+    def should_include_zzy_record(self, data: Optional[Dict[str, Any]]) -> bool:
+        if not data:
+            return False
+
+        magnification = data.get("magnification")
+        if magnification is None:
+            return False
+
+        return self.is_zzy_mid_position(str(data.get("position_label", ""))) and int(
+            magnification
+        ) >= self.zzy_min_magnification
+
     def parse_zzy_filename(self, filename: str) -> Optional[Dict[str, Any]]:
         name = os.path.splitext(filename)[0]
         match = self.zzy_pattern.search(name)
@@ -57,6 +82,8 @@ class CNTADataParser:
         sample_id = f"No{g[0]}-{mag}-{full_repeat}"
         raw_position = (g[12] or "Unknown").strip()
         position_label = self.zzy_position_aliases.get(raw_position.lower(), raw_position)
+        if self.is_zzy_mid_position(position_label):
+            position_label = "mid"
 
         return {
             "source": "ZZY",
@@ -166,6 +193,10 @@ class DatabaseManager:
                 alignment REAL,
                 curvature TEXT,
                 tortuosity REAL,
+                waviness_ratio REAL,
+                waviness_height_nm REAL,
+                waviness_wavelength_nm REAL,
+                waviness_branches INTEGER,
                 processed INTEGER DEFAULT 0
             )
             """
