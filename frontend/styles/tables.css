@@ -1,0 +1,65 @@
+/* 表格样式 */
+.table-header {
+    background: #fcfcfd;
+    border-bottom: 2px solid #ebedf3;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #b5b5c3;
+    height: 50px;
+    flex-shrink: 0;
+}
+#data-body {
+    flex: 1;
+    overflow-y: auto;
+}
+.table-row {
+    cursor: pointer;
+    transition: 0.2s;
+    border-bottom: 1px solid #f3f6f9;
+}
+.table-row:hover { background: #f8fbff; }
+
+/* 批量模式表格列 */
+.table-header, .table-row {
+    grid-template-columns: var(--batch-col-w) 70px 130px 1.4fr 1.4fr 1fr 1fr 1fr 1.2fr 1.1fr 0.8fr 1.1fr 1fr 50px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.table-header > div:first-child, .table-row > div:first-child {
+    overflow: hidden;
+    transition: opacity 0.2s;
+    opacity: 0;
+}
+.batch-active .table-header > div:first-child,
+.batch-active .table-row > div:first-child {
+    opacity: 1;
+}
+
+/* 分页栏 */
+.pagination-bar {
+    height: 80px;
+    flex-shrink: 0;
+    padding: 0 40px;
+    border-top: 1px solid #f1f3f5;
+    background: #fcfdfe;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 其他表格组件 */
+.parameter-pill {
+    background: #f3f6f9;
+    color: #7e8299;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11px;
+}
+.thumbnail-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f3f6f9;
+}

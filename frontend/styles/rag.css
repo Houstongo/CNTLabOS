@@ -1,0 +1,105 @@
+/* RAG 知识库页面样式 */
+#rag-page .data-card {
+    margin: 0;
+}
+#rag-page {
+    overflow: hidden;
+}
+
+.rag-workspace {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+}
+.rag-subpage {
+    flex: 1;
+    min-height: 0;
+}
+.rag-panel-scroll {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* RAG 迷你卡片 */
+.rag-mini-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 14px 16px;
+}
+
+.rag-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.rag-subpage-title {
+    font-size: 12px;
+    font-weight: 900;
+    color: #475569;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* RAG 图谱筛选按钮 */
+.rag-graph-filter-btn {
+    width: 100%;
+    border: 1px solid #dbe5f0;
+    background: #ffffff;
+    color: #475569;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+.rag-graph-filter-btn:hover {
+    border-color: #818cf8;
+    background: #eef2ff;
+    color: #3730a3;
+}
+.rag-graph-filter-btn.active {
+    border-color: #3730a3;
+    background: #3730a3;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(55, 48, 163, 0.2);
+}
+
+/* RAG 标签按钮 */
+.rag-tab-btn {
+    border: 1px solid #dbe5f0;
+    background: #ffffff;
+    color: #475569;
+    padding: 8px 14px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 800;
+    transition: all 0.2s ease;
+}
+.rag-tab-btn:hover {
+    border-color: #6366f1;
+    color: #3730a3;
+    background: #eef2ff;
+}
+.rag-tab-btn.active {
+    border-color: #3730a3;
+    background: #3730a3;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(55, 48, 163, 0.25);
+}
+
+/* 响应式 */
+@media (max-width: 1279px) {
+    #rag-page {
+        overflow-y: auto;
+    }
+    .rag-workspace,
+    .rag-subpage,
+    .rag-panel-scroll {
+        min-height: auto;
+    }
+}

@@ -7,7 +7,7 @@ document/chunk retrieval through the paper-oriented knowledge-base service.
 
 import io
 import sqlite3
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from backend.core.knowledge_base import KnowledgeBaseService
 
@@ -128,4 +128,79 @@ class RAGRetriever:
             "pdf_passages": self.retrieve_from_pdf(query, task_name=task_name) if query else [],
             "knowledge_links": self.knowledge_base.search_links(query, top_k=5) if query else [],
             "relation_chain": self.knowledge_base.get_relation_chain_summary(query, top_k=20) if query else {},
+        }
+
+    def retrieve_for_qa(
+        self,
+        query: str,
+        task_name: Optional[str] = None,
+        top_k: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        专为问答场景的检索，返回结构化上下文和来源
+
+        Args:
+            query: 用户问题
+            task_name: 任务名称（可选）
+            top_k: 返回结果数量
+
+        Returns:
+            {
+                "pdf_passages": [...],
+                "knowledge_links": [...],
+                "similar_experiments": [],
+                "context_summary": "...",
+                "retrieval_stats": {
+                    "total_sources": 10,
+                    "pdf_count": 5,
+                    "link_count": 5
+                }
+            }
+        """
+        # 检索PDF文献
+        pdf_passages = self.retrieve_from_pdf(query, task_name=task_name, top_k=top_k)
+
+        # 检索专家知识链接
+        knowledge_links = self.knowledge_base.search_links(query, top_k=top_k)
+
+        # 构建上下文摘要
+        context_parts = []
+
+        if pdf_passages:
+            context_parts.append(f"### 文献证据 ({len(pdf_passages)} 条)")
+            for i, passage in enumerate(pdf_passages[:3], 1):
+                title = passage.get("title") or passage.get("filename") or "未知文献"
+                text = passage.get("text", "")
+                context_parts.append(f"[{i}] {title}")
+                context_parts.append(f"    {text[:200]}...")
+                context_parts.append("")
+
+        if knowledge_links:
+            context_parts.append(f"### 专家知识 ({len(knowledge_links)} 条)")
+            for i, link in enumerate(knowledge_links[:3], 1):
+                process = link.get("process_factor") or "-"
+                morph = link.get("morphology_factor") or "-"
+                perf = link.get("performance_factor") or "-"
+                direction = link.get("effect_direction") or "-"
+                context_parts.append(f"{i}. 工艺={process} → 形貌={morph} → 性能={perf} ({direction})")
+                evidence = link.get("evidence_text") or ""
+                if evidence:
+                    context_parts.append(f"   证据: {evidence[:150]}...")
+                context_parts.append("")
+
+        context_summary = "\n".join(context_parts)
+
+        # 统计信息
+        retrieval_stats = {
+            "total_sources": len(pdf_passages) + len(knowledge_links),
+            "pdf_count": len(pdf_passages),
+            "link_count": len(knowledge_links),
+        }
+
+        return {
+            "pdf_passages": pdf_passages,
+            "knowledge_links": knowledge_links,
+            "similar_experiments": [],  # QA场景通常不需要相似实验
+            "context_summary": context_summary,
+            "retrieval_stats": retrieval_stats,
         }

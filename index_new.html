@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNTA 实验特征驾驶舱 - Lab-OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
+
+    <!-- 模块化 CSS -->
+    <link rel="stylesheet" href="frontend/styles/base.css">
+    <link rel="stylesheet" href="frontend/styles/layout.css">
+    <link rel="stylesheet" href="frontend/styles/sidebar.css">
+    <link rel="stylesheet" href="frontend/styles/tables.css">
+    <link rel="stylesheet" href="frontend/styles/charts.css">
+    <link rel="stylesheet" href="frontend/styles/rag.css">
+    <link rel="stylesheet" href="frontend/styles/ml.css">
+</head>
+<body class="flex">
+    <!-- 加载指示器 -->
+    <div id="app-loading" class="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin text-4xl text-indigo-600 mb-4 block"></i>
+            <div class="text-slate-600">应用加载中...</div>
+        </div>
+    </div>
+
+    <!-- 应用内容占位符 - 原始内容将从 index.html 导入 -->
+    <div id="app-root"></div>
+
+    <!-- 模块化 JS 入口 -->
+    <script type="module">
+        import { initApp } from './frontend/core/app.js';
+
+        // 将原始 HTML 内容复制到 app-root
+        // TODO: 这一步可以逐步用组件化代码替换
+        window.addEventListener('load', () => {
+            fetch('index.html')
+                .then(r => r.text())
+                .then(html => {
+                    // 提取 body 内容
+                    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/);
+                    if (bodyMatch) {
+                        const bodyContent = bodyMatch[1];
+                        // 移除原文件中的 script 标签（因为我们使用模块化 JS）
+                        const contentWithoutScripts = bodyContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+                        document.getElementById('app-root').innerHTML = contentWithoutScripts;
+                    }
+
+                    // 隐藏加载指示器
+                    const loading = document.getElementById('app-loading');
+                    if (loading) loading.style.display = 'none';
+
+                    // 初始化应用
+                    initApp();
+                });
+        });
+    </script>
+</body>
+</html>

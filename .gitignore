@@ -17,11 +17,26 @@ test_output.txt
 xr_batch_output.txt
 _tmp_*.html
 tmp-inline.js
+.tmp-check-*.js
 .claude/
 .edge-headless/
 output/
 rag-graph-*.png
 rag-doc-manage-*.png
+*.bak
+batch_output_*/
+batch_today_output*/
+temp_images/
+test_output/
+test_vis_batch/
+test_vis_both/
+test_vis_english/
+test_vis_output/
+test_vis_output2/
+test_diameter_dist/
+test_features*/
+test_single*/
+test_img.png
 
 data/raw/
 data/temp/

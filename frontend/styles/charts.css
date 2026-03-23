@@ -1,0 +1,108 @@
+/* 图表与可视化样式 */
+
+/* ML 页面布局 */
+#ml-page > .data-card {
+    margin: 0;
+}
+#ml-page > .data-card:first-child {
+    flex: 0 0 auto;
+}
+#ml-subpage-visual {
+    overflow-y: auto;
+    padding-bottom: 16px;
+}
+#ml-subpage-data {
+    overflow-y: auto;
+    padding-bottom: 10px;
+}
+
+/* ML 目标标签 */
+.ml-target-tab {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+.ml-target-tab:hover {
+    border-color: #38bdf8;
+    color: #0f172a;
+}
+.ml-target-tab.active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+}
+
+/* ML 信息标签 */
+.ml-info-tab {
+    border: 1px solid #dbe5f0;
+    background: #f8fbff;
+    color: #3b4f68;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+.ml-info-tab:hover {
+    border-color: #7fb3f1;
+    color: #102a43;
+    background: #eef6ff;
+}
+.ml-info-tab.active {
+    background: #1d4ed8;
+    color: #ffffff;
+    border-color: #1d4ed8;
+    box-shadow: 0 6px 14px rgba(29, 78, 216, 0.25);
+}
+
+/* 可视化步骤标签 */
+.step-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px 8px 0 0;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+    border-bottom: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    margin-right: 2px;
+    white-space: nowrap;
+}
+.step-tab:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+.step-tab.active {
+    background: #ffffff;
+    color: #3b82f6;
+    border-color: #cbd5e1;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.03);
+    z-index: 1;
+}
+.step-tab i {
+    font-size: 10px;
+}
+.step-tab .feature-tag {
+    font-size: 8px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #3b82f6;
+    color: white;
+    margin-left: 4px;
+    font-weight: 600;
+}
+.step-tab.active .feature-tag {
+    background: #2563eb;
+}

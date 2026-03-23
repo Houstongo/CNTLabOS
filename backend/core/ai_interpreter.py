@@ -220,3 +220,115 @@ class AIInterpreter:
                 yield f"data: {data}\n\n"
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    # ==================== MSFU LLM 精炼 ====================
+
+    MSFU_REFINEMENT_SYSTEM = """你是碳纳米管领域的知识抽取专家，负责验证和精炼从文献中提取的语义事实单元（MSFU）。
+
+任务：审查并修正候选MSFU列表，确保其准确性和一致性。
+
+MSFU结构：
+- source_entity: 源实体（如 process:temperature）
+- relation_type: 关系类型（causes, increases, decreases, affects, promotes, inhibits）
+- target_entity: 目标实体（如 morphology:density）
+- condition: 条件约束（可选）
+- direction: 影响方向（positive/negative/neutral/unknown）
+
+审查原则：
+1. 实体分类：确保实体格式为 category:type（如 process:temperature, morphology:density）
+2. 关系类型：选择最准确的关系类型
+3. 方向一致性：direction应与relation_type一致
+4. 条件提取：只在确实存在条件约束时才添加
+5. 置信度：基于证据强度和明确程度评分（0-1）
+
+输出格式（JSON数组）：
+[
+  {
+    "valid": true/false,
+    "source_entity": "process:temperature",
+    "relation_type": "increases",
+    "target_entity": "morphology:density",
+    "condition": {...} 或 null,
+    "direction": "positive",
+    "confidence": 0.8,
+    "reasoning": "修改原因"
+  }
+]
+
+只返回有效（valid=true）的MSFU。"""
+
+    def refine_msfu_batch(
+        self,
+        candidates: list,
+        context: str,
+        temperature: float = 0.3
+    ) -> list:
+        """
+        使用LLM批量精炼MSFU候选
+
+        Args:
+            candidates: MSFU字典列表
+            context: 原始文本上下文
+            temperature: 温度参数
+
+        Returns:
+            精炼后的MSFU列表
+        """
+        if not candidates:
+            return []
+
+        # 构建prompt
+        candidate_texts = []
+        for i, msfu in enumerate(candidates):
+            candidate_texts.append(f"### 候选 {i+1}")
+            candidate_texts.append(f"- 内容: {msfu.get('content', '')[:200]}")
+            candidate_texts.append(f"- 源实体: {msfu.get('assertion', {}).get('source_entity', '')}")
+            candidate_texts.append(f"- 关系: {msfu.get('assertion', {}).get('relation_type', '')}")
+            candidate_texts.append(f"- 目标实体: {msfu.get('assertion', {}).get('target_entity', '')}")
+            candidate_texts.append(f"- 方向: {msfu.get('assertion', {}).get('direction', '')}")
+            cond = msfu.get('assertion', {}).get('condition')
+            if cond:
+                candidate_texts.append(f"- 条件: {cond}")
+            candidate_texts.append("")
+
+        user_prompt = f"""## 原始文本片段
+{context[:500]}
+
+## 候选MSFU列表
+{chr(10).join(candidate_texts)}
+
+请审查以上候选MSFU，返回JSON格式的精炼结果。"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self.MSFU_REFINEMENT_SYSTEM},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content or "[]"
+            results = json.loads(content)
+
+            # 验证结果格式
+            if not isinstance(results, list):
+                return candidates
+
+            return results
+
+        except (json.JSONDecodeError, Exception) as e:
+            # LLM调用失败，返回原始候选
+            return candidates
+
+    def refine_msfu_single(
+        self,
+        msfu_dict: dict,
+        context: str,
+        temperature: float = 0.3
+    ) -> dict:
+        """精炼单个MSFU"""
+        return self.refine_msfu_batch([msfu_dict], context, temperature)[0] if self.refine_msfu_batch([msfu_dict], context, temperature) else msfu_dict

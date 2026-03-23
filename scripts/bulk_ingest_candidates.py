@@ -8,6 +8,7 @@ Features:
 
 Usage examples:
   python scripts/bulk_ingest_candidates.py --dry-run --max-docs 20
+  python scripts/bulk_ingest_candidates.py --download-only --max-docs 20
   python scripts/bulk_ingest_candidates.py --max-docs 30 --rebuild-links
   python scripts/bulk_ingest_candidates.py --status-allow direct_pdf_candidate,oa_pdf
 """
@@ -79,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-type", default="paper")
     parser.add_argument("--theme", default="growth_mechanism")
     parser.add_argument("--is-core", action="store_true")
+    parser.add_argument("--download-only", action="store_true", help="Only download PDFs, do not ingest into KB.")
     parser.add_argument("--rebuild-links", action="store_true", help="Rebuild kb_links after ingestion.")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -529,6 +531,7 @@ def main() -> int:
     print(f"[bulk-ingest] kb_db={kb_db}")
     print(f"[bulk-ingest] selected={len(rows)} status_allow={sorted(allow_status)}")
     print(f"[bulk-ingest] dry_run={args.dry_run} retry={args.retry}")
+    print(f"[bulk-ingest] download_only={args.download_only}")
 
     for idx, row in enumerate(rows, start=1):
         signatures = build_signatures(row)
@@ -595,6 +598,42 @@ def main() -> int:
                 )
                 download_meta = dict(download_meta_raw)
                 downloaded_pdf_path = Path(str(download_meta.get("pdf_path") or pdf_path))
+
+            if args.download_only:
+                run_signatures.update(signatures)
+                historical_signatures.update(signatures)
+                title_key = normalize_title_key(row.title)
+                if title_key:
+                    existing_title_keys.add(title_key)
+                existing_file_keys.add(downloaded_pdf_path.stem.lower())
+                stats["downloaded_only"] += 1
+                append_jsonl(
+                    run_log,
+                    {
+                        **base_event,
+                        "result": "downloaded_only",
+                        "pdf_path": str(downloaded_pdf_path),
+                        "download_attempt": download_attempt,
+                        "download": download_meta,
+                    },
+                )
+                append_jsonl(
+                    success_ledger,
+                    {
+                        "ts": dt.datetime.now().isoformat(timespec="seconds"),
+                        "run_id": run_id,
+                        "title": row.title,
+                        "doi": row.doi,
+                        "source_url": row.source_url,
+                        "signatures": sorted(signatures),
+                        "doc_id": 0,
+                        "pdf_path": str(downloaded_pdf_path),
+                        "mode": "download_only",
+                    },
+                )
+                if args.sleep > 0:
+                    time.sleep(args.sleep)
+                continue
 
             (ingest_result_raw, ingest_attempt) = retry_call(
                 max_retry=args.retry,

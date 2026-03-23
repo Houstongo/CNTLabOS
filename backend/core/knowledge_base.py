@@ -179,10 +179,75 @@ class KnowledgeBaseService:
                     preferred_knowledge_types TEXT,
                     preferred_keywords TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS kb_msfu (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chunk_id INTEGER NOT NULL REFERENCES kb_chunks(id) ON DELETE CASCADE,
+                    doc_id INTEGER REFERENCES kb_documents(id) ON DELETE CASCADE,
+
+                    -- Assertion fields
+                    source_entity TEXT NOT NULL,
+                    relation_type TEXT NOT NULL,
+                    target_entity TEXT NOT NULL,
+
+                    -- Condition fields
+                    condition_param TEXT,
+                    condition_op TEXT,
+                    condition_value TEXT,
+                    condition_unit TEXT,
+
+                    -- Other fields
+                    direction TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    confidence REAL DEFAULT 0.5,
+                    extraction_method TEXT DEFAULT 'rule',
+
+                    -- Inherited from kb_links for compatibility
+                    process_factor TEXT,
+                    morphology_factor TEXT,
+                    performance_factor TEXT,
+                    effect_direction TEXT,
+                    mechanism_summary TEXT,
+                    evidence_text TEXT,
+
+                    -- Metadata
+                    doc_title TEXT,
+                    page_num INTEGER,
+
+                    created_at TEXT DEFAULT (datetime('now','localtime'))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_msfu_chunk_id ON kb_msfu(chunk_id);
+                CREATE INDEX IF NOT EXISTS idx_msfu_doc_id ON kb_msfu(doc_id);
+                CREATE INDEX IF NOT EXISTS idx_msfu_source ON kb_msfu(source_entity);
+                CREATE INDEX IF NOT EXISTS idx_msfu_target ON kb_msfu(target_entity);
+                CREATE INDEX IF NOT EXISTS idx_msfu_relation ON kb_msfu(relation_type);
+                CREATE INDEX IF NOT EXISTS idx_msfu_direction ON kb_msfu(direction);
+                CREATE INDEX IF NOT EXISTS idx_msfu_condition ON kb_msfu(condition_param, condition_op);
+
+                CREATE TABLE IF NOT EXISTS kb_conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    rag_context TEXT,
+                    sources TEXT,
+                    created_at TEXT DEFAULT (datetime('now','localtime'))
+                );
+
+                CREATE TABLE IF NOT EXISTS kb_qa_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT,
+                    question TEXT NOT NULL,
+                    icon TEXT,
+                    created_at TEXT DEFAULT (datetime('now','localtime'))
+                );
                 """
             )
             self._ensure_task_profile_columns(conn)
             self._ensure_link_columns(conn)
+            self._ensure_msfu_columns(conn)
+            self._ensure_conversation_columns(conn)
             conn.commit()
         finally:
             conn.close()
@@ -214,6 +279,30 @@ class KnowledgeBaseService:
             conn.execute("ALTER TABLE kb_links ADD COLUMN performance_factor TEXT")
         if "confidence" not in existing:
             conn.execute("ALTER TABLE kb_links ADD COLUMN confidence REAL DEFAULT 0.5")
+
+    @staticmethod
+    def _ensure_msfu_columns(conn):
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(kb_msfu)").fetchall()
+        }
+        if "doc_title" not in existing:
+            conn.execute("ALTER TABLE kb_msfu ADD COLUMN doc_title TEXT")
+        if "page_num" not in existing:
+            conn.execute("ALTER TABLE kb_msfu ADD COLUMN page_num INTEGER")
+        if "created_at" not in existing:
+            conn.execute("ALTER TABLE kb_msfu ADD COLUMN created_at TEXT DEFAULT (datetime('now','localtime'))")
+
+    @staticmethod
+    def _ensure_conversation_columns(conn):
+        # 确保对话表和索引存在
+        # 创建索引（如果不存在）
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_session ON kb_conversations(session_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_created ON kb_conversations(created_at)")
+        except sqlite3.OperationalError:
+            # 如果表还不存在，会在 init_schema 中创建
+            pass
 
     def bootstrap_task_profiles(self):
         conn = self._connect()
@@ -302,6 +391,63 @@ class KnowledgeBaseService:
                             relation.get("evidence_text"),
                         ),
                     )
+
+                # MSFU提取（如果kb_msfu表存在）
+                try:
+                    from .msfu_extractor import MSFUExtractor, MSFUMetadata
+
+                    msfu_metadata = MSFUMetadata(
+                        doc_id=str(doc_id),
+                        chunk_id=str(index),
+                        doc_title=title,
+                        doc_type=source_type
+                    )
+                    msfu_extractor = MSFUExtractor(use_llm_refinement=False)
+                    msfus = msfu_extractor.extract(chunk, msfu_metadata, title)
+
+                    for msfu in msfus:
+                        row_data = msfu.to_db_row()
+                        cursor.execute(
+                            """
+                            INSERT INTO kb_msfu (
+                                chunk_id, doc_id, source_entity, relation_type, target_entity,
+                                condition_param, condition_op, condition_value, condition_unit,
+                                direction, content, confidence, extraction_method,
+                                process_factor, morphology_factor, performance_factor,
+                                effect_direction, mechanism_summary, evidence_text,
+                                doc_title, page_num
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                index,
+                                doc_id,
+                                row_data["source_entity"],
+                                row_data["relation_type"],
+                                row_data["target_entity"],
+                                row_data["condition_param"],
+                                row_data["condition_op"],
+                                row_data["condition_value"],
+                                row_data["condition_unit"],
+                                row_data["direction"],
+                                row_data["content"],
+                                row_data["confidence"],
+                                row_data["extraction_method"],
+                                row_data["process_factor"],
+                                row_data["morphology_factor"],
+                                row_data["performance_factor"],
+                                row_data["effect_direction"],
+                                row_data["mechanism_summary"],
+                                row_data["evidence_text"],
+                                title,
+                                None
+                            )
+                        )
+                except ImportError:
+                    # msfu_extractor模块不可用，跳过
+                    pass
+                except Exception:
+                    # MSFU提取失败，不影响正常流程
+                    pass
             conn.commit()
         finally:
             conn.close()

@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import argparse
+import sqlite3
 
 # 设置环境路径
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -162,6 +163,166 @@ def kb_search(query, task_name=None, top_k=5):
         print(f"Knowledge-base search failed: {e}")
 
 
+def msfu_migrate(clear=False):
+    """迁移MSFU表结构（添加kb_msfu表）"""
+    print("正在迁移MSFU表结构...")
+    try:
+        from backend.core.knowledge_rag import RAGRetriever
+
+        kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
+        retriever = RAGRetriever(db_path, knowledge_db_path=kb_path)
+
+        # 重新初始化schema会自动创建kb_msfu表
+        retriever.knowledge_base.init_schema()
+
+        print("MSFU表结构迁移完成")
+        stats = get_msfu_stats_internal(kb_path)
+        print(f"MSFU统计: 总数={stats.get('total_msfus', 0)}, 平均置信度={stats.get('average_confidence', 0)}")
+    except Exception as e:
+        print(f"MSFU迁移失败: {e}")
+
+
+def msfu_extract(doc_id=None, reextract=False, use_llm=False, provider=None, api_key=None):
+    """提取MSFU"""
+    print(f"正在提取MSFU (doc_id={doc_id}, reextract={reextract}, use_llm={use_llm})...")
+    try:
+        from backend.core.msfu_extractor import MSFUExtractor, MSFUMetadata, store_msfus_in_db, get_msfu_stats
+        from backend.core.knowledge_rag import RAGRetriever
+
+        db_path = os.path.join(PROJECT_ROOT, "database", "cnta_experiments.sqlite")
+        kb_path = os.path.join(PROJECT_ROOT, "database", "cnta_knowledge_base.sqlite")
+        retriever = RAGRetriever(db_path, knowledge_db_path=kb_path)
+
+        # 初始化 LLM client（如果启用）
+        llm_client = None
+        if use_llm and provider and api_key:
+            from backend.core.ai_interpreter import AIInterpreter
+            llm_client = AIInterpreter(provider=provider, api_key=api_key)
+            print(f"已启用 LLM 精炼: provider={provider}")
+        elif use_llm:
+            print("警告: --use-llm 需要同时指定 --provider 和 --api-key，将使用纯规则提取")
+
+        if doc_id:
+            # 处理单个文档
+            conn = sqlite3.connect(kb_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, title, source_type FROM kb_documents WHERE id = ?",
+                (doc_id,)
+            )
+            doc_row = cursor.fetchone()
+            if not doc_row:
+                print(f"文档 {doc_id} 不存在")
+                return
+
+            doc_id, title, source_type = doc_row
+
+            if reextract:
+                cursor.execute("DELETE FROM kb_msfu WHERE doc_id = ?", (doc_id,))
+
+            cursor.execute(
+                "SELECT id, text FROM kb_chunks WHERE doc_id = ? ORDER BY chunk_index",
+                (doc_id,)
+            )
+            chunks = cursor.fetchall()
+            conn.close()
+
+            extractor = MSFUExtractor(llm_client=llm_client, use_llm_refinement=use_llm)
+            total_count = 0
+
+            for chunk_id, chunk_text in chunks:
+                metadata = MSFUMetadata(
+                    doc_id=str(doc_id),
+                    chunk_id=str(chunk_id),
+                    doc_title=title,
+                    doc_type=source_type
+                )
+                msfus = extractor.extract(chunk_text, metadata, title)
+                stored_ids = store_msfus_in_db(msfus, kb_path, doc_id, chunk_id)
+                total_count += len(stored_ids)
+                print(f"  Chunk {chunk_id}: 提取 {len(msfus)} 个MSFU")
+
+            print(f"文档 {title} ({doc_id}): 共提取 {total_count} 个MSFU")
+
+        else:
+            # 处理所有未提取MSFU的文档
+            conn = sqlite3.connect(kb_path)
+            cursor = conn.cursor()
+
+            # 找出没有MSFU的文档
+            if reextract:
+                cursor.execute("""
+                    SELECT d.id, d.title, d.source_type, COUNT(c.id) as chunk_count
+                    FROM kb_documents d
+                    LEFT JOIN kb_chunks c ON c.doc_id = d.id
+                    GROUP BY d.id
+                """)
+            else:
+                cursor.execute("""
+                    SELECT d.id, d.title, d.source_type, COUNT(c.id) as chunk_count
+                    FROM kb_documents d
+                    LEFT JOIN kb_chunks c ON c.doc_id = d.id
+                    LEFT JOIN kb_msfu m ON m.doc_id = d.id
+                    GROUP BY d.id
+                    HAVING m.id IS NULL
+                """)
+            docs = cursor.fetchall()
+            conn.close()
+
+            extractor = MSFUExtractor(llm_client=llm_client, use_llm_refinement=use_llm)
+            total_count = 0
+
+            for doc_id, title, source_type, chunk_count in docs:
+                print(f"处理文档: {title} ({doc_id}), chunks: {chunk_count}")
+
+                conn = sqlite3.connect(kb_path)
+                cursor = conn.cursor()
+
+                if reextract:
+                    cursor.execute("DELETE FROM kb_msfu WHERE doc_id = ?", (doc_id,))
+                    conn.commit()
+
+                cursor.execute(
+                    "SELECT id, text FROM kb_chunks WHERE doc_id = ? ORDER BY chunk_index",
+                    (doc_id,)
+                )
+                chunks = cursor.fetchall()
+                conn.close()  # 先关闭读取连接
+
+                for chunk_id, chunk_text in chunks:
+                    metadata = MSFUMetadata(
+                        doc_id=str(doc_id),
+                        chunk_id=str(chunk_id),
+                        doc_title=title,
+                        doc_type=source_type
+                    )
+                    msfus = extractor.extract(chunk_text, metadata, title)
+                    stored_ids = store_msfus_in_db(msfus, kb_path, doc_id, chunk_id)
+                    total_count += len(stored_ids)
+
+            print(f"共提取 {total_count} 个MSFU")
+
+        # 显示统计
+        stats = get_msfu_stats(kb_path)
+        print(f"\nMSFU统计:")
+        print(f"  总数: {stats.get('total_msfus', 0)}")
+        print(f"  平均置信度: {stats.get('average_confidence', 0)}")
+        print(f"  按关系类型: {stats.get('by_relation_type', {})}")
+        print(f"  按方向: {stats.get('by_direction', {})}")
+
+    except Exception as e:
+        print(f"MSFU提取失败: {e}")
+
+
+def get_msfu_stats_internal(kb_path):
+    """获取MSFU统计（内部函数）"""
+    try:
+        from backend.core.msfu_extractor import get_msfu_stats
+        return get_msfu_stats(kb_path)
+    except:
+        return {"total_msfus": 0, "average_confidence": 0}
+
+
 def main():
     parser = argparse.ArgumentParser(description="CNTA Project 统一管理工具")
     subparsers = parser.add_subparsers(dest="command", help="子命令")
@@ -197,6 +358,17 @@ def main():
     kb_search_parser.add_argument("--task-name", type=str, default=None, help="Task-aware retrieval profile")
     kb_search_parser.add_argument("--top-k", type=int, default=5, help="Maximum number of results")
 
+    # MSFU管理
+    msfu_migrate_parser = subparsers.add_parser("msfu-migrate", help="迁移MSFU表结构")
+    msfu_migrate_parser.add_argument("--clear", action="store_true", help="清空现有MSFU数据")
+
+    msfu_extract_parser = subparsers.add_parser("msfu-extract", help="提取MSFU")
+    msfu_extract_parser.add_argument("--doc-id", type=int, default=None, help="只处理指定文档")
+    msfu_extract_parser.add_argument("--reextract", action="store_true", help="重新提取已处理文档")
+    msfu_extract_parser.add_argument("--use-llm", action="store_true", help="使用LLM精炼")
+    msfu_extract_parser.add_argument("--provider", type=str, default=None, help="LLM提供商 (glm/deepseek)")
+    msfu_extract_parser.add_argument("--api-key", type=str, default=None, help="API密钥")
+
     args = parser.parse_args()
 
     if args.command == "run-backend":
@@ -225,6 +397,16 @@ def main():
             query=getattr(args, "query"),
             task_name=getattr(args, "task_name", None),
             top_k=getattr(args, "top_k", 5),
+        )
+    elif args.command == "msfu-migrate":
+        msfu_migrate(clear=getattr(args, "clear", False))
+    elif args.command == "msfu-extract":
+        msfu_extract(
+            doc_id=getattr(args, "doc_id", None),
+            reextract=getattr(args, "reextract", False),
+            use_llm=getattr(args, "use_llm", False),
+            provider=getattr(args, "provider", None),
+            api_key=getattr(args, "api_key", None),
         )
     elif args.command == "analyze":
         analyze_batch(

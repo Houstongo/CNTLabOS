@@ -1,0 +1,41 @@
+/* 基础样式与 CSS 变量 */
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
+
+:root {
+    --sb-w: 260px;
+    --det-w: 520px;
+    --batch-col-w: 0px;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f4f7fa;
+    color: #3f4254;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    --sidebar-width: var(--sb-w);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+body.sb-collapsed {
+    --sidebar-width: 68px;
+}
+
+/* 动画 */
+@keyframes pulse-glow {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+}
+
+@keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* 批量模式变量 */
+.batch-active {
+    --batch-col-w: 44px !important;
+}

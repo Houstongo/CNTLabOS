@@ -3,6 +3,7 @@ import json
 import re
 import sqlite3
 import numpy as np
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +15,10 @@ from backend.core.ai_interpreter import AIInterpreter
 from backend.core.knowledge_rag import RAGRetriever
 from backend.core.calibrator import calibrator
 from backend.core.algorithm_visualizer import AlgorithmVisualizer
+from backend.core.knowledge_driven_predictor import KnowledgeDrivenPredictor
+from backend.core.tccer_retriever import TCCERRetriever
+from backend.core.msfu_extractor import MSFUExtractor, MSFUMetadata, store_msfus_in_db, get_msfu_stats
+from backend.core.qa_service import QAService
 
 app = FastAPI(title="CNTA ML Project API")
 
@@ -31,6 +36,15 @@ IMAGE_ROOT = r'd:\CNTDATA'
 
 # 初始化 RAG 检索器（自动建表）
 rag_retriever = RAGRetriever(DB_PATH, knowledge_db_path=KB_DB_PATH)
+
+# 初始化 TCCER 检索器
+tccer_retriever = TCCERRetriever(kb_db_path=KB_DB_PATH)
+
+# 初始化知识驱动预测器
+knowledge_predictor = KnowledgeDrivenPredictor(DB_PATH, rag_retriever)
+
+# 初始化QA服务
+qa_service = QAService(kb_db_path=KB_DB_PATH)
 
 # 挂载图片目录，让前端能访问
 if os.path.exists(IMAGE_ROOT):
@@ -1080,6 +1094,171 @@ async def chat_with_ai(
 
 
 # ─────────────────────────────────────────────────────────────────── #
+#  QA Chat Assistant Endpoints
+# ─────────────────────────────────────────────────────────────────── #
+
+class QAChatRequest(BaseModel):
+    """QA对话请求"""
+    message: str
+    session_id: Optional[str] = None
+    rag_enabled: bool = True
+    top_k: int = 5
+    task_name: Optional[str] = "科研问答"
+
+
+@app.post("/api/qa/chat")
+async def qa_chat(
+    req: QAChatRequest,
+    x_provider: str = Header(default="glm"),
+    x_api_key: str = Header(default=""),
+    x_model: Optional[str] = Header(default=None),
+    x_temperature: Optional[str] = Header(default="0.5"),
+):
+    """
+    QA专用对话接口，自动检索RAG知识库并保存对话历史
+
+    SSE响应格式：
+    - type: "content" - 回答内容
+    - type: "sources" - 引用来源
+    - type: "done" - 对话完成
+    """
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="请提供 X-Api-Key")
+
+    # 生成或获取会话ID
+    session_id = req.session_id or f"qa_{int(datetime.now().timestamp())}"
+
+    # 保存用户消息
+    qa_service.save_conversation(session_id, "user", req.message)
+
+    # 检索RAG知识
+    rag_context = None
+    sources = []
+
+    if req.rag_enabled:
+        retrieval_result = rag_retriever.retrieve_for_qa(
+            query=req.message,
+            task_name=req.task_name,
+            top_k=req.top_k,
+        )
+        rag_context = {
+            "context_summary": retrieval_result["context_summary"],
+            "retrieval_stats": retrieval_result["retrieval_stats"],
+        }
+        sources = retrieval_result["pdf_passages"] + retrieval_result["knowledge_links"]
+
+    # 获取对话历史
+    history = qa_service.get_conversations(session_id, limit=20)
+    history_list = [
+        {"role": conv["role"], "content": conv["content"]}
+        for conv in history
+    ]
+
+    # 构建LLM上下文
+    llm_context = None
+    if rag_context:
+        llm_context = {
+            "rag_enabled": True,
+            "context_summary": rag_context["context_summary"],
+        }
+
+    # 调用LLM
+    interpreter = _get_interpreter(x_provider, x_api_key, x_model)
+    temperature = float(x_temperature or 0.5)
+
+    def event_stream():
+        assistant_response = []
+
+        def stream_with_sources():
+            # 流式输出内容
+            for chunk in interpreter.chat_stream(
+                history=history_list,
+                user_message=req.message,
+                context=llm_context,
+                temperature=temperature,
+            ):
+                data = json.loads(chunk.replace("data: ", "").replace("\n\n", ""))
+                if data.get("type") == "content":
+                    assistant_response.append(data.get("text", ""))
+                    yield chunk
+                elif data.get("type") == "done":
+                    # 发送完成信号
+                    yield chunk
+                    break
+
+        yield from _stream_with_error_boundary(stream_with_sources)
+
+        # 发送引用来源
+        if sources:
+            sources_data = json.dumps(
+                {"type": "sources", "sources": sources},
+                ensure_ascii=False,
+            )
+            yield f"data: {sources_data}\n\n"
+
+        # 保存助手响应
+        assistant_text = "".join(assistant_response)
+        if assistant_text:
+            qa_service.save_conversation(
+                session_id,
+                "assistant",
+                assistant_text,
+                rag_context=rag_context,
+                sources=sources,
+            )
+
+        # 返回会话ID（新会话时需要）
+        yield f"data: {json.dumps({'type': 'done', 'session_id': session_id}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/qa/history")
+async def get_qa_history(session_id: str, limit: int = 50):
+    """获取对话历史"""
+    conversations = qa_service.get_conversations(session_id, limit)
+    return {"session_id": session_id, "conversations": conversations}
+
+
+@app.delete("/api/qa/session/{session_id}")
+async def clear_qa_session(session_id: str):
+    """清空会话"""
+    deleted_count = qa_service.clear_session(session_id)
+    return {"status": "success", "deleted_count": deleted_count}
+
+
+@app.get("/api/qa/templates")
+async def get_qa_templates():
+    """获取预设问题模板"""
+    templates = qa_service.get_templates()
+    return {"templates": templates}
+
+
+@app.get("/api/qa/sessions")
+async def list_qa_sessions():
+    """获取所有会话列表"""
+    sessions = qa_service.get_session_list()
+    return {"sessions": sessions}
+
+
+@app.post("/api/qa/export")
+async def export_qa_conversation(
+    session_id: str,
+    format: str = "markdown",
+):
+    """导出对话历史"""
+    try:
+        content = qa_service.export_conversation(session_id, format)
+        return {
+            "status": "success",
+            "content": content,
+            "format": format,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────── #
 #  RAG 文献管理 Endpoints
 # ─────────────────────────────────────────────────────────────────── #
 
@@ -1094,6 +1273,126 @@ async def upload_rag_document(file: UploadFile = File(...)):
         return {"status": "success", **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF处理失败: {e}")
+
+
+# ------------------------------------------------------------------ #
+#  知识驱动预测 API
+# ------------------------------------------------------------------ #
+
+class PredictionRequest(BaseModel):
+    """预测请求"""
+    source: str = "ZZY"
+    growth_temp: Optional[float] = None
+    growth_time: Optional[float] = None
+    actual_temp: Optional[float] = None
+    membrane_pos_cm: Optional[float] = None
+    fe_thickness: Optional[float] = None
+    al2o3_thickness: Optional[float] = None
+    ar_flow: Optional[float] = None
+    h2_flow: Optional[float] = None
+    c2h4_flow: Optional[float] = None
+    anneal_temp: Optional[float] = None
+    anneal_time: Optional[float] = None
+    target: str = "diameter"  # diameter, density, alignment, curvature
+    query: Optional[str] = None  # 用于RAG检索
+
+
+@app.post("/api/predict")
+async def predict_features(req: PredictionRequest):
+    """
+    知识驱动预测接口
+    结合RAG文献、专家知识和相似实验进行预测
+    """
+    try:
+        # 构造参数字典
+        params = {
+            'source': req.source,
+            'growth_temp': req.growth_temp,
+            'growth_time': req.growth_time,
+            'actual_temp': req.actual_temp,
+            'membrane_pos_cm': req.membrane_pos_cm,
+            'fe_thickness': req.fe_thickness,
+            'al2o3_thickness': req.al2o3_thickness,
+            'ar_flow': req.ar_flow,
+            'h2_flow': req.h2_flow,
+            'c2h4_flow': req.c2h4_flow,
+            'anneal_temp': req.anneal_temp,
+            'anneal_time': req.anneal_time,
+        }
+
+        # 执行预测
+        result = knowledge_predictor.predict(
+            params=params,
+            target=req.target,
+            query=req.query,
+            use_knowledge=True
+        )
+
+        return {
+            "status": "success",
+            "prediction": {
+                "target": req.target,
+                "predicted_value": result.predicted_value,
+                "confidence": result.confidence,
+                "knowledge_baseline": result.knowledge_baseline,
+                "ml_residual": result.ml_residual,
+            },
+            "evidence": {
+                "similar_experiments": result.similar_experiments,
+                "rag_evidence": result.rag_evidence,
+                "physical_constraints": result.physical_constraints,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"预测失败: {e}")
+
+
+class BatchPredictionRequest(BaseModel):
+    """批量预测请求"""
+    params_list: List[Dict[str, Any]]
+    target: str = "diameter"
+    query: Optional[str] = None
+
+
+@app.post("/api/predict/batch")
+async def batch_predict_features(req: BatchPredictionRequest):
+    """
+    批量预测接口
+    """
+    try:
+        results = knowledge_predictor.batch_predict(
+            params_list=req.params_list,
+            target=req.target,
+            query=req.query
+        )
+
+        return {
+            "status": "success",
+            "predictions": [
+                {
+                    "predicted_value": r.predicted_value,
+                    "confidence": r.confidence,
+                    "knowledge_baseline": r.knowledge_baseline,
+                    "ml_residual": r.ml_residual,
+                }
+                for r in results
+            ],
+            "count": len(results)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"批量预测失败: {e}")
+
+
+@app.post("/api/ml/train")
+async def train_ml_models(source: Optional[str] = None):
+    """
+    训练机器学习模型
+    """
+    try:
+        knowledge_predictor.train_models(source=source)
+        return {"status": "success", "message": "模型训练完成"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"训练失败: {e}")
 
 
 @app.get("/api/rag/documents")
@@ -1162,12 +1461,185 @@ async def search_rag_links(req: RAGSearchRequest):
 
 
 # ========================================================================
+# TCCER (Task-Constrained Chain Evidence Retrieval) API
+# ========================================================================
+
+class TCCERQueryRequest(BaseModel):
+    query: str
+    task_name: Optional[str] = None
+    max_hops: int = 3
+    min_confidence: float = 0.4
+
+
+@app.post("/api/tccer/query")
+async def tccer_query(req: TCCERQueryRequest):
+    """
+    TCCER约束链式证据检索
+
+    返回主链、辅助链、冲突链等结构化证据
+    """
+    try:
+        result = tccer_retriever.retrieve(
+            query=req.query,
+            task_name=req.task_name
+        )
+        return result.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TCCER检索失败: {str(e)}")
+
+
+# ========================================================================
+# MSFU (Minimal Semantic Fact Unit) API
+# ========================================================================
+
+class MSFUExtractRequest(BaseModel):
+    text: str
+    doc_title: str = ""
+    use_llm_refinement: bool = False
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@app.post("/api/msfu/extract")
+async def msfu_extract(req: MSFUExtractRequest):
+    """
+    手动触发MSFU提取
+
+    从给定文本中提取语义事实单元
+    """
+    try:
+        metadata = MSFUMetadata(
+            doc_id="manual",
+            chunk_id="manual",
+            doc_title=req.doc_title or "Manual Extraction",
+            doc_type="manual"
+        )
+
+        # 设置LLM客户端
+        llm_client = None
+        if req.use_llm_refinement and req.provider and req.api_key:
+            llm_client = AIInterpreter(provider=req.provider, api_key=req.api_key)
+
+        extractor = MSFUExtractor(
+            llm_client=llm_client,
+            use_llm_refinement=req.use_llm_refinement
+        )
+
+        msfus = extractor.extract(req.text, metadata, req.doc_title)
+
+        return {
+            "status": "success",
+            "count": len(msfus),
+            "msfus": [m.to_dict() for m in msfus]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MSFU提取失败: {str(e)}")
+
+
+@app.get("/api/msfu/stats")
+async def msfu_stats():
+    """
+    获取MSFU统计信息
+
+    包括总数、按关系类型/方向/提取方法的分布、平均置信度等
+    """
+    try:
+        stats = get_msfu_stats(KB_DB_PATH)
+        return {"status": "success", "stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取MSFU统计失败: {str(e)}")
+
+
+class MSFUDocExtractRequest(BaseModel):
+    doc_id: int
+    use_llm_refinement: bool = False
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@app.post("/api/msfu/reextract-doc")
+async def msfu_reextract_doc(req: MSFUDocExtractRequest):
+    """
+    对已有文档重新提取MSFU
+
+    清除该文档的MSFU后重新提取
+    """
+    try:
+        conn = sqlite3.connect(KB_DB_PATH)
+        cursor = conn.cursor()
+
+        # 获取文档信息
+        cursor.execute(
+            "SELECT id, title, source_type FROM kb_documents WHERE id = ?",
+            (req.doc_id,)
+        )
+        doc_row = cursor.fetchone()
+        if not doc_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        doc_id, title, source_type = doc_row
+
+        # 获取chunks
+        cursor.execute(
+            "SELECT id, text FROM kb_chunks WHERE doc_id = ? ORDER BY chunk_index",
+            (doc_id,)
+        )
+        chunks = cursor.fetchall()
+
+        # 删除旧MSFU
+        cursor.execute("DELETE FROM kb_msfu WHERE doc_id = ?", (doc_id,))
+
+        # 设置LLM客户端
+        llm_client = None
+        if req.use_llm_refinement and req.provider and req.api_key:
+            llm_client = AIInterpreter(provider=req.provider, api_key=req.api_key)
+
+        extractor = MSFUExtractor(
+            llm_client=llm_client,
+            use_llm_refinement=req.use_llm_refinement
+        )
+
+        # 提取新MSFU
+        total_count = 0
+        for chunk_id, chunk_text in chunks:
+            metadata = MSFUMetadata(
+                doc_id=str(doc_id),
+                chunk_id=str(chunk_id),
+                doc_title=title,
+                doc_type=source_type
+            )
+            msfus = extractor.extract(chunk_text, metadata, title)
+            stored_ids = store_msfus_in_db(msfus, KB_DB_PATH, doc_id, chunk_id)
+            total_count += len(stored_ids)
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "success",
+            "doc_id": doc_id,
+            "doc_title": title,
+            "chunks_processed": len(chunks),
+            "msfu_count": total_count
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重新提取MSFU失败: {str(e)}")
+
+
+# ========================================================================
 # 算法可视化API
 # ========================================================================
 
 class VisualizationResponse(BaseModel):
-    steps: List[Dict[str, Any]]
-    total_steps: int
+    backend: Optional[str] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+    total_steps: Optional[int] = None
+    phases: Optional[List[Dict[str, Any]]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    comparison: Optional[Dict[str, Any]] = None
 
 
 def prepare_visualization_image(img_gray: np.ndarray, max_side: int = 1280) -> np.ndarray:
@@ -1185,8 +1657,25 @@ def prepare_visualization_image(img_gray: np.ndarray, max_side: int = 1280) -> n
 
 
 @app.get("/api/images/{image_id}/visualize", response_model=VisualizationResponse)
-async def visualize_image_analysis(image_id: int):
-    """获取图像分析的可视化步骤"""
+async def visualize_image_analysis(
+    image_id: int,
+    backend: str = "threshold",
+    device: str = "cpu",
+    checkpoint: str = None,
+    tile_size: int = 512,
+    overlap: int = 64,
+    seg_threshold: float = 0.5
+):
+    """获取图像分析的可视化步骤
+
+    Args:
+        backend: 分割后端，可选值 "threshold"(传统阈值) | "cntsegnet"(深度学习) | "both"(对比查看)
+        device: CNTSegNet设备，"cpu" 或 "cuda"
+        checkpoint: CNTSegNet模型权重路径
+        tile_size: 分块大小
+        overlap: 分块重叠像素
+        seg_threshold: 分割阈值
+    """
     # 查询图像路径
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1214,14 +1703,123 @@ async def visualize_image_analysis(image_id: int):
         raise HTTPException(status_code=400, detail="Failed to read image")
     img = prepare_visualization_image(img, max_side=1280)
 
-    # 生成可视化步骤
-    visualizer = AlgorithmVisualizer(magnification=mag)
-    visualizer.visualize_extraction(img)
+    # 定义阶段配置
+    threshold_phases = [
+        {"name": "图像预处理", "steps": [0, 1, 2, 3]},
+        {"name": "基础特征", "steps": [4, 5, 6, 7]},
+        {"name": "高级特征", "steps": [8, 9, 10]}
+    ]
 
-    return {
-        "steps": visualizer.get_steps(),
-        "total_steps": len(visualizer.get_steps())
-    }
+    cntsegnet_phases = [
+        {"name": "模型初始化", "steps": [0, 1, 2]},
+        {"name": "分块推理", "steps": [3, 4, 5]},
+        {"name": "特征计算", "steps": [6, 7, 8, 9, 10]}
+    ]
+
+    # 根据backend参数返回不同结果
+    if backend == "threshold":
+        # 传统阈值分割
+        visualizer = AlgorithmVisualizer(magnification=mag)
+        visualizer.visualize_extraction(img)
+        return {
+            "backend": "threshold",
+            "steps": visualizer.get_steps(),
+            "total_steps": len(visualizer.get_steps()),
+            "phases": threshold_phases
+        }
+
+    elif backend == "cntsegnet":
+        # CNTSegNet深度学习分割
+        try:
+            from backend.core.cntsegnet_visualizer import CNTSegNetVisualizer
+            visualizer = CNTSegNetVisualizer(
+                magnification=mag,
+                device=device,
+                checkpoint_path=checkpoint,
+                tile_size=tile_size,
+                overlap=overlap,
+                seg_threshold=seg_threshold
+            )
+            visualizer.visualize_extraction(img)
+            return {
+                "backend": "cntsegnet",
+                "steps": visualizer.get_steps(),
+                "total_steps": len(visualizer.get_steps()),
+                "phases": cntsegnet_phases,
+                "metadata": {
+                    "model_info": visualizer.get_model_info(),
+                    "inference_time": visualizer.get_inference_time(),
+                    "tile_config": {"tile_size": tile_size, "overlap": overlap}
+                }
+            }
+        except Exception as e:
+            # CNTSegNet失败，降级到阈值分割
+            print(f"CNTSegNet failed, falling back to threshold: {e}")
+            visualizer = AlgorithmVisualizer(magnification=mag)
+            visualizer.visualize_extraction(img)
+            return {
+                "backend": "threshold",
+                "steps": visualizer.get_steps(),
+                "total_steps": len(visualizer.get_steps()),
+                "phases": threshold_phases,
+                "metadata": {"fallback_reason": f"CNTSegNet failed: {str(e)}"}
+            }
+
+    elif backend == "both":
+        # 对比查看模式
+        threshold_viz = AlgorithmVisualizer(magnification=mag)
+        threshold_viz.visualize_extraction(img)
+
+        try:
+            from backend.core.cntsegnet_visualizer import CNTSegNetVisualizer
+            cntsegnet_viz = CNTSegNetVisualizer(
+                magnification=mag,
+                device=device,
+                checkpoint_path=checkpoint,
+                tile_size=tile_size,
+                overlap=overlap,
+                seg_threshold=seg_threshold
+            )
+            cntsegnet_viz.visualize_extraction(img)
+
+            return {
+                "backend": "both",
+                "comparison": {
+                    "threshold": {
+                        "steps": threshold_viz.get_steps(),
+                        "total_steps": len(threshold_viz.get_steps()),
+                        "phases": threshold_phases
+                    },
+                    "cntsegnet": {
+                        "steps": cntsegnet_viz.get_steps(),
+                        "total_steps": len(cntsegnet_viz.get_steps()),
+                        "phases": cntsegnet_phases
+                    },
+                    "metadata": {
+                        "model_info": cntsegnet_viz.get_model_info(),
+                        "inference_time": cntsegnet_viz.get_inference_time(),
+                        "tile_config": {"tile_size": tile_size, "overlap": overlap}
+                    }
+                }
+            }
+        except Exception as e:
+            # CNTSegNet失败，只返回阈值分割
+            print(f"CNTSegNet failed in both mode: {e}")
+            return {
+                "backend": "both",
+                "comparison": {
+                    "threshold": {
+                        "steps": threshold_viz.get_steps(),
+                        "total_steps": len(threshold_viz.get_steps()),
+                        "phases": threshold_phases
+                    },
+                    "cntsegnet": None,
+                    "metadata": {"fallback_reason": f"CNTSegNet failed: {str(e)}"}
+                }
+            }
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid backend parameter: {backend}")
 
 
 def _trace_skeleton(mask, start, end):

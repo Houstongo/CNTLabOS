@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA页面布局测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { height: 100vh; overflow: hidden; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="qa-page" class="flex-1 overflow-hidden bg-slate-50/50">
+        <div class="grid grid-cols-[280px_minmax(0,1fr)] h-full gap-0">
+            <!-- 侧边栏 -->
+            <div class="bg-white border-r border-slate-200 flex flex-col h-full">
+                <!-- 侧边栏头部 -->
+                <div class="p-4 border-b border-slate-100">
+                    <h3 class="text-lg font-black text-slate-800 mb-2">科研问答助手</h3>
+                    <p class="text-xs text-slate-500">基于RAG知识库的智能问答</p>
+                </div>
+
+                <!-- 新对话按钮 -->
+                <div class="p-4">
+                    <button class="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-plus"></i> 新对话
+                    </button>
+                </div>
+
+                <!-- 预设问题 -->
+                <div class="flex-1 overflow-y-auto px-4 pb-4">
+                    <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">快速提问</div>
+                    <div id="qa-templates" class="space-y-2">
+                        <div class="text-center text-slate-300 py-4">
+                            <i class="fas fa-spinner fa-spin"></i> 加载中...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 会话历史 -->
+                <div class="border-t border-slate-100 p-4 max-h-[200px] overflow-y-auto">
+                    <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">历史对话</div>
+                    <div id="qa-sessions" class="space-y-1">
+                        <div class="text-center text-slate-400 py-4 text-xs">
+                            暂无历史对话
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主对话区域 -->
+            <div class="flex flex-col h-full bg-slate-50">
+                <!-- 对话头部 -->
+                <div class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-robot text-indigo-600"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-slate-800">科研问答助手</div>
+                            <div class="text-[10px] text-slate-500">已加载知识库：<span id="qa-kb-status">59 篇文献</span></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="h-8 px-3 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all">
+                            <i class="fas fa-file-export mr-1"></i> 导出
+                        </button>
+                        <button class="h-8 px-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-all">
+                            <i class="fas fa-trash mr-1"></i> 清空
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 对话消息区 -->
+                <div id="qa-messages" class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <!-- 欢迎消息 -->
+                    <div class="flex justify-start">
+                        <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm max-w-[80%]">
+                            <div class="text-sm text-slate-700">
+                                <p class="mb-2">你好！我是科研问答助手，可以帮助你：</p>
+                                <ul class="list-disc list-inside space-y-1 text-xs text-slate-600">
+                                    <li>基于文献和专家知识回答问题</li>
+                                    <li>提供准确的引用来源</li>
+                                    <li>辅助工艺参数优化</li>
+                                    <li>解释形貌特征含义</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 输入区域 -->
+                <div class="bg-white border-t border-slate-200 p-4 shrink-0">
+                    <div class="flex gap-3">
+                        <div class="flex-1 relative">
+                            <textarea id="qa-input"
+                                class="w-full h-14 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="输入你的问题..."></textarea>
+                        </div>
+                        <button class="h-14 w-14 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 测试加载预设问题
+        async function loadTemplates() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/qa/templates');
+                const data = await response.json();
+                console.log('预设问题:', data);
+
+                const container = document.getElementById('qa-templates');
+                if (data.templates && data.templates.length > 0) {
+                    container.innerHTML = data.templates.map(t => `
+                        <div class="bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition-all">
+                            <div class="text-xs font-bold text-slate-500 mb-1">${t.category || '问题'}</div>
+                            <div class="text-sm">${t.question}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('加载预设问题失败:', error);
+            }
+        }
+
+        // 页面加载时执行
+        window.onload = loadTemplates;
+    </script>
+</body>
+</html>
