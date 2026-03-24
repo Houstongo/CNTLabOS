@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模块加载测试</title>
+</head>
+<body>
+    <h1>CNTA 前端模块加载测试</h1>
+    <div id="test-results"></div>
+
+    <script type="module">
+        const results = document.getElementById('test-results');
+
+        async function testModule(name, path) {
+            try {
+                const module = await import(path);
+                const exports = Object.keys(module).filter(k => k !== 'default');
+                const hasDefault = 'default' in module;
+                results.innerHTML += `<p style="color:green">✅ ${name}: 导出 [${exports.join(', ') || '无'}], 默认导出: ${hasDefault}</p>`;
+                return true;
+            } catch (err) {
+                results.innerHTML += `<p style="color:red">❌ ${name}: ${err.message}</p>`;
+                return false;
+            }
+        }
+
+        async function runTests() {
+            results.innerHTML = '<h2>测试结果：</h2>';
+
+            const tests = [
+                ['Core Constants', '../../frontend/core/constants.js'],
+                ['Core Events', '../../frontend/core/events.js'],
+                ['Core Store', '../../frontend/core/store.js'],
+                ['Utils DOM', '../../frontend/utils/dom.js'],
+                ['Utils Format', '../../frontend/utils/format.js'],
+                ['Utils Stream', '../../frontend/utils/stream.js'],
+                ['Config AI', '../../frontend/config/ai-config.js'],
+                ['Config LocalStorage', '../../frontend/config/local-storage.js'],
+                ['Sidebar', '../../frontend/modules/sidebar/index.js'],
+                ['Data List', '../../frontend/modules/data-list/index.js'],
+                ['Charts', '../../frontend/modules/charts/index.js'],
+                ['AI Chat', '../../frontend/modules/ai-chat/index.js'],
+                ['RAG', '../../frontend/modules/rag/index.js'],
+                ['Data Clean', '../../frontend/modules/data-clean/index.js'],
+                ['Details', '../../frontend/modules/details/index.js'],
+                ['App', '../../frontend/core/app.js'],
+            ];
+
+            const results_arr = await Promise.all(tests.map(([name, path]) => testModule(name, path)));
+
+            const passed = results_arr.filter(r => r).length;
+            const total = results_arr.length;
+            results.innerHTML += `<h2>测试完成：${passed}/${total} 通过</h2>`;
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

@@ -53,12 +53,18 @@ class FeatureExtractorWavinessTests(unittest.TestCase):
         skel = self._make_wave_skeleton()
 
         metrics = extractor.calculate_waviness(skel)
+        metrics_v2 = extractor.calculate_waviness_v2(skel)
 
         self.assertGreater(metrics["waviness_ratio"], 0.2)
         self.assertLess(metrics["waviness_ratio"], 0.6)
         self.assertGreater(metrics["waviness_height_nm"], 100.0)
         self.assertGreater(metrics["waviness_wavelength_nm"], 200.0)
         self.assertGreaterEqual(metrics["waviness_branches"], 1)
+        self.assertGreater(metrics_v2["waviness_ratio_v2"], 0.2)
+        self.assertLess(metrics_v2["waviness_ratio_v2"], 0.6)
+        self.assertGreater(metrics_v2["waviness_height_nm_v2"], 100.0)
+        self.assertGreater(metrics_v2["waviness_wavelength_nm_v2"], 200.0)
+        self.assertGreaterEqual(metrics_v2["waviness_branches_v2"], 1)
 
     def test_calculate_waviness_returns_zero_for_straight_centerline(self):
         extractor = FeatureExtractor(magnification=50000)
@@ -67,11 +73,17 @@ class FeatureExtractorWavinessTests(unittest.TestCase):
         skel[40, 10:90] = True
 
         metrics = extractor.calculate_waviness(skel)
+        metrics_v2 = extractor.calculate_waviness_v2(skel)
 
         self.assertEqual(metrics["waviness_ratio"], 0.0)
         self.assertEqual(metrics["waviness_height_nm"], 0.0)
         self.assertEqual(metrics["waviness_wavelength_nm"], 0.0)
         self.assertEqual(metrics["waviness_branches"], 0)
+        self.assertEqual(metrics_v2["waviness_ratio_v2"], 0.0)
+        self.assertEqual(metrics_v2["waviness_height_nm_v2"], 0.0)
+        self.assertEqual(metrics_v2["waviness_wavelength_nm_v2"], 0.0)
+        self.assertEqual(metrics_v2["waviness_branches_v2"], 0)
+        self.assertGreaterEqual(metrics_v2["tortuosity_v2"], 1.0)
 
     def test_fast_profile_bounds_branchy_mesh_waviness_ratio(self):
         extractor = FeatureExtractor(magnification=20000, speed_profile="fast")
@@ -79,10 +91,14 @@ class FeatureExtractorWavinessTests(unittest.TestCase):
         skel = self._make_branchy_wave_mesh()
 
         metrics = extractor.calculate_waviness(skel)
+        metrics_v2 = extractor.calculate_waviness_v2(skel)
 
         self.assertGreaterEqual(metrics["waviness_ratio"], 0.0)
         self.assertLessEqual(metrics["waviness_ratio"], 5.0)
         self.assertGreaterEqual(metrics["waviness_branches"], 0)
+        self.assertGreaterEqual(metrics_v2["waviness_ratio_v2"], 0.0)
+        self.assertLessEqual(metrics_v2["waviness_ratio_v2"], 5.0)
+        self.assertGreaterEqual(metrics_v2["waviness_branches_v2"], 0)
 
 
 if __name__ == "__main__":

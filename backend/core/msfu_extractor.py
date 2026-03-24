@@ -688,38 +688,38 @@ class RuleBasedExtractor:
                 return "negative"
         return None
 
-        def _create_msfu(
-            self,
-            sentence: str,
-            metadata: MSFUMetadata,
-            doc_title: str,
-            source_entity: str,
-            relation_type: str,
-            target_entity: str,
-            direction: str,
-            confidence: float
-        ) -> MSFU:
-            """创建MSFU对象"""
-            assertion = Assertion(
-                source_entity=source_entity,
-                relation_type=relation_type,
-                target_entity=target_entity,
-                direction=direction
-            )
-            evidence = Evidence(
-                text_snippet=sentence[:200],
-                doc_title=doc_title or metadata.doc_title,
-                confidence=confidence,
-                extraction_method=ExtractionMethod.RULE.value,
-                page_num=metadata.page_num,
-                chunk_id=int(metadata.chunk_id) if metadata.chunk_id else None
-            )
-            return MSFU(
-                content=sentence[:500],
-                metadata=metadata,
-                assertion=assertion,
-                evidence=evidence
-            )
+    def _create_msfu(
+        self,
+        sentence: str,
+        metadata: MSFUMetadata,
+        doc_title: str,
+        source_entity: str,
+        relation_type: str,
+        target_entity: str,
+        direction: str,
+        confidence: float
+    ) -> MSFU:
+        """创建MSFU对象"""
+        assertion = Assertion(
+            source_entity=source_entity,
+            relation_type=relation_type,
+            target_entity=target_entity,
+            direction=direction
+        )
+        evidence = Evidence(
+            text_snippet=sentence[:200],
+            doc_title=doc_title or metadata.doc_title,
+            confidence=confidence,
+            extraction_method=ExtractionMethod.RULE.value,
+            page_num=metadata.page_num,
+            chunk_id=int(metadata.chunk_id) if metadata.chunk_id else None
+        )
+        return MSFU(
+            content=sentence[:500],
+            metadata=metadata,
+            assertion=assertion,
+            evidence=evidence
+        )
 
     def _extract_from_sentence(
         self,

@@ -1,18 +1,34 @@
 import os
 import sqlite3
-import tempfile
+import shutil
 import unittest
+from pathlib import Path
+from uuid import uuid4
 from unittest.mock import patch
 
 from backend.core import batch_processor
 
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_TEST_TEMP_ROOT = _PROJECT_ROOT / "_tmp_unittest"
+
+
+def _make_workspace_tempdir(prefix: str) -> str:
+    _TEST_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
+    path = _TEST_TEMP_ROOT / f"{prefix}{uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=False)
+    return str(path)
+
+
 class BatchProcessorTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp_dir.cleanup)
-        self.db_path = os.path.join(self.temp_dir.name, "batch.sqlite")
-        self.image_dir = os.path.join(self.temp_dir.name, "images")
+        self.temp_dir = _make_workspace_tempdir("batch_processor_")
+        self.addCleanup(shutil.rmtree, self.temp_dir, True)
+        self.db_path = f"file:batch_processor_{uuid4().hex}?mode=memory&cache=shared"
+        self._sqlite_connect = sqlite3.connect
+        self._keeper_conn = self._sqlite_connect(self.db_path, uri=True, check_same_thread=False)
+        self.addCleanup(self._keeper_conn.close)
+        self.image_dir = os.path.join(self.temp_dir, "images")
         os.makedirs(self.image_dir, exist_ok=True)
 
         self.keep_path = os.path.join(self.image_dir, "C1A2.tiff")
@@ -21,7 +37,7 @@ class BatchProcessorTests(unittest.TestCase):
             with open(path, "wb") as handle:
                 handle.write(b"fake")
 
-        conn = sqlite3.connect(self.db_path)
+        conn = self._keeper_conn
         conn.execute(
             """
             CREATE TABLE images (
@@ -58,43 +74,41 @@ class BatchProcessorTests(unittest.TestCase):
             (self.deleted_path,),
         )
         conn.commit()
-        conn.close()
+
+    def _connect_test_db(self, path, *args, **kwargs):
+        if path == self.db_path:
+            kwargs.setdefault("uri", True)
+            kwargs.setdefault("check_same_thread", False)
+        return self._sqlite_connect(path, *args, **kwargs)
 
     def test_batch_process_skips_logically_deleted_images(self):
         processed_paths = []
         diameter_methods = []
 
-        class DummyExtractor:
-            def __init__(self, magnification=None, diameter_method=None):
-                self.magnification = magnification
-                self.diameter_method = diameter_method
-                diameter_methods.append(diameter_method)
-
-            def extract_all(self, img):
-                processed_paths.append(img)
-                return {
-                    "diameter": 10.0,
-                    "density": 20.0,
-                    "alignment": 0.3,
-                    "curvature": 0.4,
-                    "tortuosity": 1.2,
-                    "waviness_ratio": 0.25,
-                    "waviness_height_nm": 12.5,
-                    "waviness_wavelength_nm": 50.0,
-                    "waviness_branches": 3,
-                }
-
-        def fake_imread(path, flags):
-            return path
+        def fake_extract_image_features(file_path, magnification, diameter_method="standard", **kwargs):
+            processed_paths.append(file_path)
+            diameter_methods.append(diameter_method)
+            return {
+                "diameter": 10.0,
+                "density": 20.0,
+                "alignment": 0.3,
+                "curvature": 0.4,
+                "curvature_nm": 0.4,
+                "tortuosity": 1.2,
+                "waviness_ratio": 0.25,
+                "waviness_height_nm": 12.5,
+                "waviness_wavelength_nm": 50.0,
+                "waviness_branches": 3,
+            }
 
         with patch.object(batch_processor, "DB_PATH", self.db_path), \
-             patch.object(batch_processor, "FeatureExtractor", DummyExtractor), \
-             patch.object(batch_processor.cv2, "imread", side_effect=fake_imread):
+             patch.object(batch_processor.sqlite3, "connect", side_effect=self._connect_test_db), \
+             patch.object(batch_processor, "_extract_image_features", side_effect=fake_extract_image_features):
             batch_processor.batch_process(source="XR")
 
         self.assertEqual(processed_paths, [self.keep_path])
 
-        conn = sqlite3.connect(self.db_path)
+        conn = self._sqlite_connect(self.db_path, uri=True, check_same_thread=False)
         rows = conn.execute(
             """
             SELECT
@@ -120,34 +134,29 @@ class BatchProcessorTests(unittest.TestCase):
     def test_batch_process_falls_back_to_standard_for_xr_20k_when_enhanced_requested(self):
         diameter_methods = []
 
-        class DummyExtractor:
-            def __init__(self, magnification=None, diameter_method=None):
-                diameter_methods.append(diameter_method)
+        def fake_extract_image_features(file_path, magnification, diameter_method="standard", **kwargs):
+            diameter_methods.append(diameter_method)
+            return {
+                "diameter": 10.0,
+                "density": 20.0,
+                "alignment": 0.3,
+                "curvature": 0.4,
+                "curvature_nm": 0.4,
+                "tortuosity": 1.2,
+                "waviness_ratio": 0.25,
+                "waviness_height_nm": 12.5,
+                "waviness_wavelength_nm": 50.0,
+                "waviness_branches": 3,
+            }
 
-            def extract_all(self, img):
-                return {
-                    "diameter": 10.0,
-                    "density": 20.0,
-                    "alignment": 0.3,
-                    "curvature": 0.4,
-                    "tortuosity": 1.2,
-                    "waviness_ratio": 0.25,
-                    "waviness_height_nm": 12.5,
-                    "waviness_wavelength_nm": 50.0,
-                    "waviness_branches": 3,
-                }
-
-        def fake_imread(path, flags):
-            return path
-
-        conn = sqlite3.connect(self.db_path)
+        conn = self._sqlite_connect(self.db_path, uri=True, check_same_thread=False)
         conn.execute("UPDATE images SET magnification = 20000 WHERE is_deleted = 0")
         conn.commit()
         conn.close()
 
         with patch.object(batch_processor, "DB_PATH", self.db_path), \
-             patch.object(batch_processor, "FeatureExtractor", DummyExtractor), \
-             patch.object(batch_processor.cv2, "imread", side_effect=fake_imread):
+             patch.object(batch_processor.sqlite3, "connect", side_effect=self._connect_test_db), \
+             patch.object(batch_processor, "_extract_image_features", side_effect=fake_extract_image_features):
             batch_processor.batch_process(source="XR", diameter_method="enhanced")
 
         self.assertEqual(diameter_methods, ["standard"])

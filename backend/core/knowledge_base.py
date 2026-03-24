@@ -9,22 +9,23 @@ from urllib.parse import urlparse
 import numpy as np
 
 PROCESS_FACTOR_PATTERNS = {
-    "growth_temp": [r"\btemperature\b", r"温度", r"生长温度"],
-    "growth_time": [r"\bgrowth time\b", r"\btime\b", r"生长时间"],
+    "growth_temp": [r"\bgrowth.{0,5}temperature\b", r"\btemperature\b", r"温度", r"生长温度", r"\d+\s*°[Cc]"],
+    "growth_time": [r"\bgrowth.{0,5}time\b", r"\bgrowth.{0,5}duration\b", r"\btime\b", r"生长时间"],
     "anneal_time": [r"\banneal", r"退火"],
     "ar_flow": [r"\bar\b", r"氩", r"氩气"],
     "h2_flow": [r"\bh2\b", r"氢", r"氢气"],
-    "c2h4_flow": [r"\bc2h4\b", r"乙烯"],
-    "fe_thickness": [r"\bfe\b", r"铁", r"催化剂厚度"],
+    "c2h4_flow": [r"\bc2h4\b", r"乙烯", r"\bethylene\b"],
+    "fe_thickness": [r"\bfe\b", r"铁", r"催化剂厚度", r"\bcatalyst\b", r"\biron\b"],
     "al2o3_thickness": [r"al2o3", r"氧化铝", r"支撑层"],
 }
 
 MORPHOLOGY_FACTOR_PATTERNS = {
-    "alignment": [r"\balignment\b", r"取向", r"对齐"],
-    "density": [r"\bdensity\b", r"密度", r"覆盖率"],
-    "diameter": [r"\bdiameter\b", r"管径", r"直径"],
-    "curvature": [r"\bcurvature\b", r"弯曲", r"波曲", r"wav"],
-    "tortuosity": [r"\btortuosity\b", r"曲折度"],
+    "alignment": [r"\balign", r"取向", r"对齐", r"oriented"],
+    "density": [r"\bdens", r"密度", r"覆盖率"],
+    "diameter": [r"\bdiamet", r"管径", r"直径"],
+    "curvature": [r"\bcurvat", r"弯曲", r"波曲", r"\bwav"],
+    "tortuosity": [r"\btortuos", r"曲折度"],
+    "height": [r"\bheight\b", r"高度", r"mm-scale"],
 }
 
 PERFORMANCE_FACTOR_PATTERNS = {
@@ -54,8 +55,18 @@ INVERSE_PERFORMANCE_FACTORS = {
     "sheet_resistance": "conductivity",
 }
 
-INCREASE_PATTERNS = [r"increase", r"improve", r"enhance", r"rise", r"提高", r"增大", r"增加", r"改善"]
-DECREASE_PATTERNS = [r"decrease", r"reduce", r"drop", r"decline", r"降低", r"减小", r"下降", r"恶化"]
+INCREASE_PATTERNS = [
+    r"increase", r"improve", r"enhance", r"rise", r"提高", r"增大", r"增加", r"改善",
+    r"promot", r"stimulat", r"boost", r"facilitate", r"favor", r"促进",
+    r"higher", r"greater", r"longer", r"larger", r"better",
+    r"upscal", r"elongat",
+]
+DECREASE_PATTERNS = [
+    r"decrease", r"reduce", r"drop", r"decline", r"降低", r"减小", r"下降", r"恶化",
+    r"inhibit", r"suppress", r"degrade", r"deterior", r"suppress", r"抑制",
+    r"lower", r"shorter", r"smaller", r"weaker",
+    r"deactiv", r"poison", r"失活", r"中毒",
+]
 MECHANISM_FACTOR_PATTERNS = {
     "diffusion": [r"\bdiffusion\b", r"扩散"],
     "catalyst_deactivation": [r"\bdeactivation\b", r"\bpoison", r"失活", r"中毒"],

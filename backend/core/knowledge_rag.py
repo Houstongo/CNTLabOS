@@ -20,18 +20,22 @@ class RAGRetriever:
         self.knowledge_base.bootstrap_task_profiles()
 
     def add_pdf(self, file_bytes: bytes, filename: str) -> Dict[str, int]:
-        import pdfplumber
+        from backend.core.mineru_extractor import MinerUExtractor
 
-        text_pages: List[str] = []
-        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    text_pages.append(text)
+        extractor = MinerUExtractor()
+        doc = extractor.parse_pdf_bytes(file_bytes, title=filename)
+
+        # 优先使用 Markdown（保留表格、标题等结构），回退到纯文本拼接
+        text = doc.markdown if doc and doc.markdown else (
+            "\n".join(doc.pages) if doc and doc.pages else ""
+        )
+
+        if not text.strip():
+            raise ValueError(f"MinerU 解析失败，未提取到有效内容: {filename}")
 
         return self.knowledge_base.ingest_text(
             title=filename,
-            text="\n".join(text_pages),
+            text=text,
             source_type="pdf",
             theme="growth_mechanism",
             is_core=False,

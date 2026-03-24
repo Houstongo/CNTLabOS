@@ -20,10 +20,16 @@ tmp-inline.js
 .tmp-check-*.js
 .claude/
 .edge-headless/
+_tmp_cnt_paper_repro_data_case/
+_tmp_unittest/
+tests/_tmp_cnt_paper_repro_data/
 output/
 rag-graph-*.png
 rag-doc-manage-*.png
 *.bak
+experiments/**/datasets/
+experiments/**/runs/
+experiments/**/reports/
 batch_output_*/
 batch_today_output*/
 temp_images/

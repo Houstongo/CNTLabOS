@@ -1,0 +1,48 @@
+experiment_name: cnt_paper_repro_100000x_center768_smoke
+seed: 42
+
+data:
+  source_dataset_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2
+  patch_dataset_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\datasets\zzy_mid_100000_patch768_center_paper_v1
+  train_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\datasets\zzy_mid_100000_patch768_center_paper_v1\manifests\train_patch_manifest.csv
+  val_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\datasets\zzy_mid_100000_patch768_center_paper_v1\manifests\val_patch_manifest.csv
+  test_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\datasets\zzy_mid_100000_patch768_center_paper_v1\manifests\test_patch_manifest.csv
+  reserve_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\datasets\zzy_mid_100000_patch768_center_paper_v1\manifests\reserve_patch_manifest.csv
+  patch_size: 768
+  patch_mode: center
+  normalize_mean: 0.5
+  normalize_std: 0.5
+  augment: false
+
+model:
+  name: ResNet34UNet
+  in_channels: 1
+  num_classes: 1
+  encoder_weights: null
+
+training:
+  device: auto
+  batch_size: 1
+  num_workers: 0
+  learning_rate: 0.0005
+  weight_decay: 0.0
+  selection_metric: dice
+  phases:
+    - name: dice
+      epochs: 1
+      dice_weight: 1.0
+      orientation_weight: 0.0
+      orientation_bins: 360
+      orientation_use_power_spectrum: true
+    - name: dice_orientation
+      epochs: 1
+      dice_weight: 0.6
+      orientation_weight: 1.0e-7
+      orientation_bins: 360
+      orientation_use_power_spectrum: true
+
+inference:
+  threshold: 0.7
+
+output:
+  run_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_paper_repro\runs

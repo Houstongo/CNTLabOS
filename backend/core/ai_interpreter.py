@@ -332,3 +332,98 @@ MSFU结构：
     ) -> dict:
         """精炼单个MSFU"""
         return self.refine_msfu_batch([msfu_dict], context, temperature)[0] if self.refine_msfu_batch([msfu_dict], context, temperature) else msfu_dict
+
+    MSFU_EXTRACTION_SYSTEM = """你是碳纳米管（CNT）及相关材料领域的知识抽取专家。
+从给定的学术文本片段中提取最小语义事实单元（MSFU）。
+
+MSFU 结构：
+- source_entity: 源实体，格式 category:type
+  - process 类: growth_temp, growth_time, anneal_time, ar_flow, h2_flow, c2h4_flow, fe_thickness, al2o3_thickness
+  - morphology 类: alignment, density, diameter, curvature, height, length, tortuosity
+  - performance 类: conductivity, resistivity, tensile_strength, modulus
+  - mechanism 类: catalyst, nucleation, growth_mode, diffusion
+- relation_type: causes, increases, decreases, affects, promotes, inhibits
+- target_entity: 目标实体，同上格式
+- direction: positive（正相关/增加）, negative（负相关/减少）, neutral, unknown
+
+提取原则：
+1. 只提取有明确因果或相关关系的陈述
+2. 忽略单纯的实验描述（如"在X条件下进行了实验"）
+3. 忽略与其他材料体系无关的陈述
+4. 关注工艺参数→形貌→性能的关联链
+5. 置信度基于证据明确程度（0.5-0.95）
+
+输出格式（JSON数组）：
+[
+  {
+    "source_entity": "process:temperature",
+    "relation_type": "increases",
+    "target_entity": "morphology:density",
+    "condition": null,
+    "direction": "positive",
+    "confidence": 0.8,
+    "content": "原文片段（不超过200字）"
+  }
+]
+
+如果文本中无有效MSFU，返回空数组 []。只返回JSON，不要其他文字。"""
+
+    def extract_msfu_from_text(
+        self,
+        text: str,
+        temperature: float = 0.2,
+        max_tokens: int = 2000,
+    ) -> list:
+        """
+        直接从文本中提取 MSFU（无需预先候选）
+
+        Args:
+            text: 原始文本片段
+            temperature: 生成温度
+            max_tokens: 最大输出 token 数
+
+        Returns:
+            MSFU 字典列表
+        """
+        if not text or len(text.strip()) < 50:
+            return []
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self.MSFU_EXTRACTION_SYSTEM},
+                    {"role": "user", "content": f"请从以下文本中提取MSFU：\n\n{text[:800]}"},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content or "{}"
+            result = json.loads(content)
+
+            # 兼容 {"msfus": [...]} 或直接 [...]
+            if isinstance(result, dict):
+                msfus = result.get("msfus", result.get("results", []))
+            elif isinstance(result, list):
+                msfus = result
+            else:
+                msfus = []
+
+            # 过滤无效项
+            valid_msfus = []
+            for item in msfus:
+                if not isinstance(item, dict):
+                    continue
+                se = item.get("source_entity", "")
+                te = item.get("target_entity", "")
+                if not se or not te:
+                    continue
+                valid_msfus.append(item)
+
+            return valid_msfus
+
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"  LLM提取失败: {e}")
+            return []

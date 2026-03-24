@@ -58,6 +58,8 @@ class FeatureExtractor:
     FAST_CURVATURE_SAMPLE_STEP = 4
     FAST_WAVINESS_MIN_WAVELENGTH_FACTOR = 10.0
     FAST_WAVINESS_MAX_RATIO = 5.0
+    V2_MIN_BRANCH_POINTS = 8
+    V2_MIN_BRANCH_LENGTH_FACTOR = 2.0
 
     @staticmethod
     def _collect_components(skel: np.ndarray):
@@ -130,6 +132,170 @@ class FeatureExtractor:
             max_branches=max_branches,
             max_points_per_branch=max_points_per_branch,
         )
+
+    @staticmethod
+    def _neighbor_count_map(skel: np.ndarray) -> np.ndarray:
+        from scipy.ndimage import convolve
+
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        kernel[1, 1] = 0
+        return convolve((skel > 0).astype(np.uint8), kernel, mode="constant", cval=0)
+
+    @staticmethod
+    def _path_length(coords: np.ndarray) -> float:
+        if coords.shape[0] < 2:
+            return 0.0
+        deltas = np.diff(coords.astype(float), axis=0)
+        return float(np.sum(np.hypot(deltas[:, 0], deltas[:, 1])))
+
+    @staticmethod
+    def _trace_ordered_component_path(component_mask: np.ndarray) -> np.ndarray:
+        points = np.argwhere(component_mask > 0)
+        if points.size == 0:
+            return np.zeros((0, 2), dtype=float)
+
+        offsets = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),           (0, 1),
+            (1, -1),  (1, 0),  (1, 1),
+        ]
+        point_set = {tuple(int(v) for v in point) for point in points}
+        adjacency = {}
+        for point in point_set:
+            y, x = point
+            neighbors = []
+            for dy, dx in offsets:
+                candidate = (y + dy, x + dx)
+                if candidate in point_set:
+                    neighbors.append(candidate)
+            adjacency[point] = neighbors
+
+        endpoints = sorted(point for point, neighbors in adjacency.items() if len(neighbors) <= 1)
+        start = endpoints[0] if endpoints else min(point_set)
+
+        path = []
+        visited = set()
+        current = start
+        previous = None
+
+        while current is not None and current not in visited:
+            path.append(current)
+            visited.add(current)
+
+            candidates = [neighbor for neighbor in adjacency[current] if neighbor != previous and neighbor not in visited]
+            if not candidates:
+                candidates = [neighbor for neighbor in adjacency[current] if neighbor not in visited]
+            if not candidates:
+                break
+
+            if previous is None or len(candidates) == 1:
+                next_point = sorted(candidates)[0]
+            else:
+                prev_vec = np.asarray(current, dtype=float) - np.asarray(previous, dtype=float)
+
+                def direction_score(candidate):
+                    cand_vec = np.asarray(candidate, dtype=float) - np.asarray(current, dtype=float)
+                    return float(np.dot(prev_vec, cand_vec))
+
+                next_point = max(candidates, key=direction_score)
+
+            previous, current = current, next_point
+
+        if len(visited) < len(point_set):
+            remaining = sorted(point_set - visited)
+            path.extend(remaining)
+
+        return np.asarray(path, dtype=float)
+
+    def _smooth_path_coords(self, coords: np.ndarray, window: int = None) -> np.ndarray:
+        if coords.shape[0] < 5:
+            return coords.astype(float)
+
+        if window is None:
+            base = 3 if self.speed_profile == "fast" else 5
+            dynamic = int(round(self.expected_tube_px * 1.5)) | 1
+            window = max(base, dynamic)
+
+        window = max(3, min(window, coords.shape[0]))
+        if window % 2 == 0:
+            window -= 1
+        if window < 3:
+            return coords.astype(float)
+
+        kernel = np.ones(window, dtype=float) / window
+        pad = window // 2
+        padded = np.pad(coords.astype(float), ((pad, pad), (0, 0)), mode="edge")
+        smoothed = np.column_stack([
+            np.convolve(padded[:, 0], kernel, mode="valid"),
+            np.convolve(padded[:, 1], kernel, mode="valid"),
+        ])
+        smoothed[0] = coords[0]
+        smoothed[-1] = coords[-1]
+        return smoothed
+
+    def _collect_ordered_branches_v2(
+        self,
+        skel: np.ndarray,
+        min_points: int = None,
+        max_branches: int = None,
+        max_points_per_branch: int = None,
+    ):
+        skel_mask = (skel > 0).astype(np.uint8)
+        if not np.any(skel_mask):
+            return []
+
+        if min_points is None:
+            min_points = max(self.V2_MIN_BRANCH_POINTS, int(round(self.expected_tube_px * 2.0)))
+
+        min_length_px = max(4.0, float(self.expected_tube_px * self.V2_MIN_BRANCH_LENGTH_FACTOR))
+        neighbor_count = self._neighbor_count_map(skel_mask)
+        junction_mask = (skel_mask > 0) & (neighbor_count >= 3)
+        branch_mask = (skel_mask > 0) & np.logical_not(junction_mask)
+        labeled = label(branch_mask, connectivity=2)
+        if labeled.max() == 0:
+            return []
+
+        branches = []
+        for branch_id in range(1, int(labeled.max()) + 1):
+            component_mask = labeled == branch_id
+            point_count = int(np.count_nonzero(component_mask))
+            if point_count < min_points:
+                continue
+
+            ordered = self._trace_ordered_component_path(component_mask)
+            if ordered.shape[0] < min_points:
+                continue
+
+            path_length_px = self._path_length(ordered)
+            if path_length_px < min_length_px:
+                continue
+
+            ordered = self._smooth_path_coords(ordered)
+            if max_points_per_branch and ordered.shape[0] > max_points_per_branch:
+                sample_idx = np.linspace(0, ordered.shape[0] - 1, num=max_points_per_branch, dtype=int)
+                ordered = ordered[sample_idx]
+                path_length_px = self._path_length(ordered)
+
+            branches.append({
+                "coords": ordered,
+                "n_points": int(ordered.shape[0]),
+                "path_length_px": float(path_length_px),
+            })
+
+        branches.sort(key=lambda item: (item["path_length_px"], item["n_points"]), reverse=True)
+        if max_branches is not None and len(branches) > max_branches:
+            branches = branches[:max_branches]
+        return branches
+
+    @staticmethod
+    def _sample_ordered_coords(coords: np.ndarray, sample_step: int) -> np.ndarray:
+        if coords.shape[0] <= 2:
+            return coords
+        step = max(1, int(sample_step))
+        sampled = coords[::step]
+        if not np.array_equal(sampled[-1], coords[-1]):
+            sampled = np.vstack([sampled, coords[-1]])
+        return sampled
 
     # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     #  1. 鐗╃悊鏍囧畾
@@ -674,6 +840,81 @@ class FeatureExtractor:
 
         return label, median_curvature
 
+    def calculate_curvature_v2(
+        self,
+        skel: np.ndarray,
+        max_branches: int = None,
+        max_points_per_branch: int = None,
+        sample_step: int = None,
+        ordered_branches=None,
+    ):
+        if max_branches is None and self.speed_profile == "fast":
+            max_branches = self.FAST_CURVATURE_BRANCH_LIMIT
+        if max_points_per_branch is None and self.speed_profile == "fast":
+            max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH
+        if sample_step is None:
+            sample_step = 2 if self.speed_profile == "fast" else 1
+
+        branches = ordered_branches
+        if branches is None:
+            branches = self._collect_ordered_branches_v2(
+                skel,
+                min_points=15,
+                max_branches=max_branches,
+                max_points_per_branch=max_points_per_branch,
+            )
+        if not branches:
+            return "Unknown", 0.0
+
+        px_per_nm = max(self.px_per_um / 1000.0, 1e-6)
+        branch_curvatures = []
+        weights = []
+
+        for branch in branches:
+            sampled_coords = self._sample_ordered_coords(branch["coords"], sample_step=sample_step)
+            if sampled_coords.shape[0] < 3:
+                continue
+
+            curvature_values_px = []
+            for idx in range(1, sampled_coords.shape[0] - 1):
+                p_prev = sampled_coords[idx - 1]
+                p_curr = sampled_coords[idx]
+                p_next = sampled_coords[idx + 1]
+
+                ab = p_curr - p_prev
+                bc = p_next - p_curr
+                ca = p_next - p_prev
+
+                a = float(np.linalg.norm(ab))
+                b = float(np.linalg.norm(bc))
+                c = float(np.linalg.norm(ca))
+                if min(a, b, c) <= 1e-6:
+                    continue
+
+                cross = abs(ab[0] * bc[1] - ab[1] * bc[0])
+                curvature_px = (2.0 * cross) / max(a * b * c, 1e-6)
+                if np.isfinite(curvature_px) and curvature_px > 0:
+                    curvature_values_px.append(curvature_px)
+
+            if curvature_values_px:
+                branch_curvatures.append(float(np.median(curvature_values_px)) * px_per_nm)
+                weights.append(max(branch["path_length_px"], 1.0))
+            else:
+                branch_curvatures.append(0.0)
+                weights.append(max(branch["path_length_px"], 1.0))
+
+        if not branch_curvatures:
+            return "Unknown", 0.0
+
+        median_curvature_nm = float(np.average(branch_curvatures, weights=np.asarray(weights, dtype=float)))
+        if median_curvature_nm < 5e-4:
+            label_name = "Straight"
+        elif median_curvature_nm < 2.5e-3:
+            label_name = "Wavy"
+        else:
+            label_name = "Coiled"
+        return label_name, median_curvature_nm
+
     @staticmethod
     def _smooth_signal(values: np.ndarray, window: int = 5) -> np.ndarray:
         """Simple moving average smoothing used for waviness extraction."""
@@ -894,6 +1135,68 @@ class FeatureExtractor:
             "tortuosity": float(np.average([metric["tortuosity"] for metric in branch_metrics], weights=weights)),
         }
 
+    def calculate_waviness_v2(
+        self,
+        skel: np.ndarray,
+        max_branches: int = None,
+        max_points_per_branch: int = None,
+        ordered_branches=None,
+    ):
+        if max_branches is None and self.speed_profile == "fast":
+            max_branches = self.FAST_WAVINESS_BRANCH_LIMIT
+        if max_points_per_branch is None and self.speed_profile == "fast":
+            max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH
+
+        branches = ordered_branches
+        if branches is None:
+            branches = self._collect_ordered_branches_v2(
+                skel,
+                min_points=20,
+                max_branches=max_branches,
+                max_points_per_branch=max_points_per_branch,
+            )
+        if not branches:
+            return {
+                "waviness_ratio_v2": 0.0,
+                "waviness_height_nm_v2": 0.0,
+                "waviness_wavelength_nm_v2": 0.0,
+                "waviness_branches_v2": 0,
+                "tortuosity_v2": 1.0,
+            }
+
+        branch_metrics = []
+        for branch in branches:
+            metrics = self._calculate_component_waviness(
+                branch["coords"],
+                fast_mode=(self.speed_profile == "fast"),
+            )
+            if metrics is None:
+                continue
+            metrics["weight"] = max(branch["path_length_px"], metrics["weight"])
+            branch_metrics.append(metrics)
+
+        if not branch_metrics:
+            return {
+                "waviness_ratio_v2": 0.0,
+                "waviness_height_nm_v2": 0.0,
+                "waviness_wavelength_nm_v2": 0.0,
+                "waviness_branches_v2": 0,
+                "tortuosity_v2": 1.0,
+            }
+
+        px_per_nm = max(self.px_per_um / 1000.0, 1e-6)
+        weights = np.array([metric["weight"] for metric in branch_metrics], dtype=float)
+        height_px = float(np.average([metric["height_px"] for metric in branch_metrics], weights=weights))
+        wavelength_px = float(np.average([metric["wavelength_px"] for metric in branch_metrics], weights=weights))
+
+        return {
+            "waviness_ratio_v2": float(np.average([metric["ratio"] for metric in branch_metrics], weights=weights)),
+            "waviness_height_nm_v2": height_px / px_per_nm,
+            "waviness_wavelength_nm_v2": wavelength_px / px_per_nm,
+            "waviness_branches_v2": len(branch_metrics),
+            "tortuosity_v2": float(np.average([metric["tortuosity"] for metric in branch_metrics], weights=weights)),
+        }
+
     def extract_all(
         self,
         img_gray: np.ndarray,
@@ -984,12 +1287,28 @@ class FeatureExtractor:
             rotation_correction_deg=int(alignment_metrics["rotation_correction_deg"]),
         )
         curv_label, curvature_nm = self.calculate_curvature(skel, base_components=base_components)
+        ordered_branches_v2 = self._collect_ordered_branches_v2(
+            skel,
+            min_points=15,
+            max_branches=self.FAST_CURVATURE_BRANCH_LIMIT if self.speed_profile == "fast" else None,
+            max_points_per_branch=self.FAST_MAX_POINTS_PER_BRANCH if self.speed_profile == "fast" else None,
+        )
+        curv_label_v2, curvature_nm_v2 = self.calculate_curvature_v2(
+            skel,
+            ordered_branches=ordered_branches_v2,
+        )
         emit_progress(
             "curvature",
             curvature=curv_label,
             curvature_nm=round(curvature_nm, 4),
+            curvature_v2=curv_label_v2,
+            curvature_nm_v2=round(curvature_nm_v2, 6),
         )
         waviness = self.calculate_waviness(skel, base_components=base_components)
+        waviness_v2 = self.calculate_waviness_v2(
+            skel,
+            ordered_branches=ordered_branches_v2,
+        )
         emit_progress(
             "waviness",
             waviness_ratio=(
@@ -997,15 +1316,23 @@ class FeatureExtractor:
                 if waviness["waviness_ratio"] is not None else None
             ),
             waviness_branches=int(waviness["waviness_branches"]),
+            waviness_ratio_v2=(
+                round(waviness_v2["waviness_ratio_v2"], 4)
+                if waviness_v2["waviness_ratio_v2"] is not None else None
+            ),
+            waviness_branches_v2=int(waviness_v2["waviness_branches_v2"]),
         )
         hof_method = alignment_metrics.get("hof_method", "skeleton")
         tortuosity = waviness["tortuosity"]
+        tortuosity_v2 = waviness_v2["tortuosity_v2"]
 
         if self.mag and self.mag < self.MIN_MAG_FOR_DIAMETER:
             # 浣庡€嶇巼锛氱寰?鏇茬巼鏍囪涓轰笉鍙俊
             diameter_nm = -1.0
             curv_label, tortuosity = "N/A", 0.0
             curvature_nm = 0.0
+            curv_label_v2, tortuosity_v2 = "N/A", 0.0
+            curvature_nm_v2 = 0.0
             diameter_method_name = "N/A"
             waviness = {
                 "waviness_ratio": None,
@@ -1013,6 +1340,13 @@ class FeatureExtractor:
                 "waviness_wavelength_nm": None,
                 "waviness_branches": 0,
                 "tortuosity": 0.0,
+            }
+            waviness_v2 = {
+                "waviness_ratio_v2": None,
+                "waviness_height_nm_v2": None,
+                "waviness_wavelength_nm_v2": None,
+                "waviness_branches_v2": 0,
+                "tortuosity_v2": 0.0,
             }
 
         extra = {
@@ -1030,15 +1364,22 @@ class FeatureExtractor:
             "alignment":    round(hof, 4),
             "diameter":     round(diameter_nm, 2) if diameter_nm >= 0 else None,
             "curvature":    curv_label,
+            "curvature_v2": curv_label_v2,
             # 杈呭姪瀛楁锛堣鏂囨姤鍛?/ 璋冭瘯鐢級
             "hof_method":   hof_method,
             "mean_phi_deg": round(mean_phi, 2),
             "curvature_nm": round(curvature_nm, 4),  # 鐪熸鐨勬洸鐜囷紙nm鈦宦癸級
+            "curvature_nm_v2": round(curvature_nm_v2, 6),
             "tortuosity":   round(tortuosity, 3),
+            "tortuosity_v2": round(tortuosity_v2, 3),
             "waviness_ratio": round(waviness["waviness_ratio"], 4) if waviness["waviness_ratio"] is not None else None,
             "waviness_height_nm": round(waviness["waviness_height_nm"], 2) if waviness["waviness_height_nm"] is not None else None,
             "waviness_wavelength_nm": round(waviness["waviness_wavelength_nm"], 2) if waviness["waviness_wavelength_nm"] is not None else None,
             "waviness_branches": waviness["waviness_branches"],
+            "waviness_ratio_v2": round(waviness_v2["waviness_ratio_v2"], 4) if waviness_v2["waviness_ratio_v2"] is not None else None,
+            "waviness_height_nm_v2": round(waviness_v2["waviness_height_nm_v2"], 2) if waviness_v2["waviness_height_nm_v2"] is not None else None,
+            "waviness_wavelength_nm_v2": round(waviness_v2["waviness_wavelength_nm_v2"], 2) if waviness_v2["waviness_wavelength_nm_v2"] is not None else None,
+            "waviness_branches_v2": waviness_v2["waviness_branches_v2"],
             "px_per_um":    round(self.px_per_um, 2),
             **extra,
         }
