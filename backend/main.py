@@ -15,10 +15,18 @@ from backend.core.ai_interpreter import AIInterpreter
 from backend.core.knowledge_rag import RAGRetriever
 from backend.core.calibrator import calibrator
 from backend.core.algorithm_visualizer import AlgorithmVisualizer
+from backend.core.batch_processor import _extract_image_features, DEFAULT_CNTSEGNET_CHECKPOINT
 from backend.core.knowledge_driven_predictor import KnowledgeDrivenPredictor
 from backend.core.tccer_retriever import TCCERRetriever
 from backend.core.msfu_extractor import MSFUExtractor, MSFUMetadata, store_msfus_in_db, get_msfu_stats
 from backend.core.qa_service import QAService
+from backend.core.segmentation_backend import (
+    BOTH,
+    CANONICAL_WCNTSEGNET,
+    CNTSEGNET,
+    LEGACY_THRESHOLD,
+    normalize_segmentation_backend,
+)
 
 app = FastAPI(title="CNTA ML Project API")
 
@@ -114,6 +122,12 @@ def _read_grayscale_image(image_path: str):
 
 class BatchImageActionRequest(BaseModel):
     image_ids: List[int]
+    backend: Optional[str] = CANONICAL_WCNTSEGNET
+    device: Optional[str] = "cpu"
+    checkpoint: Optional[str] = None
+    tile_size: Optional[int] = 512
+    overlap: Optional[int] = 64
+    seg_threshold: Optional[float] = 0.5
 
 
 def _validate_batch_ids(image_ids: List[int]) -> List[int]:
@@ -132,7 +146,16 @@ def _validate_batch_ids(image_ids: List[int]) -> List[int]:
     return normalized
 
 
-def _analyze_image_with_cursor(cursor: sqlite3.Cursor, image_id: int) -> Dict[str, Any]:
+def _analyze_image_with_cursor(
+    cursor: sqlite3.Cursor,
+    image_id: int,
+    backend: str = CANONICAL_WCNTSEGNET,
+    device: str = "cpu",
+    checkpoint: Optional[str] = None,
+    tile_size: int = 512,
+    overlap: int = 64,
+    seg_threshold: float = 0.5,
+) -> Dict[str, Any]:
     active_clause = _active_images_clause(cursor)
     cursor.execute(f"SELECT * FROM images WHERE id = ? AND {active_clause}", (image_id,))
     row = cursor.fetchone()
@@ -145,15 +168,22 @@ def _analyze_image_with_cursor(cursor: sqlite3.Cursor, image_id: int) -> Dict[st
     if not os.path.exists(img_path):
         raise HTTPException(status_code=404, detail="Physical file missing")
 
-    img = _read_grayscale_image(img_path)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Failed to read image")
+    try:
+        normalized_backend = normalize_segmentation_backend(backend, allow_both=False)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    extractor = FeatureExtractor(
-        magnification=int(mag) if mag else None,
+    results = _extract_image_features(
+        file_path=img_path,
+        magnification=mag,
         diameter_method="enhanced",
+        segmentation_backend=normalized_backend,
+        device=device or "cpu",
+        checkpoint_path=checkpoint or DEFAULT_CNTSEGNET_CHECKPOINT,
+        tile_size=tile_size or 512,
+        overlap=overlap or 64,
+        seg_threshold=seg_threshold if seg_threshold is not None else 0.5,
     )
-    results = extractor.extract_all(img)
 
     update_values = {
         "diameter": results.get("diameter"),
@@ -183,6 +213,7 @@ def _analyze_image_with_cursor(cursor: sqlite3.Cursor, image_id: int) -> Dict[st
 @app.post("/api/images/batch/analyze")
 async def batch_analyze_images(req: BatchImageActionRequest):
     image_ids = _validate_batch_ids(req.image_ids)
+    backend = normalize_segmentation_backend(req.backend, allow_both=False)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -212,7 +243,16 @@ async def batch_analyze_images(req: BatchImageActionRequest):
                 continue
 
             try:
-                results = _analyze_image_with_cursor(cursor, image_id)
+                results = _analyze_image_with_cursor(
+                    cursor,
+                    image_id,
+                    backend=backend,
+                    device=req.device or "cpu",
+                    checkpoint=req.checkpoint,
+                    tile_size=req.tile_size or 512,
+                    overlap=req.overlap or 64,
+                    seg_threshold=req.seg_threshold if req.seg_threshold is not None else 0.5,
+                )
                 success_count += 1
                 items.append({"image_id": image_id, "status": "success", "results": results})
             except HTTPException as exc:
@@ -291,7 +331,15 @@ async def batch_soft_delete_images(req: BatchImageActionRequest):
         conn.close()
 
 @app.post("/api/images/{image_id}/analyze")
-async def analyze_image_v2(image_id: int):
+async def analyze_image_v2(
+    image_id: int,
+    backend: str = CANONICAL_WCNTSEGNET,
+    device: str = "cpu",
+    checkpoint: str = None,
+    tile_size: int = 512,
+    overlap: int = 64,
+    seg_threshold: float = 0.5,
+):
     """
     ?????? AI ??????????????????????+ ???????????
     """
@@ -300,7 +348,16 @@ async def analyze_image_v2(image_id: int):
     cursor = conn.cursor()
 
     try:
-        results = _analyze_image_with_cursor(cursor, image_id)
+        results = _analyze_image_with_cursor(
+            cursor,
+            image_id,
+            backend=backend,
+            device=device,
+            checkpoint=checkpoint,
+            tile_size=tile_size,
+            overlap=overlap,
+            seg_threshold=seg_threshold,
+        )
         conn.commit()
         return {"status": "success", "results": results}
     except HTTPException:
@@ -1659,7 +1716,7 @@ def prepare_visualization_image(img_gray: np.ndarray, max_side: int = 1280) -> n
 @app.get("/api/images/{image_id}/visualize", response_model=VisualizationResponse)
 async def visualize_image_analysis(
     image_id: int,
-    backend: str = "threshold",
+    backend: str = CANONICAL_WCNTSEGNET,
     device: str = "cpu",
     checkpoint: str = None,
     tile_size: int = 512,
@@ -1669,7 +1726,7 @@ async def visualize_image_analysis(
     """获取图像分析的可视化步骤
 
     Args:
-        backend: 分割后端，可选值 "threshold"(传统阈值) | "cntsegnet"(深度学习) | "both"(对比查看)
+        backend: 分割后端，可选值 "wcntsegnet"(主传统算法) | "threshold"(兼容别名) | "cntsegnet"(深度学习) | "both"(对比查看)
         device: CNTSegNet设备，"cpu" 或 "cuda"
         checkpoint: CNTSegNet模型权重路径
         tile_size: 分块大小
@@ -1716,19 +1773,24 @@ async def visualize_image_analysis(
         {"name": "特征计算", "steps": [6, 7, 8, 9, 10]}
     ]
 
+    try:
+        normalized_backend = normalize_segmentation_backend(backend, allow_both=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     # 根据backend参数返回不同结果
-    if backend == "threshold":
-        # 传统阈值分割
+    if normalized_backend == CANONICAL_WCNTSEGNET:
+        # WCNTSegNET 传统分割
         visualizer = AlgorithmVisualizer(magnification=mag)
         visualizer.visualize_extraction(img)
         return {
-            "backend": "threshold",
+            "backend": CANONICAL_WCNTSEGNET,
             "steps": visualizer.get_steps(),
             "total_steps": len(visualizer.get_steps()),
             "phases": threshold_phases
         }
 
-    elif backend == "cntsegnet":
+    elif normalized_backend == CNTSEGNET:
         # CNTSegNet深度学习分割
         try:
             from backend.core.cntsegnet_visualizer import CNTSegNetVisualizer
@@ -1753,19 +1815,19 @@ async def visualize_image_analysis(
                 }
             }
         except Exception as e:
-            # CNTSegNet失败，降级到阈值分割
-            print(f"CNTSegNet failed, falling back to threshold: {e}")
+            # CNTSegNet失败，降级到WCNTSegNET
+            print(f"CNTSegNet failed, falling back to WCNTSegNET: {e}")
             visualizer = AlgorithmVisualizer(magnification=mag)
             visualizer.visualize_extraction(img)
             return {
-                "backend": "threshold",
+                "backend": CANONICAL_WCNTSEGNET,
                 "steps": visualizer.get_steps(),
                 "total_steps": len(visualizer.get_steps()),
                 "phases": threshold_phases,
                 "metadata": {"fallback_reason": f"CNTSegNet failed: {str(e)}"}
             }
 
-    elif backend == "both":
+    elif normalized_backend == BOTH:
         # 对比查看模式
         threshold_viz = AlgorithmVisualizer(magnification=mag)
         threshold_viz.visualize_extraction(img)
@@ -1783,14 +1845,19 @@ async def visualize_image_analysis(
             cntsegnet_viz.visualize_extraction(img)
 
             return {
-                "backend": "both",
+                "backend": BOTH,
                 "comparison": {
-                    "threshold": {
+                    CANONICAL_WCNTSEGNET: {
                         "steps": threshold_viz.get_steps(),
                         "total_steps": len(threshold_viz.get_steps()),
                         "phases": threshold_phases
                     },
-                    "cntsegnet": {
+                    LEGACY_THRESHOLD: {
+                        "steps": threshold_viz.get_steps(),
+                        "total_steps": len(threshold_viz.get_steps()),
+                        "phases": threshold_phases
+                    },
+                    CNTSEGNET: {
                         "steps": cntsegnet_viz.get_steps(),
                         "total_steps": len(cntsegnet_viz.get_steps()),
                         "phases": cntsegnet_phases
@@ -1806,14 +1873,19 @@ async def visualize_image_analysis(
             # CNTSegNet失败，只返回阈值分割
             print(f"CNTSegNet failed in both mode: {e}")
             return {
-                "backend": "both",
+                "backend": BOTH,
                 "comparison": {
-                    "threshold": {
+                    CANONICAL_WCNTSEGNET: {
                         "steps": threshold_viz.get_steps(),
                         "total_steps": len(threshold_viz.get_steps()),
                         "phases": threshold_phases
                     },
-                    "cntsegnet": None,
+                    LEGACY_THRESHOLD: {
+                        "steps": threshold_viz.get_steps(),
+                        "total_steps": len(threshold_viz.get_steps()),
+                        "phases": threshold_phases
+                    },
+                    CNTSEGNET: None,
                     "metadata": {"fallback_reason": f"CNTSegNet failed: {str(e)}"}
                 }
             }

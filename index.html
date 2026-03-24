@@ -1327,7 +1327,7 @@
                             <p id="clean-algo-caption" class="text-[11px] text-slate-500 mt-1">展示当前样品的完整算法过程，不再与审查页混排。</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button id="clean-btn-threshold" onclick="switchCleanBackend('threshold')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-indigo-600 text-white border-indigo-600">阈值</button>
+                            <button id="clean-btn-threshold" onclick="switchCleanBackend('wcntsegnet')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-indigo-600 text-white border-indigo-600">WCNTSegNET</button>
                             <button id="clean-btn-cntsegnet" onclick="switchCleanBackend('cntsegnet')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-white text-slate-600 border-slate-200 hover:border-indigo-300">CNTSegNet</button>
                             <button id="clean-btn-both" onclick="switchCleanBackend('both')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-white text-slate-600 border-slate-200 hover:border-indigo-300">对比</button>
                             <button onclick="hideCleanAlgoPanel()" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200">
@@ -3969,15 +3969,16 @@
         // 算法可视化相关变量和函数
             let visualizationSteps = null;
         let currentStepIndex = 0;
-        let currentBackend = 'threshold';  // 'threshold' | 'cntsegnet' | 'both'
+        let currentBackend = 'wcntsegnet';  // 'wcntsegnet' | 'threshold' | 'cntsegnet' | 'both'
             let visualizationData = {
+            wcntsegnet: null,
             threshold: null,
             cntsegnet: null
         };
 
         // 分割后端阶段配置
             const PHASE_CONFIG = {
-            'threshold': [
+            'wcntsegnet': [
                 {name: '图像预处理', steps: [0, 1, 2, 3]},
                 {name: '基础特征', steps: [4, 5, 6, 7]},
                 {name: '高级特征', steps: [8, 9, 10]}
@@ -3988,6 +3989,10 @@
                 {name: '特征计算', steps: [6, 7, 8, 9, 10]}
             ]
         };
+
+        function normalizeVizBackend(backend) {
+            return backend === 'threshold' ? 'wcntsegnet' : backend;
+        }
 
         async function loadAlgorithmVisualization() {
             if (!currentItem) return;
@@ -4010,6 +4015,7 @@
 
         // ==================== 分割后端切换函数 ====================
         async function switchBackend(backend) {
+            backend = normalizeVizBackend(backend);
             currentBackend = backend;
 
             // 更新按钮样式
@@ -4031,8 +4037,9 @@
         }
 
         function updateBackendButtons(activeBackend) {
+            activeBackend = normalizeVizBackend(activeBackend);
             const buttons = {
-                'threshold': document.getElementById('btn-threshold'),
+                'wcntsegnet': document.getElementById('btn-threshold'),
                 'cntsegnet': document.getElementById('btn-cntsegnet'),
                 'both': document.getElementById('btn-both')
             };
@@ -4049,10 +4056,11 @@
         }
 
         async function loadVisualizationData(backend) {
+            backend = normalizeVizBackend(backend);
             if (backend === 'both') {
                 // 并行加载两种数据
             await Promise.all([
-                    loadBackendData('threshold'),
+                    loadBackendData('wcntsegnet'),
                     loadBackendData('cntsegnet')
                 ]);
                 showBackendMetadata();
@@ -4064,6 +4072,7 @@
         }
 
         async function loadBackendData(backend) {
+            backend = normalizeVizBackend(backend);
             // 如果数据已缓存，直接使用
             if (visualizationData[backend]) {
                 return;
@@ -4077,7 +4086,8 @@
             const data = await response.json();
 
             if (backend === 'both') {
-                visualizationData.threshold = data.comparison.threshold;
+                visualizationData.wcntsegnet = data.comparison.wcntsegnet || data.comparison.threshold;
+                visualizationData.threshold = visualizationData.wcntsegnet;
                 visualizationData.cntsegnet = data.comparison.cntsegnet;
                 // 保存元数?
             if (data.comparison.metadata) {
@@ -4093,6 +4103,7 @@
         }
 
         function updateVisualizationDisplay(backend) {
+            backend = normalizeVizBackend(backend);
             const timelineContainer = document.getElementById('process-timeline');
             const phaseDetailsPanel = document.getElementById('phase-details-panel');
             const legacyStepNav = document.getElementById('legacy-step-nav');
@@ -4151,10 +4162,10 @@
 
                     <div class="flex gap-2">
                         <button id="btn-threshold"
-                                onclick="switchBackend('threshold')"
+                                onclick="switchBackend('wcntsegnet')"
                                 class="px-4 py-2 rounded-lg text-xs font-bold border-2 transition-all
                                        bg-indigo-600 text-white border-indigo-600">
-                            传统阈?                        </button>
+                            WCNTSegNET                        </button>
 
                         <button id="btn-cntsegnet"
                                 onclick="switchBackend('cntsegnet')"
@@ -4405,7 +4416,7 @@
                 legacyStepNav.classList.add('hidden');
 
                 // 创建对比视图
-            const thresholdData = visualizationData.threshold;
+            const thresholdData = visualizationData.wcntsegnet || visualizationData.threshold;
                 const cntsegnetData = visualizationData.cntsegnet;
 
                 if (!thresholdData || !cntsegnetData) {
@@ -4414,12 +4425,12 @@
 
                 let html = `
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <!-- 左侧：传统阈值分?-->
+                        <!-- 左侧：WCNTSegNET -->
                         <div class="border-r border-slate-200 pr-4">
                             <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                                 <i class="fas fa-sliders-h text-indigo-500"></i>
-                                传统阈值分?                            </h3>
-                            ${renderSingleBackendSteps(thresholdData, 'threshold')}
+                                WCNTSegNET                            </h3>
+                            ${renderSingleBackendSteps(thresholdData, 'wcntsegnet')}
                         </div>
 
                         <!-- 右侧：CNTSegNet深度学习 -->
@@ -7157,9 +7168,10 @@
     <!-- 数据清洗模块算法可视化功?-->
     <script>
         // 㷨ӻرϴģרã
-        let cleanAlgoCurrentBackend = 'threshold';
+        let cleanAlgoCurrentBackend = 'wcntsegnet';
         let cleanAlgoSelectedStepIndex = 0;
         let cleanAlgoVisualizationData = {
+            wcntsegnet: null,
             threshold: null,
             cntsegnet: null
         };
@@ -7178,6 +7190,10 @@
                 btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-100');
                 label.textContent = '算法可视化';
             }
+        }
+
+        function normalizeCleanAlgoBackend(backend) {
+            return backend === 'threshold' ? 'wcntsegnet' : backend;
         }
 
         function toggleCleanAlgoPage() {
@@ -7213,9 +7229,9 @@
             if (caption) {
                 caption.textContent = `当前样品：${activeItem.sample_id || activeItem.id} · ${activeItem.source || '--'}`;
             }
-            cleanAlgoCurrentBackend = ['threshold', 'cntsegnet', 'both'].includes(cleanAlgoCurrentBackend)
-                ? cleanAlgoCurrentBackend
-                : 'threshold';
+            cleanAlgoCurrentBackend = ['wcntsegnet', 'threshold', 'cntsegnet', 'both'].includes(cleanAlgoCurrentBackend)
+                ? normalizeCleanAlgoBackend(cleanAlgoCurrentBackend)
+                : 'wcntsegnet';
             updateCleanAlgoButtons(cleanAlgoCurrentBackend);
             if (contentDiv) {
                 contentDiv.innerHTML = '<div class="text-center text-slate-400 py-10">算法可视化加载中...</div>';
@@ -7248,6 +7264,7 @@
 
         // лϴģķָ
         async function switchCleanBackend(backend) {
+            backend = normalizeCleanAlgoBackend(backend);
             cleanAlgoCurrentBackend = backend;
             updateCleanAlgoButtons(backend);
             try {
@@ -7261,8 +7278,9 @@
         }
 
         function updateCleanAlgoButtons(activeBackend) {
+            activeBackend = normalizeCleanAlgoBackend(activeBackend);
             const buttons = {
-                'threshold': document.getElementById('clean-btn-threshold'),
+                'wcntsegnet': document.getElementById('clean-btn-threshold'),
                 'cntsegnet': document.getElementById('clean-btn-cntsegnet'),
                 'both': document.getElementById('clean-btn-both')
             };
@@ -7279,7 +7297,8 @@
             }
         }
 
-        async function loadCleanAlgoVisualizationData(backend = cleanAlgoCurrentBackend || 'threshold') {
+        async function loadCleanAlgoVisualizationData(backend = cleanAlgoCurrentBackend || 'wcntsegnet') {
+            backend = normalizeCleanAlgoBackend(backend);
             const activeItem = getActiveCleanItem();
             if (!activeItem?.id) {
                 throw new Error('未选择样品');
@@ -7310,10 +7329,11 @@
             }
 
             if (backend === 'both') {
-                if (!data.comparison?.threshold) {
-                    throw new Error(data?.detail || '对比模式未返回 threshold 数据');
+                if (!data.comparison?.wcntsegnet && !data.comparison?.threshold) {
+                    throw new Error(data?.detail || '对比模式未返回 WCNTSegNET 数据');
                 }
-                cleanAlgoVisualizationData.threshold = data.comparison.threshold;
+                cleanAlgoVisualizationData.wcntsegnet = data.comparison.wcntsegnet || data.comparison.threshold;
+                cleanAlgoVisualizationData.threshold = cleanAlgoVisualizationData.wcntsegnet;
                 cleanAlgoVisualizationData.cntsegnet = data.comparison.cntsegnet || null;
                 cleanAlgoVisualizationData.metadata = data.comparison.metadata || null;
                 if (!cleanAlgoVisualizationData.cntsegnet && cleanAlgoVisualizationData.metadata?.fallback_reason) {
@@ -7345,11 +7365,11 @@
         }
 
         function renderCleanAlgoComparisonView(container) {
-            const thresholdData = cleanAlgoVisualizationData.threshold;
+            const thresholdData = cleanAlgoVisualizationData.wcntsegnet || cleanAlgoVisualizationData.threshold;
             const cntsegnetData = cleanAlgoVisualizationData.cntsegnet;
 
             if (!thresholdData) {
-                container.innerHTML = '<div class="text-center text-slate-300 py-8">暂无传统阈值可视化结果</div>';
+                container.innerHTML = '<div class="text-center text-slate-300 py-8">暂无 WCNTSegNET 可视化结果</div>';
                 return;
             }
 
@@ -7369,12 +7389,12 @@
             </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <!-- 左侧：传统阈值分?-->
+                    <!-- 左侧：WCNTSegNET -->
                     <div class="border-r border-slate-200 pr-4">
                         <h4 class="text-sm font-bold text-indigo-600 mb-3 flex items-center gap-2">
                             <i class="fas fa-sliders-h"></i>
-                            传统阈值分?                        </h4>
-                        ${renderCleanAlgoSteps(thresholdData, 'threshold')}
+                            WCNTSegNET                        </h4>
+                        ${renderCleanAlgoSteps(thresholdData, 'wcntsegnet')}
                     </div>
 
                     <!-- 右侧：CNTSegNet深度学习 -->

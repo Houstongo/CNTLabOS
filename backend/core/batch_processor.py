@@ -35,6 +35,12 @@ if VLMSAM_ROOT not in sys.path:
     sys.path.insert(0, VLMSAM_ROOT)
 
 from src.analysis.feature_extractor import FeatureExtractor
+from backend.core.segmentation_backend import (
+    CANONICAL_WCNTSEGNET,
+    CNTSEGNET,
+    LEGACY_THRESHOLD,
+    normalize_segmentation_backend,
+)
 
 DB_PATH = r'd:\CNTDATA\CNTA_ML_Project\database\cnta_experiments.sqlite'
 DEFAULT_CNTSEGNET_CHECKPOINT = os.path.join(VLMSAM_ROOT, 'checkpoints_512_v2', 'best_model.pth')
@@ -162,7 +168,7 @@ def _extract_image_features(
     magnification,
     diameter_method: str = "standard",
     progress_callback=None,
-    segmentation_backend: str = "threshold",
+    segmentation_backend: str = CANONICAL_WCNTSEGNET,
     device: str = "cpu",
     checkpoint_path: str = DEFAULT_CNTSEGNET_CHECKPOINT,
     tile_size: int = 512,
@@ -178,11 +184,13 @@ def _extract_image_features(
     if img is None:
         raise ValueError(f"imread 失败: {os.path.basename(file_path)}")
 
+    normalized_backend = normalize_segmentation_backend(segmentation_backend, allow_both=False)
+
     extractor = _make_feature_extractor(
         magnification=int(magnification) if magnification else None,
         diameter_method=diameter_method,
     )
-    if segmentation_backend == "cntsegnet":
+    if normalized_backend == CNTSEGNET:
         roi = extractor.extract_roi(img)
         segmenter = _get_cntsegnet_segmenter(
             checkpoint_path=checkpoint_path,
@@ -197,7 +205,7 @@ def _extract_image_features(
                 "segmentation",
                 0.0,
                 {
-                    "backend": "cntsegnet",
+                    "backend": CNTSEGNET,
                     "device": device,
                     "fg_ratio": round(float(mask.mean()), 4),
                 },
@@ -506,13 +514,14 @@ def batch_process(
     diameter_method: str = "standard",
     per_image_timeout: float = None,
     log_steps: bool = False,
-    segmentation_backend: str = "threshold",
+    segmentation_backend: str = CANONICAL_WCNTSEGNET,
     device: str = "cpu",
     checkpoint_path: str = DEFAULT_CNTSEGNET_CHECKPOINT,
     tile_size: int = 512,
     overlap: int = 64,
     seg_threshold: float = 0.5,
 ):
+    normalized_backend = normalize_segmentation_backend(segmentation_backend, allow_both=False)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -571,7 +580,7 @@ def batch_process(
     print(
         f"批处理配置: source={source or 'ALL'} "
         f"diameter_method={diameter_method} "
-        f"segmentation_backend={segmentation_backend} "
+        f"segmentation_backend={normalized_backend} "
         f"device={device} "
         f"per_image_timeout={per_image_timeout if per_image_timeout is not None else 'OFF'} "
         f"log_steps={log_steps}",
@@ -615,7 +624,7 @@ def batch_process(
                     timeout_s=per_image_timeout,
                     prefix=prefix,
                     log_steps=log_steps,
-                    segmentation_backend=segmentation_backend,
+                    segmentation_backend=normalized_backend,
                     device=device,
                     checkpoint_path=checkpoint_path,
                     tile_size=tile_size,
@@ -661,7 +670,7 @@ def batch_process(
                     magnification=mag,
                     diameter_method=effective_diameter_method,
                     progress_callback=emit_progress if log_steps else None,
-                    segmentation_backend=segmentation_backend,
+                    segmentation_backend=normalized_backend,
                     device=device,
                     checkpoint_path=checkpoint_path,
                     tile_size=tile_size,
@@ -734,9 +743,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--segmentation-backend",
         type=str,
-        choices=["threshold", "cntsegnet"],
-        default="threshold",
-        help="分割后端: threshold(传统阈值) 或 cntsegnet(深度学习)",
+        choices=[CANONICAL_WCNTSEGNET, LEGACY_THRESHOLD, CNTSEGNET],
+        default=CANONICAL_WCNTSEGNET,
+        help="分割后端: wcntsegnet(主传统算法), threshold(兼容别名), cntsegnet(深度学习)",
     )
     parser.add_argument(
         "--device",
