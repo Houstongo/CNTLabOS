@@ -230,20 +230,30 @@ def predict_roi_mask(
     normalize_mean: float,
     normalize_std: float,
     device: torch.device,
+    batch_size: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     specs = extract_patch_specs(roi_gray, patch_size=patch_size, mode="grid", stride=stride)
     accum = np.zeros(roi_gray.shape, dtype=np.float32)
     counts = np.zeros(roi_gray.shape, dtype=np.float32)
+    if batch_size is None:
+        batch_size = 8 if device.type == "cuda" else 2
+    batch_size = max(1, int(batch_size))
 
     with torch.no_grad():
-        for spec in specs:
-            patch = extract_patch(roi_gray, spec).astype(np.float32) / 255.0
-            tensor = torch.from_numpy(((patch - normalize_mean) / max(normalize_std, 1e-6)).astype(np.float32))
-            tensor = tensor.unsqueeze(0).unsqueeze(0).to(device)
-            prob = torch.sigmoid(model(tensor))[0, 0].detach().cpu().numpy()
-            valid_prob = prob[: spec.height, : spec.width]
-            accum[spec.top : spec.top + spec.height, spec.left : spec.left + spec.width] += valid_prob
-            counts[spec.top : spec.top + spec.height, spec.left : spec.left + spec.width] += 1.0
+        for start in range(0, len(specs), batch_size):
+            batch_specs = specs[start : start + batch_size]
+            batch_patches = []
+            for spec in batch_specs:
+                patch = extract_patch(roi_gray, spec).astype(np.float32) / 255.0
+                batch_patches.append(((patch - normalize_mean) / max(normalize_std, 1e-6)).astype(np.float32))
+
+            tensor = torch.from_numpy(np.stack(batch_patches, axis=0)).unsqueeze(1).to(device)
+            probs = torch.sigmoid(model(tensor)).detach().cpu().numpy()[:, 0]
+
+            for spec, prob in zip(batch_specs, probs):
+                valid_prob = prob[: spec.height, : spec.width]
+                accum[spec.top : spec.top + spec.height, spec.left : spec.left + spec.width] += valid_prob
+                counts[spec.top : spec.top + spec.height, spec.left : spec.left + spec.width] += 1.0
 
     prob_map = accum / np.maximum(counts, 1.0)
     mask = (prob_map >= threshold).astype(np.uint8) * 255

@@ -1545,6 +1545,91 @@ async def tccer_query(req: TCCERQueryRequest):
         raise HTTPException(status_code=500, detail=f"TCCER检索失败: {str(e)}")
 
 
+@app.post("/api/tccer/visualize")
+async def tccer_visualize(req: TCCERQueryRequest):
+    """
+    TCCER检索路径可视化
+
+    生成关系图谱数据、路径展示和可视化摘要
+    """
+    try:
+        # 先进行TCCER检索
+        tccer_result = tccer_retriever.retrieve(
+            query=req.query,
+            task_name=req.task_name,
+        )
+
+        # 转换为字典格式
+        result_dict = tccer_result.to_dict()
+
+        # 使用KnowledgeBaseService进行路径可视化
+        viz_result = rag_retriever.knowledge_base.visualize_paths(result_dict)
+
+        return viz_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TCCER可视化失败: {str(e)}")
+
+
+@app.post("/api/tccer/explain")
+async def tccer_explain(req: TCCERQueryRequest):
+    """
+    TCCER证据解释生成
+
+    自动生成检索路径的文字解释，包括链式推理、置信度说明等
+    """
+    try:
+        # 先进行TCCER检索
+        tccer_result = tccer_retriever.retrieve(
+            query=req.query,
+            task_name=req.task_name,
+        )
+
+        # 转换为字典格式
+        result_dict = tccer_result.to_dict()
+
+        # 使用KnowledgeBaseService进行证据解释生成
+        exp_result = rag_retriever.knowledge_base.generate_evidence_explanation(result_dict)
+
+        return exp_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TCCER解释生成失败: {str(e)}")
+
+
+@app.post("/api/tccer/full")
+async def tccer_full(req: TCCERQueryRequest):
+    """
+    TCCER完整检索 + 可视化 + 解释
+
+    一次性返回检索结果、可视化和解释生成
+    """
+    try:
+        # 进行TCCER检索
+        tccer_result = tccer_retriever.retrieve(
+            query=req.query,
+            task_name=req.task_name,
+        )
+
+        # 转换为字典格式
+        result_dict = tccer_result.to_dict()
+
+        # 路径可视化
+        viz_result = rag_retriever.knowledge_base.visualize_paths(result_dict)
+
+        # 证据解释生成
+        exp_result = rag_retriever.knowledge_base.generate_evidence_explanation(result_dict)
+
+        # 合并所有结果
+        full_result = {
+            "tccer_retrieval": result_dict,
+            "visualization": viz_result,
+            "explanation": exp_result,
+        }
+
+        return full_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TCCER完整检索失败: {str(e)}")
+
+
 # ========================================================================
 # MSFU (Minimal Semantic Fact Unit) API
 # ========================================================================

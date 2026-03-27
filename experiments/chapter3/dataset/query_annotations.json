@@ -1,0 +1,503 @@
+{
+  "metadata": {
+    "total_queries": 70,
+    "task_types": [
+      "process_analysis",
+      "morphology_interpretation",
+      "prediction_explanation"
+    ],
+    "annotation_status": "pending"
+  },
+  "queries": [
+    {
+      "query_id": "process_analysis_001",
+      "task_type": "process_analysis",
+      "query_text": "生长温度通过机理影响取向",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_002",
+      "task_type": "process_analysis",
+      "query_text": "催化剂失活的影响机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_003",
+      "task_type": "process_analysis",
+      "query_text": "碳源裂解与生长速率",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_004",
+      "task_type": "process_analysis",
+      "query_text": "扩散受限的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_005",
+      "task_type": "process_analysis",
+      "query_text": "表面反应的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_006",
+      "task_type": "process_analysis",
+      "query_text": "催化剂状态对生长的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_007",
+      "task_type": "process_analysis",
+      "query_text": "温度调控的机理",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_008",
+      "task_type": "process_analysis",
+      "query_text": "气氛组成的作用机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_009",
+      "task_type": "process_analysis",
+      "query_text": "生长稳定性的影响因素",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_010",
+      "task_type": "process_analysis",
+      "query_text": "生长终止的原因",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_011",
+      "task_type": "process_analysis",
+      "query_text": "催化剂颗粒大小对生长的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_012",
+      "task_type": "process_analysis",
+      "query_text": "基底温度对形貌的影响机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_013",
+      "task_type": "process_analysis",
+      "query_text": "气体压强对生长速率的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_014",
+      "task_type": "process_analysis",
+      "query_text": "反应时间与生长机理的关系",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_015",
+      "task_type": "process_analysis",
+      "query_text": "催化剂形貌对碳管结构的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_016",
+      "task_type": "process_analysis",
+      "query_text": "温度梯度对生长模式的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_017",
+      "task_type": "process_analysis",
+      "query_text": "载气类型对生长的影响机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_018",
+      "task_type": "process_analysis",
+      "query_text": "碳源浓度对生长的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_019",
+      "task_type": "process_analysis",
+      "query_text": "退火过程的机理分析",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_020",
+      "task_type": "process_analysis",
+      "query_text": "催化剂预处理的机理",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_021",
+      "task_type": "process_analysis",
+      "query_text": "生长初期与后期的机理差异",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_022",
+      "task_type": "process_analysis",
+      "query_text": "多层催化与单层催化的机理对比",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_023",
+      "task_type": "process_analysis",
+      "query_text": "添加剂对生长机理的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_024",
+      "task_type": "process_analysis",
+      "query_text": "反应器内流动状态对生长的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_025",
+      "task_type": "process_analysis",
+      "query_text": "催化剂活性位点的作用机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_026",
+      "task_type": "process_analysis",
+      "query_text": "温度变化对催化剂相态的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_027",
+      "task_type": "process_analysis",
+      "query_text": "气体组成对催化剂表面状态的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_028",
+      "task_type": "process_analysis",
+      "query_text": "生长密度对催化剂利用率的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_029",
+      "task_type": "process_analysis",
+      "query_text": "生长过程中的传质机理",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "process_analysis_030",
+      "task_type": "process_analysis",
+      "query_text": "能量输入对生长反应的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_001",
+      "task_type": "morphology_interpretation",
+      "query_text": "温度对直径的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_002",
+      "task_type": "morphology_interpretation",
+      "query_text": "催化剂厚度对密度的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_003",
+      "task_type": "morphology_interpretation",
+      "query_text": "生长时间与取向度的关系",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_004",
+      "task_type": "morphology_interpretation",
+      "query_text": "退火温度对形貌的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_005",
+      "task_type": "morphology_interpretation",
+      "query_text": "气体流量对曲率的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_006",
+      "task_type": "morphology_interpretation",
+      "query_text": "C2H4 流量对生长的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_007",
+      "task_type": "morphology_interpretation",
+      "query_text": "H2 流量的作用机制",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_008",
+      "task_type": "morphology_interpretation",
+      "query_text": "催化剂活性的影响因素",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_009",
+      "task_type": "morphology_interpretation",
+      "query_text": "阵列高度的变化规律",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_010",
+      "task_type": "morphology_interpretation",
+      "query_text": "覆盖密度的控制条件",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_011",
+      "task_type": "morphology_interpretation",
+      "query_text": "退火时间对直径分布的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_012",
+      "task_type": "morphology_interpretation",
+      "query_text": "催化剂层厚度对取向的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_013",
+      "task_type": "morphology_interpretation",
+      "query_text": "气体压强对密度的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_014",
+      "task_type": "morphology_interpretation",
+      "query_text": "基底位置与形貌的关系",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_015",
+      "task_type": "morphology_interpretation",
+      "query_text": "温度对曲率半径的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_016",
+      "task_type": "morphology_interpretation",
+      "query_text": "生长时间对高度的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_017",
+      "task_type": "morphology_interpretation",
+      "query_text": "催化剂状态对密度的调控",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_018",
+      "task_type": "morphology_interpretation",
+      "query_text": "气流速度对形貌的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_019",
+      "task_type": "morphology_interpretation",
+      "query_text": "退火气氛对取向的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "morphology_interpretation_020",
+      "task_type": "morphology_interpretation",
+      "query_text": "反应温度与密度的关系",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_001",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 fe_thickness 对直径的影响趋势",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_002",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 growth_temp 对密度的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_003",
+      "task_type": "prediction_explanation",
+      "query_text": "增加 growth_time 对取向的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_004",
+      "task_type": "prediction_explanation",
+      "query_text": "调节 ar_flow 对形貌的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_005",
+      "task_type": "prediction_explanation",
+      "query_text": "提高 h2 流量的效果",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_006",
+      "task_type": "prediction_explanation",
+      "query_text": "降低 c2h4 流量的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_007",
+      "task_type": "prediction_explanation",
+      "query_text": "增加 anneal_temp 的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_008",
+      "task_type": "prediction_explanation",
+      "query_text": "延长 anneal_time 的效果",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_009",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 position 的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_010",
+      "task_type": "prediction_explanation",
+      "query_text": "优化 magnification 的意义",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_011",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 al2o3_power 对形貌的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_012",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 fe_power 对直径的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_013",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 al2o3_thickness 对密度的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_014",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 ar_flow 对取向的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_015",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 h2_flow 对曲率的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_016",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 c2h4_flow 对高度的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_017",
+      "task_type": "prediction_explanation",
+      "query_text": "增加 anneal_temp 对活性的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_018",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 anneal_time 对形貌的作用",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_019",
+      "task_type": "prediction_explanation",
+      "query_text": "改变 growth_temp 对取向的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    },
+    {
+      "query_id": "prediction_explanation_020",
+      "task_type": "prediction_explanation",
+      "query_text": "调整 growth_time 对密度的影响",
+      "relevant_msfus": [],
+      "annotation_notes": ""
+    }
+  ]
+}

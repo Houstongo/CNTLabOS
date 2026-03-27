@@ -70,6 +70,64 @@ class FeatureExtractorCurvatureV2Tests(unittest.TestCase):
         self.assertGreater(fine_curvature, 0.0)
         self.assertGreater(fine_curvature, coarse_curvature)
 
+    def test_calculate_curvature_v2_skips_invalid_branches_instead_of_zero_weighting(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_wave_skeleton()
+
+        branches = extractor._collect_ordered_branches_v2(
+            skel,
+            min_points=max(extractor.V3_MIN_BRANCH_POINTS, int(round(extractor.expected_tube_px * 1.5))),
+            min_length_factor=extractor.V3_MIN_BRANCH_LENGTH_FACTOR,
+        )
+        self.assertTrue(branches)
+
+        _, baseline_curvature = extractor.calculate_curvature_v2(skel, ordered_branches=branches)
+        invalid_branch = {
+            "coords": np.asarray([[0.0, 0.0], [1.0, 0.0]], dtype=float),
+            "n_points": 2,
+            "path_length_px": 20.0,
+        }
+        _, mixed_curvature = extractor.calculate_curvature_v2(skel, ordered_branches=branches + [invalid_branch])
+
+        self.assertAlmostEqual(mixed_curvature, baseline_curvature, places=9)
+
+    def test_calculate_curvature_legacy_uses_calibrated_px_per_um(self):
+        skel = self._make_wave_skeleton()
+
+        coarse = FeatureExtractor(magnification=50000)
+        coarse.px_per_um = 50.0
+        _, coarse_curvature = coarse.calculate_curvature(skel)
+
+        fine = FeatureExtractor(magnification=50000)
+        fine.px_per_um = 200.0
+        _, fine_curvature = fine.calculate_curvature(skel)
+
+        self.assertGreater(coarse_curvature, 0.0)
+        self.assertGreater(fine_curvature, coarse_curvature)
+
+    def test_calculate_curvature_v3_returns_near_zero_for_straight_centerline(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_straight_skeleton()
+
+        label, curvature_nm_v3 = extractor.calculate_curvature_v3(skel)
+
+        self.assertEqual(label, "Straight")
+        self.assertLess(curvature_nm_v3, 0.05)
+
+    def test_calculate_curvature_v3_is_more_sensitive_than_v2_for_wave_centerline(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_wave_skeleton()
+
+        _, curvature_nm_v2 = extractor.calculate_curvature_v2(skel)
+        label_v3, curvature_nm_v3 = extractor.calculate_curvature_v3(skel)
+
+        self.assertIn(label_v3, {"Wavy", "Coiled"})
+        self.assertGreater(curvature_nm_v3, 0.001)
+        self.assertGreaterEqual(curvature_nm_v3, curvature_nm_v2)
+
 
 if __name__ == "__main__":
     unittest.main()

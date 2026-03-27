@@ -111,6 +111,32 @@ DEFAULT_TASK_PROFILES = (
 
 
 class KnowledgeBaseService:
+    # TCCER 关系转换矩阵 - 控制允许的路径扩展
+    RELATION_TRANSITION_MATRIX = {
+        "process_to_morphology": ["morphology_to_performance", "mechanism_to_morphology"],
+        "process_to_mechanism": ["mechanism_to_morphology", "mechanism_evidence"],
+        "mechanism_to_morphology": ["morphology_to_performance", "process_to_morphology"],
+        "morphology_to_performance": [],
+        "process_to_performance": [],
+        "mechanism_evidence": [],
+    }
+
+    # 任务类型配置
+    TASK_TYPES = {
+        "morphology_interpretation": {
+            "preferred_relations": ["process_to_morphology", "mechanism_to_morphology"],
+            "direction_bias": 0.2,
+        },
+        "process_analysis": {
+            "preferred_relations": ["process_to_morphology", "process_to_mechanism"],
+            "direction_bias": 0.1,
+        },
+        "prediction_explanation": {
+            "preferred_relations": ["morphology_to_performance", "process_to_performance"],
+            "direction_bias": 0.15,
+        },
+    }
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.embedding_model_name = os.getenv(
@@ -400,6 +426,7 @@ class KnowledgeBaseService:
                             relation.get("confidence", 0.5),
                             relation.get("mechanism_summary"),
                             relation.get("evidence_text"),
+                            chunk_id,
                         ),
                     )
 
@@ -565,6 +592,1014 @@ class KnowledgeBaseService:
                 }
             )
         return results
+
+    def parse_query(self, query: str) -> Dict[str, object]:
+        """
+        解析查询语句，提取实体、条件、方向、目标
+        z(q) = (Eq, Cq, Dq, Yq)
+        """
+        result = {
+            "entities": [],
+            "conditions": [],
+            "direction": None,
+            "targets": [],
+            "raw_query": query,
+        }
+
+        # 提取实体 - 从查询中提取工艺/形貌/性能因子
+        all_patterns = {
+            **PROCESS_FACTOR_PATTERNS,
+            **MORPHOLOGY_FACTOR_PATTERNS,
+            **PERFORMANCE_FACTOR_PATTERNS,
+        }
+
+        for factor_name, patterns in all_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, query, re.IGNORECASE):
+                    if factor_name not in result["entities"]:
+                        result["entities"].append(factor_name)
+
+        # 提取方向 - 正向/负向相关
+        if re.search(r"(促进|增加|提高|增强|increase|promote|enhance|improve)", query, re.IGNORECASE):
+            result["direction"] = "positive"
+        elif re.search(r"(抑制|减少|降低|减弱|decrease|reduce|suppress|inhibit)", query, re.IGNORECASE):
+            result["direction"] = "negative"
+
+        # 提取条件 - 数值范围、比较关系
+        numeric_matches = re.finditer(r"\d+", query)
+        for match in numeric_matches:
+            result["conditions"].append({"type": "numeric", "value": match.group()})
+
+        # 提取目标 - 用户想要得到的信息类型
+        if any(kw in query.lower() for kw in ["为什么", "why", "how", "机制", "mechanism"]):
+            result["targets"].append("explanation")
+        if any(kw in query.lower() for kw in ["影响", "effect", "impact", "关系", "relation"]):
+            result["targets"].append("relation")
+
+        return result
+
+    def tccer_retrieve(
+        self,
+        query: str,
+        task_name: Optional[str] = None,
+        top_k: int = 5,
+        max_depth: Optional[int] = None,
+    ) -> Dict[str, object]:
+        """
+        TCCER: 面向任务的约束链式证据检索
+
+        Args:
+            max_depth: 路径扩展最大深度，未指定时根据任务类型自动设置
+                      - process_analysis: H=2
+                      - morphology_interpretation: H=3
+                      - prediction_explanation: H=3
+        """
+        parsed_query = self.parse_query(query)
+        task_profile = self.TASK_TYPES.get(task_name or "morphology_interpretation", {})
+
+        # 根据任务类型设置默认 max_depth
+        depth_config = {
+            "process_analysis": 2,
+            "morphology_interpretation": 3,
+            "prediction_explanation": 3,
+        }
+        actual_max_depth = max_depth or depth_config.get(task_name, 2)
+
+        # 步骤1: 初始召回 - 稀疏检索 + 稠密检索
+        initial_chunks = self._mixed_recall_initial(
+            query, parsed_query, task_profile, top_k * 2
+        )
+
+        # 步骤2: 约束路径扩展
+        expanded_paths = self._constrained_path_expansion(
+            initial_chunks, parsed_query, task_profile, actual_max_depth
+        )
+
+        # 步骤3: 路径评分与排序
+        scored_paths = self._score_paths(expanded_paths, parsed_query, task_profile)
+
+        # 步骤4: 冗余抑制
+        final_results = self._suppress_redundancy(scored_paths, top_k)
+
+        return {
+            "query": query,
+            "parsed_query": parsed_query,
+            "task_name": task_name,
+            "max_depth": actual_max_depth,
+            "results": final_results,
+            "path_count": len(scored_paths),
+        }
+
+    def _mixed_recall_initial(
+        self,
+        query: str,
+        parsed_query: Dict[str, object],
+        task_profile: Dict[str, object],
+        top_k: int,
+    ) -> List[Dict[str, object]]:
+        """混合召回：稀疏检索 + 稠密检索"""
+        query_tokens = self._tokenize(query)
+        if not query_tokens:
+            return []
+
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT c.id, c.text, c.keywords, c.knowledge_type,
+                       d.id AS doc_id, d.title, d.theme, d.source_type, d.is_core
+                FROM kb_chunks c
+                JOIN kb_documents d ON d.id = c.doc_id
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+        row_dicts = [dict(row) for row in rows]
+        semantic_scores = self._semantic_scores(query, row_dicts)
+
+        # 混合评分: S0 = α·sparse + (1-α)·dense + β·task + γ·condition
+        alpha, beta, gamma = 0.4, 0.3, 0.2
+
+        scored = []
+        for row in row_dicts:
+            sparse_score = self._score_row(row, query_tokens, task_profile)
+            dense_score = semantic_scores.get(int(row["id"]), 0.0)
+
+            # 任务相关性评分
+            task_score = 0.0
+            if task_profile.get("preferred_relations"):
+                task_score = self._task_relevance_score(row, task_profile)
+
+            # 条件匹配评分
+            condition_score = self._condition_match_score(row, parsed_query)
+
+            total_score = (
+                alpha * sparse_score +
+                (1 - alpha) * dense_score +
+                beta * task_score +
+                gamma * condition_score
+            )
+
+            if total_score > 0:
+                scored.append({
+                    "chunk_id": row["id"],
+                    "doc_id": row["doc_id"],
+                    "text": row["text"],
+                    "score": total_score,
+                    "sparse_score": sparse_score,
+                    "dense_score": dense_score,
+                    "task_score": task_score,
+                    "condition_score": condition_score,
+                })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
+
+    def _constrained_path_expansion(
+        self,
+        initial_chunks: List[Dict[str, object]],
+        parsed_query: Dict[str, object],
+        task_profile: Dict[str, object],
+        max_depth: int,
+    ) -> List[Dict[str, object]]:
+        """约束路径扩展：基于关系转换矩阵扩展证据链"""
+        paths = []
+
+        # 预先加载所有初始chunks的关系信息
+        chunk_relations_map = self._get_chunk_relations_map(
+            [chunk["chunk_id"] for chunk in initial_chunks]
+        )
+
+        for chunk in initial_chunks:
+            chunk_id = chunk["chunk_id"]
+
+            # 为初始chunk添加关系信息
+            chunk_with_relation = dict(chunk)
+            chunk_with_relation["relation"] = chunk_relations_map.get(chunk_id, {}).get("relation", {})
+
+            path = {
+                "chunks": [chunk_with_relation],
+                "relations": [chunk_with_relation.get("relation")],
+                "depth": 1,
+            }
+            paths.append(path)
+
+            # 深度优先扩展，使用路径级别的 visited 集合
+            path_visited = {chunk_id}
+            for depth_step in range(1, max_depth):
+                last_chunk = path["chunks"][-1]
+                next_chunks = self._get_related_chunks(
+                    last_chunk["chunk_id"],
+                    parsed_query,
+                    task_profile,
+                    max_hops=1,  # 每次扩展只查找1跳邻居
+                )
+
+                if not next_chunks:
+                    break
+
+                # 尝试找到第一个未访问的chunk
+                found_next = False
+                for next_chunk in next_chunks:
+                    next_chunk_id = next_chunk["chunk_id"]
+                    if next_chunk_id not in path_visited:
+                        # 为新chunk加载关系信息
+                        relations_map = self._get_chunk_relations_map([next_chunk_id])
+                        if next_chunk_id in relations_map:
+                            next_chunk["relation"] = relations_map[next_chunk_id]["relation"]
+
+                        path["chunks"].append(next_chunk)
+                        path["relations"].append(next_chunk.get("relation", {}))
+                        path["depth"] += 1
+                        path_visited.add(next_chunk_id)
+                        found_next = True
+                        break
+
+                if not found_next:
+                    break
+
+        return paths
+
+    def _get_chunk_relations_map(self, chunk_ids: List[int]) -> Dict[int, Dict[str, object]]:
+        """获取多个chunks的关系信息
+
+        Args:
+            chunk_ids: chunk ID列表
+
+        Returns:
+            chunk_id -> 关系信息的映射
+        """
+        if not chunk_ids:
+            return {}
+
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            placeholders = ",".join("?" for _ in chunk_ids)
+            rows = conn.execute(
+                f"""
+                SELECT l.chunk_id,
+                       l.relation_type, l.process_factor, l.morphology_factor,
+                       l.performance_factor, l.effect_direction, l.confidence
+                FROM kb_links l
+                WHERE l.chunk_id IN ({placeholders})
+                ORDER BY l.confidence DESC
+                """,
+                tuple(chunk_ids),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        relations_map = {}
+        for row in rows:
+            chunk_id = row["chunk_id"]
+            relations_map[chunk_id] = {
+                "relation": {
+                    "type": row["relation_type"],
+                    "process_factor": row["process_factor"],
+                    "morphology_factor": row["morphology_factor"],
+                    "performance_factor": row["performance_factor"],
+                    "effect_direction": row["effect_direction"],
+                    "confidence": row["confidence"],
+                }
+            }
+
+        return relations_map
+
+    def _get_related_chunks(
+        self,
+        chunk_id: int,
+        parsed_query: Dict[str, object],
+        task_profile: Dict[str, object],
+        max_hops: int = 1,
+    ) -> List[Dict[str, object]]:
+        """获取相关的 chunks（基于关系链接）
+
+        Args:
+            chunk_id: 当前chunk的ID
+            parsed_query: 解析后的查询
+            task_profile: 任务配置
+            max_hops: 最大跳数（目前只支持1跳）
+
+        Returns:
+            相关chunks列表，按相关性排序
+        """
+        # 只支持1跳查询，多跳通过迭代实现
+        if max_hops != 1:
+            max_hops = 1
+
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+
+            # 首先获取当前chunk的所有links
+            current_links = conn.execute(
+                "SELECT source_node, target_node FROM kb_links WHERE chunk_id = ?",
+                (chunk_id,)
+            ).fetchall()
+
+            if not current_links:
+                return []
+
+            # 收集所有相关的因子名称
+            related_factors = set()
+            for link in current_links:
+                if link["source_node"]:
+                    related_factors.add(link["source_node"])
+                if link["target_node"]:
+                    related_factors.add(link["target_node"])
+
+            if not related_factors:
+                return []
+
+            # 查找与这些因子相关的其他chunks
+            placeholders = ",".join("?" for _ in related_factors)
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT c.id, c.text, c.knowledge_type,
+                       l.relation_type, l.process_factor, l.morphology_factor,
+                       l.performance_factor, l.effect_direction, l.confidence
+                FROM kb_links l
+                JOIN kb_chunks c ON c.id = l.chunk_id
+                WHERE (l.source_node IN ({placeholders}) OR l.target_node IN ({placeholders}))
+                AND c.id != ?
+                ORDER BY l.confidence DESC
+                LIMIT 50
+                """,
+                tuple(list(related_factors) + list(related_factors) + [chunk_id]),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        related = []
+        for row in rows:
+            score = self._relation_relevance_score(row, parsed_query, task_profile)
+            # 如果没有任务配置和查询实体，使用置信度作为基础分数
+            if score == 0 and row["confidence"]:
+                score = row["confidence"] * 0.5
+
+            # 降低评分阈值到0.001，允许更多结果通过
+            if score > 0.001:  # 进一步降低阈值，允许更多结果通过
+                related.append({
+                    "chunk_id": row["id"],
+                    "text": row["text"],
+                    "relation": {
+                        "type": row["relation_type"],
+                        "process_factor": row["process_factor"],
+                        "morphology_factor": row["morphology_factor"],
+                        "performance_factor": row["performance_factor"],
+                        "effect_direction": row["effect_direction"],
+                        "confidence": row["confidence"],
+                    },
+                    "score": score,
+                })
+
+        return related
+
+    def _score_paths(
+        self,
+        paths: List[Dict[str, object]],
+        parsed_query: Dict[str, object],
+        task_profile: Dict[str, object],
+    ) -> List[Dict[str, object]]:
+        """路径评分：综合路径深度、相关性、一致性"""
+        scored = []
+        for path in paths:
+            # 基础评分：所有 chunk 评分的平均
+            avg_chunk_score = sum(c["score"] for c in path["chunks"]) / len(path["chunks"])
+
+            # 深度奖励：更深的路径获得更高分数
+            depth_bonus = 0.1 * path["depth"]
+
+            # 一致性评分：检查路径中关系的连贯性
+            consistency_score = self._path_consistency_score(path)
+
+            # 方向一致性：与查询方向是否一致
+            direction_score = self._direction_consistency_score(path, parsed_query)
+
+            total_score = (
+                avg_chunk_score * 0.6 +
+                depth_bonus * 0.1 +
+                consistency_score * 0.2 +
+                direction_score * 0.1
+            )
+
+            scored.append({
+                "path": path,
+                "score": total_score,
+                "avg_chunk_score": avg_chunk_score,
+                "depth_bonus": depth_bonus,
+                "consistency_score": consistency_score,
+                "direction_score": direction_score,
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored
+
+    def _suppress_redundancy(
+        self,
+        scored_paths: List[Dict[str, object]],
+        top_k: int,
+    ) -> List[Dict[str, object]]:
+        """冗余抑制：去除高度重复的路径"""
+        selected = []
+        selected_path_chunk_sets = []
+
+        for path_data in scored_paths:
+            path = path_data["path"]
+            chunk_ids = {c["chunk_id"] for c in path["chunks"]}
+
+            # 计算与已选择路径的重叠度
+            max_overlap = 0.0
+            for selected_ids in selected_path_chunk_sets:
+                if selected_ids:
+                    overlap = len(chunk_ids & selected_ids) / len(chunk_ids)
+                    max_overlap = max(max_overlap, overlap)
+
+            # 重叠度超过阈值则跳过
+            if max_overlap > 0.6:
+                continue
+
+            selected.append({
+                "chunks": path["chunks"],
+                "relations": path["relations"],
+                "depth": path["depth"],
+                "score": path_data["score"],
+                "consistency": path_data["consistency_score"],
+            })
+
+            selected_path_chunk_sets.append(chunk_ids)
+
+            if len(selected) >= top_k:
+                break
+
+        return selected
+
+    def visualize_paths(self, tccer_result: Dict[str, object]) -> Dict[str, object]:
+        """
+        路径可视化：生成关系图谱和路径展示
+
+        Returns:
+            {
+                "graph": {...},           # 关系图谱数据
+                "paths": [...],            # 可视化路径列表
+                "summary": {...}           # 可视化摘要
+            }
+        """
+        if not tccer_result.get("results"):
+            return {"graph": {}, "paths": [], "summary": {"error": "No paths to visualize"}}
+
+        # 1. 构建关系图谱节点和边
+        nodes = []
+        edges = []
+        node_map = {}
+
+        path_index = 0
+        for path_result in tccer_result["results"]:
+            chunks = path_result.get("chunks", [])
+            relations = path_result.get("relations", [])
+
+            # 为每个 chunk 创建节点
+            for chunk_idx, chunk in enumerate(chunks):
+                node_id = f"p{path_index}_c{chunk_idx}"
+                if node_id not in node_map:
+                    node_map[node_id] = {
+                        "id": node_id,
+                        "path_index": path_index,
+                        "chunk_index": chunk_idx,
+                        "text": chunk.get("text", "")[:200],
+                        "score": chunk.get("score", 0.0),
+                        "type": "chunk",
+                    }
+                    nodes.append(node_map[node_id])
+
+            # 创建关系边
+            for rel_idx, relation in enumerate(relations):
+                if rel_idx < len(chunks) - 1:
+                    source_id = f"p{path_index}_c{rel_idx}"
+                    target_id = f"p{path_index}_c{rel_idx + 1}"
+
+                    edge_id = f"p{path_index}_e{rel_idx}"
+                    edges.append({
+                        "id": edge_id,
+                        "source": source_id,
+                        "target": target_id,
+                        "path_index": path_index,
+                        "relation_type": relation.get("type", "unknown"),
+                        "process_factor": relation.get("process_factor"),
+                        "morphology_factor": relation.get("morphology_factor"),
+                        "performance_factor": relation.get("performance_factor"),
+                        "effect_direction": relation.get("effect_direction"),
+                        "confidence": relation.get("confidence", 0.5),
+                    })
+
+            path_index += 1
+
+        # 2. 构建可视化路径
+        visual_paths = []
+        for path_idx, path_result in enumerate(tccer_result["results"]):
+            chunks = path_result.get("chunks", [])
+            relations = path_result.get("relations", [])
+
+            visual_path = {
+                "path_index": path_idx,
+                "depth": path_result.get("depth", 1),
+                "score": path_result.get("score", 0.0),
+                "consistency": path_result.get("consistency", 0.0),
+                "nodes": [],
+                "edges": [],
+            }
+
+            # 添加路径节点
+            for chunk_idx, chunk in enumerate(chunks):
+                node_id = f"p{path_idx}_c{chunk_idx}"
+                visual_path["nodes"].append({
+                    "id": node_id,
+                    "position": chunk_idx,
+                    "text": chunk.get("text", "")[:150],
+                    "score": chunk.get("score", 0.0),
+                })
+
+            # 添加路径边
+            for rel_idx, relation in enumerate(relations):
+                if rel_idx < len(chunks) - 1:
+                    visual_path["edges"].append({
+                        "from": f"p{path_idx}_c{rel_idx}",
+                        "to": f"p{path_idx}_c{rel_idx + 1}",
+                        "relation_type": relation.get("type", "unknown"),
+                        "direction": relation.get("effect_direction"),
+                        "label": self._create_edge_label(relation),
+                    })
+
+            visual_paths.append(visual_path)
+
+        # 3. 生成关系图谱数据
+        graph_data = self._create_graph_data(nodes, edges)
+
+        # 4. 可视化摘要
+        summary = {
+            "total_paths": len(visual_paths),
+            "total_nodes": len(nodes),
+            "total_edges": len(edges),
+            "avg_depth": sum(p["depth"] for p in visual_paths) / max(len(visual_paths), 1),
+            "relation_types": list(set(e["relation_type"] for e in edges)),
+            "query": tccer_result.get("query"),
+            "task_name": tccer_result.get("task_name"),
+        }
+
+        return {
+            "graph": graph_data,
+            "paths": visual_paths,
+            "summary": summary,
+        }
+
+    def _create_graph_data(self, nodes: List[Dict[str, object]], edges: List[Dict[str, object]]) -> Dict[str, object]:
+        """创建关系图谱数据，适配 D3.js 等可视化库"""
+        node_list = []
+        edge_list = []
+
+        # 节点样式配置
+        node_styles = {
+            "chunk": {"color": "#4CAF50", "size": 20},
+            "query": {"color": "#2196F3", "size": 25},
+        }
+
+        for node in nodes:
+            node_list.append({
+                "id": node["id"],
+                "label": f"Chunk {node['chunk_index']}",
+                "text": node["text"],
+                "score": node["score"],
+                "color": node_styles[node["type"]]["color"],
+                "size": node_styles[node["type"]]["size"],
+                "type": node["type"],
+            })
+
+        # 边样式配置
+        edge_styles = {
+            "process_to_morphology": {"color": "#FF9800", "width": 2},
+            "process_to_mechanism": {"color": "#9C27B0", "width": 2},
+            "mechanism_to_morphology": {"color": "#E91E63", "width": 2},
+            "morphology_to_performance": {"color": "#00BCD4", "width": 2},
+            "process_to_performance": {"color": "#795548", "width": 2},
+            "mechanism_evidence": {"color": "#607D8B", "width": 1, "style": "dashed"},
+        }
+
+        for edge in edges:
+            style = edge_styles.get(edge["relation_type"], {"color": "#999", "width": 1})
+            edge_list.append({
+                "id": edge["id"],
+                "source": edge["source"],
+                "target": edge["target"],
+                "label": self._create_edge_label(edge),
+                "color": style["color"],
+                "width": style["width"],
+                "style": style.get("style", "solid"),
+                "confidence": edge.get("confidence", 0.5),
+            })
+
+        return {
+            "nodes": node_list,
+            "edges": edge_list,
+            "layout": "force_directed",  # 推荐布局算法
+        }
+
+    def _create_edge_label(self, relation: Dict[str, object]) -> str:
+        """创建边的标签"""
+        parts = []
+        if relation.get("process_factor"):
+            parts.append(relation["process_factor"])
+        if relation.get("morphology_factor"):
+            parts.append("→")
+            parts.append(relation["morphology_factor"])
+        if relation.get("performance_factor"):
+            parts.append("→")
+            parts.append(relation["performance_factor"])
+
+        direction_symbol = {
+            "positive": "↑",
+            "negative": "↓",
+            "neutral": "→"
+        }.get(relation.get("effect_direction"), "→")
+
+        if parts:
+            return f"{' '.join(parts)} {direction_symbol}"
+        return relation.get("relation_type", "unknown")
+
+    def generate_evidence_explanation(self, tccer_result: Dict[str, object]) -> Dict[str, object]:
+        """
+        生成证据解释：自动生成检索路径的文字解释
+
+        Returns:
+            {
+                "summary": "...",           # 总体摘要
+                "chain_explanation": "...",   # 链式推理解释
+                "confidence_explanation": "...", # 置信度说明
+                "evidence_integration": "...", # 证据整合
+                "detailed_paths": [...]      # 详细路径解释
+            }
+        """
+        if not tccer_result.get("results"):
+            return {"error": "No evidence to explain"}
+
+        query = tccer_result.get("query", "")
+        task_name = tccer_result.get("task_name", "general")
+        results = tccer_result.get("results", [])
+
+        # 1. 生成总体摘要
+        summary = self._generate_summary(query, task_name, results)
+
+        # 2. 生成链式推理解释
+        chain_explanation = self._generate_chain_explanation(query, results)
+
+        # 3. 生成置信度说明
+        confidence_explanation = self._generate_confidence_explanation(results)
+
+        # 4. 生成证据整合
+        evidence_integration = self._generate_evidence_integration(query, results)
+
+        # 5. 生成详细路径解释
+        detailed_paths = []
+        for path_idx, path_result in enumerate(results):
+            detailed_paths.append(self._generate_detailed_path_explanation(path_idx, path_result))
+
+        return {
+            "summary": summary,
+            "chain_explanation": chain_explanation,
+            "confidence_explanation": confidence_explanation,
+            "evidence_integration": evidence_integration,
+            "detailed_paths": detailed_paths,
+        }
+
+    def _generate_summary(self, query: str, task_name: str, results: List[Dict[str, object]]) -> str:
+        """生成总体摘要"""
+        path_count = len(results)
+        avg_score = sum(r.get("score", 0) for r in results) / max(path_count, 1)
+        max_depth = max(r.get("depth", 1) for r in results) if results else 1
+
+        task_chinese = {
+            "morphology_interpretation": "形貌解释",
+            "process_analysis": "工艺分析",
+            "prediction_explanation": "预测解释"
+        }.get(task_name, "通用分析")
+
+        summary = f"""
+基于"{query}"的查询，系统在{task_chinese}任务中检索到了{path_count}条相关证据路径。
+
+这些路径的平均相关性评分为{avg_score:.3f}，最大推理深度为{max_depth}层。
+检索结果涵盖了工艺参数、形貌特征和性能指标之间的因果关系链。
+        """.strip()
+
+        return summary
+
+    def _generate_chain_explanation(self, query: str, results: List[Dict[str, object]]) -> str:
+        """生成链式推理解释"""
+        if not results:
+            return "未找到相关证据链。"
+
+        explanations = []
+        for path_idx, path_result in enumerate(results):
+            relations = path_result.get("relations", [])
+            if not relations:
+                continue
+
+            path_explanation = f"证据链 {path_idx + 1}："
+
+            # 构建推理链
+            reasoning_steps = []
+            for rel_idx, relation in enumerate(relations):
+                process = relation.get("process_factor", "未知工艺")
+                morph = relation.get("morphology_factor", "未知形貌")
+                perf = relation.get("performance_factor")
+                direction = relation.get("effect_direction", "neutral")
+                confidence = relation.get("confidence", 0.5)
+
+                if process and morph:
+                    direction_text = {"positive": "促进", "negative": "抑制", "neutral": "影响"}.get(direction, "影响")
+                    step = f"{process}{direction_text}{morph}（置信度:{confidence:.2f}）"
+                    reasoning_steps.append(step)
+
+                if morph and perf:
+                    direction_text = {"positive": "提高", "negative": "降低", "neutral": "影响"}.get(direction, "影响")
+                    step = f"{morph}{direction_text}{perf}（置信度:{confidence:.2f}）"
+                    reasoning_steps.append(step)
+
+            if reasoning_steps:
+                path_explanation += " → ".join(reasoning_steps)
+                explanations.append(path_explanation)
+
+        if explanations:
+            return "\n".join(explanations)
+        return "无法生成链式推理解释。"
+
+    def _generate_confidence_explanation(self, results: List[Dict[str, object]]) -> str:
+        """生成置信度说明"""
+        if not results:
+            return "无可评估的置信度。"
+
+        total_score = sum(r.get("score", 0) for r in results)
+        avg_confidence = total_score / len(results)
+
+        consistency_scores = [r.get("consistency", 0) for r in results if r.get("consistency")]
+        avg_consistency = sum(consistency_scores) / len(consistency_scores) if consistency_scores else 0.0
+
+        confidence_level = "高" if avg_confidence > 0.7 else "中" if avg_confidence > 0.4 else "低"
+        consistency_level = "高" if avg_consistency > 0.8 else "中" if avg_consistency > 0.5 else "低"
+
+        explanation = f"""
+检索结果的总体置信度为{confidence_level}（平均评分: {avg_confidence:.3f}），
+证据链的一致性为{consistency_level}（平均一致性: {avg_consistency:.3f}）。
+
+置信度评估综合考虑了：
+- 稀疏检索（关键词匹配）
+- 稠密检索（语义相似度）
+- 任务相关性（与查询任务的匹配度）
+- 条件匹配度（数值条件满足情况）
+
+一致性评估检查了关系链的连贯性和方向一致性。
+        """.strip()
+
+        return explanation
+
+    def _generate_evidence_integration(self, query: str, results: List[Dict[str, object]]) -> str:
+        """生成证据整合说明"""
+        if not results:
+            return "无可整合的证据。"
+
+        # 收集所有证据节点
+        all_chunks = []
+        for path_result in results:
+            chunks = path_result.get("chunks", [])
+            all_chunks.extend(chunks)
+
+        # 统计关键实体
+        process_factors = set()
+        morphology_factors = set()
+        performance_factors = set()
+
+        for path_result in results:
+            for relation in path_result.get("relations", []):
+                if relation.get("process_factor"):
+                    process_factors.add(relation["process_factor"])
+                if relation.get("morphology_factor"):
+                    morphology_factors.add(relation["morphology_factor"])
+                if relation.get("performance_factor"):
+                    performance_factors.add(relation["performance_factor"])
+
+        integration_text = f"""
+证据整合分析：
+
+覆盖的关键实体：
+- 工艺因子: {len(process_factors)}个
+- 形貌因子: {len(morphology_factors)}个
+- 性能因子: {len(performance_factors)}个
+
+证据来源统计：
+- 独立证据块: {len(all_chunks)}个
+- 证据链路: {len(results)}条
+- 平均链路深度: {sum(r.get('depth', 1) for r in results) / max(len(results), 1):.1f}层
+
+基于这些证据，我们可以形成对"{query}"的综合理解，
+通过多角度证据验证提高结论的可靠性。
+        """.strip()
+
+        return integration_text
+
+    def _generate_detailed_path_explanation(self, path_idx: int, path_result: Dict[str, object]) -> Dict[str, object]:
+        """生成单个路径的详细解释"""
+        chunks = path_result.get("chunks", [])
+        relations = path_result.get("relations", [])
+        depth = path_result.get("depth", 1)
+        score = path_result.get("score", 0.0)
+        consistency = path_result.get("consistency", 0.0)
+
+        # 生成路径描述
+        path_description = f"路径 {path_idx + 1}（深度:{depth}层，评分:{score:.3f}）"
+
+        # 生成步骤解释
+        steps = []
+        for i in range(len(chunks)):
+            chunk = chunks[i]
+            step = {
+                "step_number": i + 1,
+                "chunk_text": chunk.get("text", "")[:200],
+                "score": chunk.get("score", 0.0),
+                "relation": relations[i] if i < len(relations) else None,
+            }
+
+            if i < len(relations):
+                relation = relations[i]
+                step["explanation"] = self._generate_relation_explanation(relation)
+
+            steps.append(step)
+
+        # 生成路径总结
+        path_summary = {
+            "path_index": path_idx + 1,
+            "description": path_description,
+            "depth": depth,
+            "score": score,
+            "consistency": consistency,
+            "steps": steps,
+            "quality_assessment": self._assess_path_quality(score, consistency, depth),
+        }
+
+        return path_summary
+
+    def _generate_relation_explanation(self, relation: Dict[str, object]) -> str:
+        """生成单个关系的解释"""
+        process = relation.get("process_factor")
+        morph = relation.get("morphology_factor")
+        perf = relation.get("performance_factor")
+        direction = relation.get("effect_direction", "neutral")
+        confidence = relation.get("confidence", 0.5)
+
+        if not process and not morph and not perf:
+            return f"未知关系（置信度:{confidence:.2f}）"
+
+        parts = []
+        if process:
+            parts.append(f"工艺参数: {process}")
+        if morph:
+            parts.append(f"形貌特征: {morph}")
+        if perf:
+            parts.append(f"性能指标: {perf}")
+
+        direction_text = {"positive": "正向促进", "negative": "负向抑制", "neutral": "中性影响"}.get(direction, "影响")
+
+        base = "，".join(parts)
+        return f"{base}，{direction_text}（置信度:{confidence:.2f}）"
+
+    def _assess_path_quality(self, score: float, consistency: float, depth: int) -> str:
+        """评估路径质量"""
+        quality_score = score * 0.6 + consistency * 0.3 + min(depth / 3, 1.0) * 0.1
+
+        if quality_score > 0.8:
+            return "高质量：证据链完整，一致性强"
+        elif quality_score > 0.6:
+            return "良好：证据链较为完整，一致性较好"
+        elif quality_score > 0.4:
+            return "中等：证据链基本完整，一致性一般"
+        else:
+            return "较低：证据链不完整，一致性较差"
+
+    def _task_relevance_score(self, row: Dict[str, object], task_profile: Dict[str, object]) -> float:
+        """任务相关性评分"""
+        if not task_profile.get("preferred_relations"):
+            return 0.0
+
+        # 检查 chunk 是否包含任务偏好的关系类型
+        conn = self._connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT relation_type, confidence
+                FROM kb_links
+                WHERE chunk_id = ?
+                """,
+                (row["id"],),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return 0.0
+
+        preferred = task_profile["preferred_relations"]
+        score = 0.0
+        for r in rows:
+            if r["relation_type"] in preferred:
+                score += r["confidence"]
+
+        return min(score, 1.0)
+
+    def _condition_match_score(self, row: Dict[str, object], parsed_query: Dict[str, object]) -> float:
+        """条件匹配评分"""
+        if not parsed_query.get("conditions"):
+            return 0.0
+
+        text = row["text"].lower()
+        matches = 0
+        for condition in parsed_query["conditions"]:
+            if condition.get("type") == "numeric":
+                if condition["value"] in text:
+                    matches += 1
+
+        return matches / max(len(parsed_query["conditions"]), 1)
+
+    def _relation_relevance_score(
+        self,
+        row: Dict[str, object],
+        parsed_query: Dict[str, object],
+        task_profile: Dict[str, object],
+    ) -> float:
+        """关系相关性评分"""
+        score = 0.0
+
+        # 检查关系类型是否匹配任务偏好
+        if task_profile.get("preferred_relations"):
+            if row["relation_type"] in task_profile["preferred_relations"]:
+                score += 0.3
+
+        # 检查因子是否匹配查询实体
+        entities = parsed_query.get("entities", [])
+        for entity in entities:
+            if entity in [row["process_factor"], row["morphology_factor"], row["performance_factor"]]:
+                score += 0.2
+
+        # 检查方向是否一致
+        query_direction = parsed_query.get("direction")
+        if query_direction and row["effect_direction"]:
+            if query_direction == row["effect_direction"]:
+                score += 0.1
+
+        # 置信度加权
+        confidence = row["confidence"] if "confidence" in row.keys() else 0.5
+        score *= confidence
+
+        return min(score, 1.0)
+
+    def _path_consistency_score(self, path: Dict[str, object]) -> float:
+        """路径一致性评分"""
+        if len(path["relations"]) < 2:
+            return 1.0
+
+        consistency = 0.0
+        for i in range(len(path["relations"]) - 1):
+            rel1 = path["relations"][i]
+            rel2 = path["relations"][i + 1]
+
+            # 检查是否符合关系转换矩阵
+            allowed_transitions = self.RELATION_TRANSITION_MATRIX.get(
+                rel1.get("type"), []
+            )
+            if rel2.get("type") in allowed_transitions:
+                consistency += 1.0
+
+        return consistency / max(len(path["relations"]) - 1, 1)
+
+    def _direction_consistency_score(self, path: Dict[str, object], parsed_query: Dict[str, object]) -> float:
+        """方向一致性评分"""
+        if not parsed_query.get("direction"):
+            return 1.0
+
+        query_direction = parsed_query["direction"]
+        consistent_count = 0
+        total_count = 0
+
+        for rel in path["relations"]:
+            if rel.get("effect_direction"):
+                total_count += 1
+                if rel["effect_direction"] == query_direction:
+                    consistent_count += 1
+
+        if total_count == 0:
+            return 1.0
+
+        return consistent_count / total_count
 
     def get_stats(self) -> Dict[str, object]:
         conn = self._connect()
@@ -738,7 +1773,7 @@ class KnowledgeBaseService:
                 placeholders = ",".join("?" for _ in doc_ids)
                 chunk_rows = cursor.execute(
                     f"""
-                    SELECT doc_id, text
+                    SELECT id as chunk_id, doc_id, text
                     FROM kb_chunks
                     WHERE doc_id IN ({placeholders})
                     ORDER BY doc_id, chunk_index
@@ -748,7 +1783,7 @@ class KnowledgeBaseService:
             else:
                 chunk_rows = cursor.execute(
                     """
-                    SELECT doc_id, text
+                    SELECT id as chunk_id, doc_id, text
                     FROM kb_chunks
                     ORDER BY doc_id, chunk_index
                     """
@@ -758,28 +1793,30 @@ class KnowledgeBaseService:
             doc_set = set()
             for row in chunk_rows:
                 doc_id = int(row["doc_id"])
+                chunk_id = int(row["chunk_id"])
                 doc_set.add(doc_id)
                 for relation in self._extract_relations_from_chunk(row["text"] or ""):
                     cursor.execute(
                         """
                         INSERT INTO kb_links (
-                            doc_id, relation_type, source_node, target_node,
+                            doc_id, chunk_id, relation_type, source_node, target_node,
                             process_factor, morphology_factor, performance_factor,
                             effect_direction, confidence, mechanism_summary, evidence_text
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             doc_id,
+                            chunk_id,
                             relation.get("relation_type"),
-                            relation.get("source_node"),
-                            relation.get("target_node"),
-                            relation.get("process_factor"),
-                            relation.get("morphology_factor"),
-                            relation.get("performance_factor"),
-                            relation.get("effect_direction"),
-                            relation.get("confidence", 0.5),
-                            relation.get("mechanism_summary"),
-                            relation.get("evidence_text"),
+                            row["source_node"],
+                            row["target_node"],
+                            row["process_factor"],
+                            row["morphology_factor"],
+                            row["performance_factor"],
+                            row["effect_direction"],
+                            row["confidence"] if row["confidence"] is not None else 0.5,
+                            row["mechanism_summary"],
+                            row["evidence_text"] if row["evidence_text"] is not None else "",
                         ),
                     )
                     link_count += 1
@@ -1691,19 +2728,13 @@ class KnowledgeBaseService:
                     )
 
             if has_mechanism and (process_hits or morph_hits or perf_hits):
-                source = (
-                    f"mechanism:{mechanism_hits[0]}"
-                    if mechanism_hits
-                    else (
-                        f"process:{process_hits[0]}"
-                        if process_hits
-                        else (
-                            f"morphology:{morph_hits[0]}"
-                            if morph_hits
-                            else f"performance:{perf_hits[0]}"
-                        )
-                    )
+                # mechanism_evidence 的 source 应该总是 mechanism 类型
+                source = f"mechanism:{mechanism_hits[0]}" if mechanism_hits else (
+                    f"process:{process_hits[0]}"
+                    if process_hits
+                    else f"morphology:{morph_hits[0]}" if morph_hits else f"performance:{perf_hits[0]}"
                 )
+                # 注意：mechanism_evidence 的因子字段应保持为 None，因为 source 是 mechanism 类型
                 relations.append(
                     {
                         "relation_type": "mechanism_evidence",

@@ -399,35 +399,33 @@ def msfu_llm(limit=None, model=None):
                     continue
 
                 try:
-                    cursor2 = sqlite3.connect(kb_path).cursor()
-                    cursor2.execute("""
-                        INSERT INTO kb_msfu (
-                            chunk_id, doc_id, source_entity, relation_type, target_entity,
-                            condition_param, condition_op, condition_value, condition_unit,
-                            direction, content, confidence, extraction_method,
-                            process_factor, morphology_factor, performance_factor,
-                            effect_direction, mechanism_summary, evidence_text,
-                            doc_title, page_num
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        chunk_id, doc_id,
-                        se, item.get("relation_type", "affects"), te,
-                        None, None, None, None,
-                        item.get("direction", "unknown"),
-                        item.get("content", chunk_text[:500]),
-                        item.get("confidence", 0.6),
-                        "llm",
-                        se.split(":")[1] if ":" in se else None,
-                        te.split(":")[1] if ":" in te else None,
-                        None,
-                        item.get("direction", "unknown"),
-                        item.get("content", "")[:220],
-                        item.get("content", "")[:320],
-                        title, None,
-                    ))
-                    conn2 = sqlite3.connect(kb_path)
-                    conn2.commit()
-                    conn2.close()
+                    with sqlite3.connect(kb_path) as conn2:
+                        cursor2 = conn2.cursor()
+                        cursor2.execute("""
+                            INSERT INTO kb_msfu (
+                                chunk_id, doc_id, source_entity, relation_type, target_entity,
+                                condition_param, condition_op, condition_value, condition_unit,
+                                direction, content, confidence, extraction_method,
+                                process_factor, morphology_factor, performance_factor,
+                                effect_direction, mechanism_summary, evidence_text,
+                                doc_title, page_num
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            chunk_id, doc_id,
+                            se, item.get("relation_type", "affects"), te,
+                            None, None, None, None,
+                            item.get("direction", "unknown"),
+                            item.get("content", chunk_text[:500]),
+                            item.get("confidence", 0.6),
+                            "llm",
+                            se.split(":")[1] if ":" in se else None,
+                            te.split(":")[1] if ":" in te else None,
+                            None,
+                            item.get("direction", "unknown"),
+                            item.get("content", "")[:220],
+                            item.get("content", "")[:320],
+                            title, None,
+                        ))
                     doc_msfu_count += 1
                 except Exception as e:
                     print(f"    存储失败: {e}")
