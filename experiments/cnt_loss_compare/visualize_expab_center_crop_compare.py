@@ -92,8 +92,14 @@ def crop_full_image(array_full: np.ndarray, top: int, bottom: int, left: int, ri
 
 
 @torch.no_grad()
-def predict_full_probability(model, image_gray: np.ndarray, image_size: int, device: torch.device) -> np.ndarray:
-    image_tensor, roi_h, roi_w = preprocess_roi_for_model(image_gray, image_size)
+def predict_full_probability(
+    model,
+    image_gray: np.ndarray,
+    image_size: int,
+    input_mode: str,
+    device: torch.device,
+) -> np.ndarray:
+    image_tensor, roi_h, roi_w = preprocess_roi_for_model(image_gray, image_size, input_mode=input_mode)
     logits = model(image_tensor.to(device))
     probability_512 = torch.sigmoid(logits)[0, 0].detach().cpu().numpy().astype(np.float32)
     return restore_probability_to_full_image(probability_512, image_gray.shape, (roi_h, roi_w))
@@ -158,8 +164,10 @@ def main() -> None:
     thresholds = [float(value) for value in args.thresholds]
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
     exp_a_model, exp_a_config = build_model(args.exp_a_config, args.exp_a_checkpoint, device)
-    exp_b_model, _ = build_model(args.exp_b_config, args.exp_b_checkpoint, device)
+    exp_b_model, exp_b_config = build_model(args.exp_b_config, args.exp_b_checkpoint, device)
     image_size = int(exp_a_config["data"]["image_size"])
+    exp_a_input_mode = str(exp_a_config["model"].get("input_mode", "rgb_replicated"))
+    exp_b_input_mode = str(exp_b_config["model"].get("input_mode", "rgb_replicated"))
     output_paths = ensure_dirs(args.output_dir, thresholds)
     summary_rows: List[Dict[str, str]] = []
 
@@ -175,8 +183,8 @@ def main() -> None:
         weak_full_crop = crop_full_image(weak_full, top, bottom, left, right)
         weak_train_crop = crop_full_image(weak_train, top, bottom, left, right)
 
-        exp_a_prob = predict_full_probability(exp_a_model, image_gray, image_size, device)
-        exp_b_prob = predict_full_probability(exp_b_model, image_gray, image_size, device)
+        exp_a_prob = predict_full_probability(exp_a_model, image_gray, image_size, exp_a_input_mode, device)
+        exp_b_prob = predict_full_probability(exp_b_model, image_gray, image_size, exp_b_input_mode, device)
 
         stem = Path(row["image_filename"]).stem
         original_crop_path = output_paths["original"] / f"{stem}_original_crop.png"

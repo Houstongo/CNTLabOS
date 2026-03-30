@@ -1518,6 +1518,130 @@ async def search_rag_links(req: RAGSearchRequest):
 
 
 # ========================================================================
+# 知识库管理 API (Knowledge Base Management)
+# ========================================================================
+
+class KnowledgeRebuildLinksRequest(BaseModel):
+    """重建关系链接请求"""
+    doc_ids: Optional[List[int]] = None  # None 表示重建所有
+    clear_existing: bool = True
+
+
+@app.post("/api/knowledge/rebuild-links")
+async def rebuild_knowledge_links(req: KnowledgeRebuildLinksRequest):
+    """
+    重建知识库关系链接
+
+    重新从文档分块中提取关系链接，更新 kb_links 表
+    """
+    try:
+        result = rag_retriever.knowledge_base.rebuild_links(
+            doc_ids=req.doc_ids,
+            clear_existing=req.clear_existing
+        )
+        return {
+            "status": "success",
+            "doc_count": result["doc_count"],
+            "link_count": result["link_count"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重建链接失败: {str(e)}")
+
+
+class KnowledgeIngestRequest(BaseModel):
+    """导入知识请求"""
+    title: str
+    text: str
+    source_type: str
+    theme: Optional[str] = None
+    is_core: bool = False
+    language: Optional[str] = None
+
+
+@app.post("/api/knowledge/ingest")
+async def ingest_knowledge_text(req: KnowledgeIngestRequest):
+    """
+    导入文本知识到知识库
+
+    自动分块、提取关键词、提取关系链接
+    """
+    try:
+        result = rag_retriever.knowledge_base.ingest_text(
+            title=req.title,
+            text=req.text,
+            source_type=req.source_type,
+            theme=req.theme,
+            is_core=req.is_core,
+            language=req.language or "unknown"
+        )
+        return {
+            "status": "success",
+            **result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导入知识失败: {str(e)}")
+
+
+class KnowledgeUpdateThemeRequest(BaseModel):
+    """更新文档主题请求"""
+    theme: str
+
+
+@app.put("/api/knowledge/documents/{doc_id}/theme")
+async def update_document_theme(doc_id: int, req: KnowledgeUpdateThemeRequest):
+    """
+    更新文档主题
+
+    同时更新文档记录和所属分块的知识类型
+    """
+    try:
+        rag_retriever.knowledge_base.update_document_theme(doc_id, req.theme)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新主题失败: {str(e)}")
+
+
+@app.get("/api/knowledge/search")
+async def search_knowledge_base(
+    query: str,
+    task_name: Optional[str] = None,
+    top_k: int = 5
+):
+    """
+    基础知识库搜索
+
+    使用知识库的基础搜索功能（非 TCCER 检索）
+    """
+    try:
+        results = rag_retriever.knowledge_base.search(
+            query=query,
+            task_name=task_name,
+            top_k=top_k
+        )
+        return {
+            "status": "success",
+            "items": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
+
+
+@app.get("/api/knowledge/stats")
+async def get_knowledge_stats():
+    """
+    获取知识库详细统计信息
+
+    包括文档数量、分块数量、链接数量等
+    """
+    try:
+        return rag_retriever.knowledge_base.get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取统计失败: {str(e)}")
+
+
+# ========================================================================
 # TCCER (Task-Constrained Chain Evidence Retrieval) API
 # ========================================================================
 
@@ -1526,6 +1650,7 @@ class TCCERQueryRequest(BaseModel):
     task_name: Optional[str] = None
     max_hops: int = 3
     min_confidence: float = 0.4
+    language: str = "zh"  # 语言参数：zh=中文，en=英文
 
 
 @app.post("/api/tccer/query")
@@ -1617,6 +1742,14 @@ async def tccer_full(req: TCCERQueryRequest):
 
         # 证据解释生成
         exp_result = rag_retriever.knowledge_base.generate_evidence_explanation(result_dict)
+
+        # 根据语言参数翻译结果
+        from backend.core.knowledge_base import translate_result_zh
+        translated_result = translate_result_zh({
+            "tccer_retrieval": result_dict,
+            "visualization": viz_result,
+            "explanation": exp_result,
+        }, req.language)
 
         # 合并所有结果
         full_result = {

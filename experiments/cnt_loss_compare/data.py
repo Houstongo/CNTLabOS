@@ -16,6 +16,9 @@ from src.analysis.feature_extractor import FeatureExtractor
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+GRAYSCALE_MEAN = np.array([0.5], dtype=np.float32).reshape(1, 1, 1)
+GRAYSCALE_STD = np.array([0.5], dtype=np.float32).reshape(1, 1, 1)
+DEFAULT_INPUT_MODE = "rgb_replicated"
 
 
 def load_manifest_rows(path: str | Path) -> List[Dict[str, str]]:
@@ -51,14 +54,43 @@ def random_flip(image: torch.Tensor, mask: torch.Tensor, gray: torch.Tensor) -> 
     return image, mask, gray
 
 
+def prepare_model_input_from_gray_roi(
+    roi: np.ndarray,
+    image_size: int,
+    input_mode: str = DEFAULT_INPUT_MODE,
+) -> torch.Tensor:
+    input_mode = str(input_mode or DEFAULT_INPUT_MODE).lower()
+    gray_roi = resize_and_pad(roi, image_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
+
+    if input_mode == "rgb_replicated":
+        image_rgb = cv2.cvtColor(gray_roi.astype(np.uint8), cv2.COLOR_GRAY2RGB).astype(np.float32)
+        image_tensor = np.transpose(image_rgb, (2, 0, 1))
+        image_tensor = (image_tensor / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
+        return torch.from_numpy(image_tensor.astype(np.float32))
+
+    if input_mode == "grayscale_single_channel":
+        image_tensor = gray_roi[None, ...] / 255.0
+        image_tensor = (image_tensor - GRAYSCALE_MEAN) / GRAYSCALE_STD
+        return torch.from_numpy(image_tensor.astype(np.float32))
+
+    raise ValueError(f"Unsupported input mode: {input_mode}")
+
+
 class CNTManifestDataset(Dataset):
     """Reads curated experiment manifests and applies the agreed ROI crop."""
 
-    def __init__(self, manifest_path: str | Path, image_size: int = 512, augment: bool = False):
+    def __init__(
+        self,
+        manifest_path: str | Path,
+        image_size: int = 512,
+        augment: bool = False,
+        input_mode: str = DEFAULT_INPUT_MODE,
+    ):
         self.manifest_path = Path(manifest_path)
         self.rows = load_manifest_rows(self.manifest_path)
         self.image_size = int(image_size)
         self.augment = bool(augment)
+        self.input_mode = str(input_mode or DEFAULT_INPUT_MODE).lower()
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -76,14 +108,10 @@ class CNTManifestDataset(Dataset):
         roi_h = roi.shape[0]
         mask_roi = mask[:roi_h, :]
 
-        image_rgb = cv2.cvtColor(roi, cv2.COLOR_GRAY2RGB)
-        image_rgb = resize_and_pad(image_rgb, self.image_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
         mask_roi = resize_and_pad(mask_roi, self.image_size, interpolation=cv2.INTER_NEAREST).astype(np.float32)
         gray_roi = resize_and_pad(roi, self.image_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
 
-        image_tensor = np.transpose(image_rgb, (2, 0, 1))
-        image_tensor = (image_tensor / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-        image_tensor = torch.from_numpy(image_tensor.astype(np.float32))
+        image_tensor = prepare_model_input_from_gray_roi(roi, self.image_size, input_mode=self.input_mode)
         mask_tensor = torch.from_numpy((mask_roi / 255.0).astype(np.float32)).unsqueeze(0)
         gray_tensor = torch.from_numpy((gray_roi / 255.0).astype(np.float32)).unsqueeze(0)
 

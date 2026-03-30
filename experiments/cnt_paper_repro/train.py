@@ -24,13 +24,13 @@ if __package__ is None or __package__ == "":
     from experiments.cnt_paper_repro.data import CNTPatchDataset
     from experiments.cnt_paper_repro.losses import compute_phase_loss
     from experiments.cnt_paper_repro.metrics import pixel_metrics_from_logits
-    from experiments.cnt_paper_repro.model import ResNet34UNet
+    from experiments.cnt_paper_repro.model import build_model_from_config
 else:
     from .config import load_config, save_config_snapshot, set_seed
     from .data import CNTPatchDataset
     from .losses import compute_phase_loss
     from .metrics import pixel_metrics_from_logits
-    from .model import ResNet34UNet
+    from .model import build_model_from_config
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,6 +112,51 @@ def _snapshot_pre_resume_artifacts(run_root: Path) -> None:
             shutil.copy2(source_path, snapshot_path)
 
 
+def _write_history_csv(run_root: Path, history: List[Dict[str, float]]) -> None:
+    if not history:
+        return
+    with (run_root / "history.csv").open("w", newline="", encoding="utf-8-sig") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(history[0].keys()))
+        writer.writeheader()
+        writer.writerows(history)
+
+
+def _phase_plan_for_resume(
+    phases: List[Dict[str, object]],
+    history: List[Dict[str, float]],
+    extra_final_phase_epochs: int,
+) -> List[tuple[Dict[str, object], int, int]]:
+    if not history:
+        return []
+
+    last_row = history[-1]
+    checkpoint_phase_name = str(last_row.get("phase", ""))
+    checkpoint_phase_epoch = int(last_row.get("phase_epoch", 0))
+    final_phase_name = str(phases[-1]["name"])
+
+    phase_names = [str(phase["name"]) for phase in phases]
+    if checkpoint_phase_name not in phase_names:
+        raise ValueError(f"Checkpoint phase '{checkpoint_phase_name}' not found in configured phases: {phase_names}")
+
+    plan: List[tuple[Dict[str, object], int, int]] = []
+    checkpoint_phase_index = phase_names.index(checkpoint_phase_name)
+
+    for index, phase_cfg in enumerate(phases[checkpoint_phase_index:], start=checkpoint_phase_index):
+        phase_name = str(phase_cfg["name"])
+        total_epochs = int(phase_cfg["epochs"])
+        if phase_name == final_phase_name:
+            total_epochs += extra_final_phase_epochs
+
+        start_epoch = 1
+        if index == checkpoint_phase_index:
+            start_epoch = checkpoint_phase_epoch + 1
+
+        if start_epoch <= total_epochs:
+            plan.append((dict(phase_cfg), start_epoch, total_epochs))
+
+    return plan
+
+
 def run_epoch(model, loader, optimizer, device, threshold: float, phase_cfg: Dict[str, object], is_train: bool) -> Dict[str, float]:
     model.train(is_train)
     summaries: List[Dict[str, float]] = []
@@ -180,11 +225,7 @@ def main() -> None:
         normalize_std=normalize_std,
     )
 
-    model = ResNet34UNet(
-        in_channels=int(config["model"].get("in_channels", 1)),
-        num_classes=int(config["model"].get("num_classes", 1)),
-        encoder_weights=config["model"].get("encoder_weights"),
-    ).to(device)
+    model = build_model_from_config(config["model"]).to(device)
 
     optimizer = Adam(
         model.parameters(),
@@ -217,29 +258,26 @@ def main() -> None:
         best_metric, best_epoch, best_phase = _best_state_from_history(history, selection_metric)
         best_metric = float(checkpoint.get("best_metric", best_metric))
 
-        final_phase_name = str(config["training"]["phases"][-1]["name"])
-        checkpoint_phase_name = str(checkpoint.get("phase_name", ""))
-        if checkpoint_phase_name and checkpoint_phase_name != final_phase_name:
-            raise ValueError(
-                f"Resume currently supports only the final phase. Checkpoint phase '{checkpoint_phase_name}' "
-                f"does not match final phase '{final_phase_name}'."
-            )
-
+    phase_plan: List[tuple[Dict[str, object], int, int]]
     if args.resume is not None:
-        final_phase_cfg = dict(config["training"]["phases"][-1])
-        final_phase_name = str(final_phase_cfg["name"])
-        last_phase_epoch = 0
-        if history and str(history[-1].get("phase", "")) == final_phase_name:
-            last_phase_epoch = int(history[-1].get("phase_epoch", 0))
+        phase_plan = _phase_plan_for_resume(
+            phases=list(config["training"]["phases"]),
+            history=history,
+            extra_final_phase_epochs=extra_final_phase_epochs,
+        )
+    else:
+        phase_plan = [(dict(phase_cfg), 1, int(phase_cfg["epochs"])) for phase_cfg in config["training"]["phases"]]
 
-        for phase_epoch in range(last_phase_epoch + 1, last_phase_epoch + extra_final_phase_epochs + 1):
+    for phase_cfg, start_phase_epoch, total_phase_epochs in phase_plan:
+        phase_name = str(phase_cfg["name"])
+        for phase_epoch in range(start_phase_epoch, total_phase_epochs + 1):
             epoch_global += 1
-            train_metrics = run_epoch(model, train_loader, optimizer, device, threshold, final_phase_cfg, is_train=True)
-            val_metrics = run_epoch(model, val_loader, optimizer, device, threshold, final_phase_cfg, is_train=False)
+            train_metrics = run_epoch(model, train_loader, optimizer, device, threshold, phase_cfg, is_train=True)
+            val_metrics = run_epoch(model, val_loader, optimizer, device, threshold, phase_cfg, is_train=False)
 
             row = {
                 "epoch": epoch_global,
-                "phase": final_phase_name,
+                "phase": phase_name,
                 "phase_epoch": phase_epoch,
                 "lr": float(optimizer.param_groups[0]["lr"]),
             }
@@ -251,47 +289,18 @@ def main() -> None:
             if current_metric > best_metric:
                 best_metric = current_metric
                 best_epoch = epoch_global
-                best_phase = final_phase_name
-                save_checkpoint(run_root / "best_model.pth", model, optimizer, epoch_global, best_metric, history, final_phase_name, phase_epoch)
+                best_phase = phase_name
+                save_checkpoint(run_root / "best_model.pth", model, optimizer, epoch_global, best_metric, history, phase_name, phase_epoch)
 
-            save_checkpoint(run_root / "last_model.pth", model, optimizer, epoch_global, best_metric, history, final_phase_name, phase_epoch)
-    else:
-        for phase_cfg in config["training"]["phases"]:
-            phase_name = str(phase_cfg["name"])
-            for phase_epoch in range(1, int(phase_cfg["epochs"]) + 1):
-                epoch_global += 1
-                train_metrics = run_epoch(model, train_loader, optimizer, device, threshold, phase_cfg, is_train=True)
-                val_metrics = run_epoch(model, val_loader, optimizer, device, threshold, phase_cfg, is_train=False)
-
-                row = {
-                    "epoch": epoch_global,
-                    "phase": phase_name,
-                    "phase_epoch": phase_epoch,
-                    "lr": float(optimizer.param_groups[0]["lr"]),
-                }
-                row.update({f"train_{key}": value for key, value in train_metrics.items()})
-                row.update({f"val_{key}": value for key, value in val_metrics.items()})
-                history.append(row)
-
-                current_metric = float(val_metrics.get(selection_metric, 0.0))
-                if current_metric > best_metric:
-                    best_metric = current_metric
-                    best_epoch = epoch_global
-                    best_phase = phase_name
-                    save_checkpoint(run_root / "best_model.pth", model, optimizer, epoch_global, best_metric, history, phase_name, phase_epoch)
-
-                save_checkpoint(run_root / "last_model.pth", model, optimizer, epoch_global, best_metric, history, phase_name, phase_epoch)
+            save_checkpoint(run_root / "last_model.pth", model, optimizer, epoch_global, best_metric, history, phase_name, phase_epoch)
+            _write_history_csv(run_root, history)
 
     best_checkpoint = torch.load(run_root / "best_model.pth", map_location=device)
     model.load_state_dict(best_checkpoint["model_state_dict"])
     final_phase_cfg = config["training"]["phases"][-1]
     test_metrics = run_epoch(model, test_loader, optimizer=None, device=device, threshold=threshold, phase_cfg=final_phase_cfg, is_train=False)
 
-    if history:
-        with (run_root / "history.csv").open("w", newline="", encoding="utf-8-sig") as fh:
-            writer = csv.DictWriter(fh, fieldnames=list(history[0].keys()))
-            writer.writeheader()
-            writer.writerows(history)
+    _write_history_csv(run_root, history)
 
     summary = {
         "experiment_name": config["experiment_name"],

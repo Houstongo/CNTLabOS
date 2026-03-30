@@ -8,6 +8,16 @@ import torch.nn.functional as F
 from torchvision.models import ResNet50_Weights, resnet50
 
 
+def _resolve_resnet_weights(encoder_weights: str | None):
+    weights = None
+    if encoder_weights and str(encoder_weights).lower() == "imagenet":
+        try:
+            weights = ResNet50_Weights.IMAGENET1K_V2
+        except Exception:
+            weights = None
+    return weights
+
+
 class ASPP(nn.Module):
     """Atrous spatial pyramid pooling."""
 
@@ -82,17 +92,28 @@ class DecoderBlock(nn.Module):
         return self.attention(x)
 
 
+class SegmentationHead(nn.Module):
+    """Optional local refinement before the final logit projection."""
+
+    def __init__(self, in_channels: int, num_classes: int = 1):
+        super().__init__()
+        self.refine = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, 3, 1, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, num_classes, 1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.refine(x)
+
+
 class CNTSegNet(nn.Module):
     """Frozen-backbone experiment baseline copied into the current project."""
 
     def __init__(self, num_classes: int = 1, encoder_weights: str | None = None):
         super().__init__()
-        weights = None
-        if encoder_weights and encoder_weights.lower() == "imagenet":
-            try:
-                weights = ResNet50_Weights.IMAGENET1K_V2
-            except Exception:
-                weights = None
+        weights = _resolve_resnet_weights(encoder_weights)
         resnet = resnet50(weights=weights)
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
@@ -123,3 +144,59 @@ class CNTSegNet(nn.Module):
         x = F.interpolate(x, size=x_orig.shape[-2:], mode="bilinear", align_corners=True)
         return self.final_conv(x)
 
+
+class CNTSegNetTaskAdapted(nn.Module):
+    """Task-adapted CNT backbone for grayscale SEM with stronger high-res support."""
+
+    def __init__(self, num_classes: int = 1, encoder_weights: str | None = None):
+        super().__init__()
+        weights = _resolve_resnet_weights(encoder_weights)
+        resnet = resnet50(weights=weights)
+
+        # Directly consume single-channel SEM input while reducing the early
+        # downsampling strength from /4 to /2.
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=1, padding=3, bias=False)
+        if weights is not None:
+            with torch.no_grad():
+                self.conv1.weight.copy_(resnet.conv1.weight.mean(dim=1, keepdim=True))
+        self.bn1 = resnet.bn1
+        self.relu = resnet.relu
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = resnet.layer1
+        self.layer2 = resnet.layer2
+        self.layer3 = resnet.layer3
+        self.layer4 = resnet.layer4
+
+        self.aspp = ASPP(2048, 256)
+        self.decoder4 = DecoderBlock(256, 1024, 128)
+        self.decoder3 = DecoderBlock(128, 512, 64)
+        self.decoder2 = DecoderBlock(64, 256, 32)
+        self.decoder1 = DecoderBlock(32, 64, 32)
+        self.head = SegmentationHead(32, num_classes=num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_orig = x
+        x0 = self.relu(self.bn1(self.conv1(x)))
+        x = self.maxpool(x0)
+        skip1 = self.layer1(x)
+        skip2 = self.layer2(skip1)
+        skip3 = self.layer3(skip2)
+        skip4 = self.layer4(skip3)
+        x = self.aspp(skip4)
+        x = self.decoder4(x, skip3)
+        x = self.decoder3(x, skip2)
+        x = self.decoder2(x, skip1)
+        x = self.decoder1(x, x0)
+        if x.shape[-2:] != x_orig.shape[-2:]:
+            x = F.interpolate(x, size=x_orig.shape[-2:], mode="bilinear", align_corners=True)
+        return self.head(x)
+
+
+def build_model_from_config(model_config: dict, num_classes: int = 1) -> nn.Module:
+    name = str(model_config.get("name", "cntsegnet")).lower()
+    encoder_weights = model_config.get("encoder_weights")
+    if name == "cntsegnet":
+        return CNTSegNet(num_classes=num_classes, encoder_weights=encoder_weights)
+    if name in {"cntsegnet_task_adapted", "cntsegnet_v2"}:
+        return CNTSegNetTaskAdapted(num_classes=num_classes, encoder_weights=encoder_weights)
+    raise ValueError(f"Unsupported model name: {model_config.get('name')}")

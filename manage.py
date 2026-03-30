@@ -23,7 +23,9 @@ def run_backend():
     print("正在启动后端 API 服务 (FastAPI)...")
     env = os.environ.copy()
     env["PYTHONPATH"] = PROJECT_ROOT
-    subprocess.run([sys.executable, "backend/main.py"], env=env)
+    # 使用绝对路径确保能找到backend/main.py
+    backend_path = os.path.join(PROJECT_ROOT, "backend", "main.py")
+    subprocess.run([sys.executable, backend_path], env=env)
 
 def run_frontend(port=8080):
     print(f"正在启动前端 HTTP 服务器 (Port {port})...")

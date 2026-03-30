@@ -1,0 +1,35 @@
+experiment_name: exp_task_adapted_cldice
+seed: 42
+data:
+  dataset_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2
+  manifest_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2\manifests\repro_seed42
+  train_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2\manifests\repro_seed42\train_manifest.csv
+  val_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2\manifests\repro_seed42\val_manifest.csv
+  test_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2\manifests\repro_seed42\test_manifest.csv
+  reserve_manifest: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\datasets\zzy_mid_100000_train50_test50_v2\manifests\repro_seed42\reserve_manifest.csv
+  image_size: 512
+model:
+  name: cntsegnet_task_adapted
+  encoder_weights: null
+  input_mode: grayscale_single_channel
+loss:
+  terms:
+    - name: dice
+      weight: 0.4
+    - name: bce
+      weight: 0.4
+    - name: cldice
+      weight: 0.2
+      params:
+        iterations: 20
+training:
+  batch_size: 4
+  epochs: 80
+  learning_rate: 0.0001
+  min_learning_rate: 0.000001
+  weight_decay: 0.0001
+  num_workers: 0
+  device: auto
+  selection_metric: cldice
+output:
+  run_root: D:\CNTDATA\CNTA_ML_Project\experiments\cnt_loss_compare\runs

@@ -1,5 +1,6 @@
 import unittest
 
+import cv2
 import numpy as np
 
 from src.analysis.feature_extractor import FeatureExtractor
@@ -99,6 +100,38 @@ class FeatureExtractorWavinessTests(unittest.TestCase):
         self.assertGreaterEqual(metrics_v2["waviness_ratio_v2"], 0.0)
         self.assertLessEqual(metrics_v2["waviness_ratio_v2"], 5.0)
         self.assertGreaterEqual(metrics_v2["waviness_branches_v2"], 0)
+
+    def test_extract_all_reports_branch_cleanup_metadata_for_external_mask(self):
+        extractor = FeatureExtractor(magnification=50000)
+        img = np.zeros((240, 240), dtype=np.uint8)
+        mask = np.zeros_like(img, dtype=np.uint8)
+        cv2.line(mask, (30, 120), (210, 120), 255, 7)
+        cv2.line(mask, (120, 120), (120, 100), 255, 3)
+
+        result = extractor.extract_all(img, external_binary_mask=mask)
+
+        self.assertTrue(result["branch_cleanup_enabled"])
+        self.assertIn("removed_short_component_count", result)
+        self.assertIn("removed_spur_count", result)
+        self.assertIn("spur_length_limit_px", result)
+        self.assertGreaterEqual(result["removed_spur_count"], 0)
+        self.assertGreaterEqual(result["curvature_nm_v2"], 0.0)
+        self.assertGreaterEqual(result["curvature_nm_v3"], 0.0)
+        self.assertIn("curvature_nm_v3_p50_length", result)
+        self.assertIn("curvature_nm_v3_p50_sqrt_length", result)
+        self.assertIn("curvature_nm_v3_p75_length", result)
+        self.assertIn("curvature_nm_v3_p75_sqrt_length", result)
+        self.assertIn("curvature_nm_v3_mean_length", result)
+        self.assertIn("curvature_nm_v3_mean_sqrt_length", result)
+        self.assertIn("curvature_nm_v3_trimmed_mean_length", result)
+        self.assertIn("curvature_nm_v3_trimmed_mean_sqrt_length", result)
+        self.assertEqual(result["curvature"], result["curvature_v3"])
+        self.assertEqual(result["curvature_nm"], result["curvature_nm_v3"])
+        self.assertEqual(result["curvature_nm_v3"], result["curvature_nm_v3_p75_sqrt_length"])
+        self.assertEqual(result["waviness_ratio"], result["waviness_ratio_v2"])
+        self.assertEqual(result["tortuosity"], result["tortuosity_v2"])
+        self.assertGreaterEqual(result["waviness_ratio"], 0.0)
+        self.assertGreaterEqual(result["tortuosity"], 1.0)
 
 
 if __name__ == "__main__":

@@ -11,19 +11,20 @@ from typing import Dict, List, Tuple
 import cv2
 import numpy as np
 import torch
+import torch.nn as nn
 
 if __package__ is None or __package__ == "":
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
-    from experiments.cnt_loss_compare.backbone import CNTSegNet
+    from experiments.cnt_loss_compare.backbone import build_model_from_config
     from experiments.cnt_loss_compare.config import load_config
-    from experiments.cnt_loss_compare.data import IMAGENET_MEAN, IMAGENET_STD
+    from experiments.cnt_loss_compare.data import prepare_model_input_from_gray_roi
     from src.analysis.feature_extractor import FeatureExtractor
 else:
-    from .backbone import CNTSegNet
+    from .backbone import build_model_from_config
     from .config import load_config
-    from .data import IMAGENET_MEAN, IMAGENET_STD
+    from .data import prepare_model_input_from_gray_roi
     from src.analysis.feature_extractor import FeatureExtractor
 
 
@@ -82,13 +83,10 @@ def resize_and_pad(image: np.ndarray, target_size: int, interpolation: int) -> n
     return canvas
 
 
-def preprocess_roi_for_model(image_gray: np.ndarray, image_size: int) -> Tuple[torch.Tensor, int, int]:
+def preprocess_roi_for_model(image_gray: np.ndarray, image_size: int, input_mode: str) -> Tuple[torch.Tensor, int, int]:
     roi = FeatureExtractor.extract_roi(image_gray)
-    image_rgb = cv2.cvtColor(roi, cv2.COLOR_GRAY2RGB)
-    image_rgb = resize_and_pad(image_rgb, image_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
-    image_tensor = np.transpose(image_rgb, (2, 0, 1))
-    image_tensor = (image_tensor / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(image_tensor.astype(np.float32)).unsqueeze(0), roi.shape[0], roi.shape[1]
+    image_tensor = prepare_model_input_from_gray_roi(roi, image_size, input_mode=input_mode)
+    return image_tensor.unsqueeze(0), roi.shape[0], roi.shape[1]
 
 
 def restore_probability_to_full_image(probability_512: np.ndarray, full_shape: Tuple[int, int], roi_shape: Tuple[int, int]) -> np.ndarray:
@@ -101,9 +99,9 @@ def restore_probability_to_full_image(probability_512: np.ndarray, full_shape: T
     return full_prob
 
 
-def build_model(config_path: Path, checkpoint_path: Path, device: torch.device) -> Tuple[CNTSegNet, Dict[str, object]]:
+def build_model(config_path: Path, checkpoint_path: Path, device: torch.device) -> Tuple[nn.Module, Dict[str, object]]:
     config = load_config(config_path)
-    model = CNTSegNet(num_classes=1, encoder_weights=config["model"].get("encoder_weights")).to(device)
+    model = build_model_from_config(config["model"], num_classes=1).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
@@ -111,8 +109,15 @@ def build_model(config_path: Path, checkpoint_path: Path, device: torch.device) 
 
 
 @torch.no_grad()
-def predict_full_mask(model: CNTSegNet, image_gray: np.ndarray, image_size: int, device: torch.device, threshold: float) -> Tuple[np.ndarray, np.ndarray]:
-    image_tensor, roi_h, roi_w = preprocess_roi_for_model(image_gray, image_size)
+def predict_full_mask(
+    model: nn.Module,
+    image_gray: np.ndarray,
+    image_size: int,
+    input_mode: str,
+    device: torch.device,
+    threshold: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    image_tensor, roi_h, roi_w = preprocess_roi_for_model(image_gray, image_size, input_mode=input_mode)
     logits = model(image_tensor.to(device))
     probability_512 = torch.sigmoid(logits)[0, 0].detach().cpu().numpy().astype(np.float32)
     full_prob = restore_probability_to_full_image(probability_512, image_gray.shape, (roi_h, roi_w))
@@ -177,8 +182,10 @@ def main() -> None:
 
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
     exp_a_model, exp_a_config = build_model(args.exp_a_config, args.exp_a_checkpoint, device)
-    exp_b_model, _ = build_model(args.exp_b_config, args.exp_b_checkpoint, device)
+    exp_b_model, exp_b_config = build_model(args.exp_b_config, args.exp_b_checkpoint, device)
     image_size = int(exp_a_config["data"]["image_size"])
+    exp_a_input_mode = str(exp_a_config["model"].get("input_mode", "rgb_replicated"))
+    exp_b_input_mode = str(exp_b_config["model"].get("input_mode", "rgb_replicated"))
 
     output_paths = ensure_dirs(args.output_dir)
     summary_rows: List[Dict[str, str]] = []
@@ -189,8 +196,8 @@ def main() -> None:
         image_gray = read_image(image_path, cv2.IMREAD_GRAYSCALE)
         weak_mask = read_image(weak_mask_path, cv2.IMREAD_GRAYSCALE)
 
-        exp_a_mask, exp_a_prob = predict_full_mask(exp_a_model, image_gray, image_size, device, args.threshold)
-        exp_b_mask, exp_b_prob = predict_full_mask(exp_b_model, image_gray, image_size, device, args.threshold)
+        exp_a_mask, exp_a_prob = predict_full_mask(exp_a_model, image_gray, image_size, exp_a_input_mode, device, args.threshold)
+        exp_b_mask, exp_b_prob = predict_full_mask(exp_b_model, image_gray, image_size, exp_b_input_mode, device, args.threshold)
 
         stem = Path(row["image_filename"]).stem
         panel = make_panel(image_gray, weak_mask, exp_a_mask, exp_b_mask, args.panel_size)

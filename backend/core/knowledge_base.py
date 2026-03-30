@@ -8,7 +8,217 @@ from urllib.parse import urlparse
 
 import numpy as np
 
+# ==================== 中英文映射表 ====================
+
+# 关系类型中英文映射
+RELATION_TYPE_MAPPING = {
+    # 中文 → 英文（用于兼容旧数据）
+    "工艺→形貌": "process_to_morphology",
+    "工艺→机理": "process_to_mechanism",
+    "机理→形貌": "mechanism_to_morphology",
+    "形貌→性能": "morphology_to_performance",
+    "工艺→性能": "process_to_performance",
+    "机理证据": "mechanism_evidence",
+    # 英文 → 中文（结构化关系）
+    "process_to_morphology": "工艺→形貌",
+    "process_to_mechanism": "工艺→机理",
+    "mechanism_to_morphology": "机理→形貌",
+    "morphology_to_performance": "形貌→性能",
+    "process_to_performance": "工艺→性能",
+    "mechanism_evidence": "机理证据",
+    # 英文 → 中文（简单动词关系 - MSFU使用）
+    "causes": "导致",
+    "increases": "促进",
+    "decreases": "抑制",
+    "affects": "影响",
+    "promotes": "促进",
+    "inhibits": "抑制",
+    "characterizes": "表征",
+    "enlarges": "增大",
+    "facilitates": "促进",
+    "does_not_lead_to": "不导致",
+    "involves": "涉及",
+    "measures": "测量",
+    "patterns": "模式化",
+    "unknown": "未知",
+}
+
+# 实体类型中英文映射
+ENTITY_TYPE_MAPPING = {
+    "process": "工艺",
+    "morphology": "形貌",
+    "performance": "性能",
+    "mechanism": "机理",
+    "evidence": "证据",
+}
+
+# 工艺因子中英文映射（完整89个因子）
+PROCESS_FACTOR_MAPPING = {
+    # 基础因子
+    "growth_temp": "生长温度",
+    "growth_time": "生长时间",
+    "anneal_time": "退火时间",
+    "ar_flow": "氩气流量",
+    "h2_flow": "氢气流量",
+    "c2h4_flow": "乙烯流量",
+    "fe_thickness": "铁催化剂厚度",
+    "al2o3_thickness": "氧化铝厚度",
+    # 扩展因子
+    "temperature": "温度",
+    "calcination_temperature": "煅烧温度",
+    "flow_rate": "流速",
+    "power": "功率",
+    "filler_content": "填料含量",
+    "metal_ion_type": "金属离子类型",
+    "nitrogen_concentration": "氮浓度",
+    "chemical_vapor_deposition": "化学气相沉积",
+    "deposition": "沉积",
+    "deposition_condition": "沉积条件",
+    "reaction_solution": "反应溶液",
+    "reaction_time": "反应时间",
+    "pre_bending_treatment": "预弯处理",
+    "reaction": "反应",
+    "reduction": "还原",
+    "reduction_potential": "还原电位",
+    "catalyst_deactivation": "催化剂失活",
+    "catalyst_agglomeration": "催化剂团聚",
+    "electron_beam_lithography": "电子束光刻",
+    "exposure_to_solution": "溶液暴露",
+    "hydrophilicity": "亲水性",
+    "hydroxylamine_assisted_deposition": "羟胺辅助沉积",
+    "hydroxylamine_assisted_particle_deposition": "羟胺辅助粒子沉积",
+    "nanoparticle_deposition": "纳米粒子沉积",
+    "nanoparticle_variation": "纳米粒子变化",
+    "particle_deposition": "粒子沉积",
+    "particle_size": "粒径",
+    "pH": "pH值",
+    "immersion": "浸渍",
+    "measurement": "测量",
+    "assembly": "组装",
+    "calcination": "煅烧",
+    "capacitance": "电容",
+    "capacity": "容量",
+    "gravimetric_capacity": "重量容量",
+    "catalysis": "催化",
+    "catalyst": "催化剂",
+    "catalyst_activity": "催化剂活性",
+    "catalytic_patterning": "催化图案化",
+    "antibody_binding": "抗体结合",
+    "scan_rate": "扫描速率",
+    "soaking_time": "浸泡时间",
+    "substrate": "基底",
+    "surface_area": "表面积",
+    "surface_diffusion_flux": "表面扩散通量",
+    "transition_temperature_induction": "转变温度诱导",
+    "thickness": "厚度",
+    "voltage": "电压",
+    "volume": "体积",
+    "voc": "开路电压",
+    "wafer_thickness": "晶圆厚度",
+    "zinc_ion_transport_rate": "锌离子传输速率",
+    "cdv": "化学气相沉积",
+    "CVD": "化学气相沉积",
+    "Raman_shift_omega_r": "拉曼位移ω_r",
+    "SWNT_growth": "单壁纳米管生长",
+    "XPS_study": "XPS研究",
+    "aniline_concentration": "苯胺浓度",
+    "critical_buckling_forces": "临界屈曲力",
+    "electrical_conductivity": "电导率",
+    "peak_capacitive_currents": "峰值容性电流",
+    "placement_of_electrodes": "电极放置",
+    "polytetrafluoroethylene_fibrillation": "聚四氟乙烯分丝",
+    "rate_performance": "速率性能",
+    "redox_kinetics": "氧化还原动力学",
+    "resonant_micro_Raman_spectroscopy": "共振微拉曼光谱",
+    "response": "响应",
+    "reversible_chemical_reaction": "可逆化学反应",
+    # 中文键（用于中文提取）
+    "生长温度": [r"\bgrowth.{0,5}temperature\b", r"\btemperature\b", r"温度", r"生长温度", r"\d+\s*°[Cc]"],
+    "生长时间": [r"\bgrowth.{0,5}time\b", r"\bgrowth.{0,5}duration\b", r"\btime\b", r"生长时间"],
+    "退火时间": [r"\banneal", r"退火"],
+    "氩气流量": [r"\bar\b", r"氩", r"氩气"],
+    "氢气流量": [r"\bh2\b", r"氢", r"氢气"],
+    "乙烯流量": [r"\bc2h4\b", r"乙烯", r"\bethylene\b"],
+    "铁催化剂厚度": [r"\bfe\b", r"铁", r"催化剂厚度", r"\bcatalyst\b", r"\biron\b"],
+    "氧化铝厚度": [r"al2o3", r"氧化铝", r"支撑层"],
+}
+
+# 形貌因子中英文映射（完整）
+MORPHOLOGY_FACTOR_MAPPING = {
+    # 基础因子
+    "alignment": "取向度",
+    "density": "密度",
+    "diameter": "管径",
+    "curvature": "波曲度",
+    "tortuosity": "曲折度",
+    "height": "高度",
+    # 扩展因子
+    "substrate_bending": "基底弯曲变形",
+    "bending_deformation": "弯曲变形",
+    "morphology": "形貌",
+    "compartment_distance": "间距距离",
+    "particle_size": "粒径",
+    "patterned_growth": "图案化生长",
+    "patterned_regions": "图案区域",
+    # 中文键
+    "取向度": [r"\balign", r"取向", r"对齐", r"oriented"],
+    "密度": [r"\bdens", r"密度", r"覆盖率"],
+    "管径": [r"\bdiamet", r"管径", r"直径"],
+    "波曲度": [r"\bcurvat", r"弯曲", r"波曲", r"\bwav"],
+    "曲折度": [r"\btortuos", r"曲折度"],
+    "高度": [r"\bheight\b", r"高度", r"mm-scale"],
+}
+
+# 性能因子中英文映射（完整）
+PERFORMANCE_FACTOR_MAPPING = {
+    # 基础因子
+    "conductivity": "电导率",
+    "resistivity": "电阻率",
+    "sheet_resistance": "方块电阻",
+    "tensile_strength": "抗拉强度",
+    "modulus": "弹性模量",
+    # 扩展因子
+    "electrical_conductivity": "电导率",
+    "separation_properties": "分离性能",
+    "cycling_stability": "循环稳定性",
+    "volumetric_performance": "体积性能",
+    "interfacial_interaction": "界面相互作用",
+    # 中文键
+    "电导率": [r"\bconductiv", r"\belectrical conductivity\b", r"\bspecific conductivity\b", r"\bconductance\b", r"电导", r"导电"],
+    "电阻率": [r"\bresistiv", r"\belectrical resist", r"电阻率"],
+    "方块电阻": [r"\bsheet resistance\b", r"方阻"],
+    "抗拉强度": [r"\btensile\b", r"\bmechanical strength\b", r"\bultimate strength\b", r"\bstrength\b", r"抗拉", r"强度"],
+    "弹性模量": [r"\bmodulus\b", r"\byoung'?s modulus\b", r"\belastic modulus\b", r"\bstiffness\b", r"模量"],
+}
+
+# 机理因子中英文映射
+MECHANISM_FACTOR_MAPPING = {
+    "diffusion": "扩散",
+    "catalyst_deactivation": "催化剂失活",
+    "catalyst_agglomeration": "催化剂团聚",
+    "growth_kinetics": "生长动力学",
+    "boundary_layer_effect": "边界层效应",
+}
+
+# 效果方向中英文映射
+DIRECTION_MAPPING = {
+    "positive": "正向",
+    "negative": "负向",
+    "neutral": "中性",
+    "increase": "促进",
+    "decrease": "抑制",
+    "affect": "影响",
+    "cause": "导致",
+    "promote": "促进",
+    "inhibit": "抑制",
+    "enlarge": "增大",
+    "reduce": "减少",
+}
+
+# ==================== 模式匹配配置 ====================
+
 PROCESS_FACTOR_PATTERNS = {
+    # 英文键
     "growth_temp": [r"\bgrowth.{0,5}temperature\b", r"\btemperature\b", r"温度", r"生长温度", r"\d+\s*°[Cc]"],
     "growth_time": [r"\bgrowth.{0,5}time\b", r"\bgrowth.{0,5}duration\b", r"\btime\b", r"生长时间"],
     "anneal_time": [r"\banneal", r"退火"],
@@ -17,18 +227,36 @@ PROCESS_FACTOR_PATTERNS = {
     "c2h4_flow": [r"\bc2h4\b", r"乙烯", r"\bethylene\b"],
     "fe_thickness": [r"\bfe\b", r"铁", r"催化剂厚度", r"\bcatalyst\b", r"\biron\b"],
     "al2o3_thickness": [r"al2o3", r"氧化铝", r"支撑层"],
+    # 中文键（用于中文提取）
+    "生长温度": [r"\bgrowth.{0,5}temperature\b", r"\btemperature\b", r"温度", r"生长温度", r"\d+\s*°[Cc]"],
+    "生长时间": [r"\bgrowth.{0,5}time\b", r"\bgrowth.{0,5}duration\b", r"\btime\b", r"生长时间"],
+    "退火时间": [r"\banneal", r"退火"],
+    "氩气流量": [r"\bar\b", r"氩", r"氩气"],
+    "氢气流量": [r"\bh2\b", r"氢", r"氢气"],
+    "乙烯流量": [r"\bc2h4\b", r"乙烯", r"\bethylene\b"],
+    "铁催化剂厚度": [r"\bfe\b", r"铁", r"催化剂厚度", r"\bcatalyst\b", r"\biron\b"],
+    "氧化铝厚度": [r"al2o3", r"氧化铝", r"支撑层"],
 }
 
 MORPHOLOGY_FACTOR_PATTERNS = {
+    # 英文键
     "alignment": [r"\balign", r"取向", r"对齐", r"oriented"],
     "density": [r"\bdens", r"密度", r"覆盖率"],
     "diameter": [r"\bdiamet", r"管径", r"直径"],
     "curvature": [r"\bcurvat", r"弯曲", r"波曲", r"\bwav"],
     "tortuosity": [r"\btortuos", r"曲折度"],
     "height": [r"\bheight\b", r"高度", r"mm-scale"],
+    # 中文键
+    "取向度": [r"\balign", r"取向", r"对齐", r"oriented"],
+    "密度": [r"\bdens", r"密度", r"覆盖率"],
+    "管径": [r"\bdiamet", r"管径", r"直径"],
+    "波曲度": [r"\bcurvat", r"弯曲", r"波曲", r"\bwav"],
+    "曲折度": [r"\btortuos", r"曲折度"],
+    "高度": [r"\bheight\b", r"高度", r"mm-scale"],
 }
 
 PERFORMANCE_FACTOR_PATTERNS = {
+    # 英文键
     "conductivity": [
         r"\bconductiv",
         r"\belectrical conductivity\b",
@@ -48,11 +276,33 @@ PERFORMANCE_FACTOR_PATTERNS = {
         r"强度",
     ],
     "modulus": [r"\bmodulus\b", r"\byoung'?s modulus\b", r"\belastic modulus\b", r"\bstiffness\b", r"模量"],
+    # 中文键
+    "电导率": [
+        r"\bconductiv",
+        r"\belectrical conductivity\b",
+        r"\bspecific conductivity\b",
+        r"\bconductance\b",
+        r"电导",
+        r"导电",
+    ],
+    "电阻率": [r"\bresistiv", r"\belectrical resist", r"电阻率"],
+    "方块电阻": [r"\bsheet resistance\b", r"方阻"],
+    "抗拉强度": [
+        r"\btensile\b",
+        r"\bmechanical strength\b",
+        r"\bultimate strength\b",
+        r"\bstrength\b",
+        r"抗拉",
+        r"强度",
+    ],
+    "弹性模量": [r"\bmodulus\b", r"\byoung'?s modulus\b", r"\belastic modulus\b", r"\bstiffness\b", r"模量"],
 }
 
 INVERSE_PERFORMANCE_FACTORS = {
     "resistivity": "conductivity",
     "sheet_resistance": "conductivity",
+    "电阻率": "电导率",
+    "方块电阻": "电导率",
 }
 
 INCREASE_PATTERNS = [
@@ -60,19 +310,30 @@ INCREASE_PATTERNS = [
     r"promot", r"stimulat", r"boost", r"facilitate", r"favor", r"促进",
     r"higher", r"greater", r"longer", r"larger", r"better",
     r"upscal", r"elongat",
+    # 中文模式
+    r"促进", r"提高", r"增强", r"改善", r"优化", r"增加", r"增大", r"上升",
 ]
 DECREASE_PATTERNS = [
     r"decrease", r"reduce", r"drop", r"decline", r"降低", r"减小", r"下降", r"恶化",
     r"inhibit", r"suppress", r"degrade", r"deterior", r"suppress", r"抑制",
     r"lower", r"shorter", r"smaller", r"weaker",
     r"deactiv", r"poison", r"失活", r"中毒",
+    # 中文模式
+    r"降低", r"减小", r"抑制", r"下降", r"减弱", r"恶化", r"退化", r"抑制",
 ]
 MECHANISM_FACTOR_PATTERNS = {
+    # 英文键
     "diffusion": [r"\bdiffusion\b", r"扩散"],
     "catalyst_deactivation": [r"\bdeactivation\b", r"\bpoison", r"失活", r"中毒"],
     "catalyst_agglomeration": [r"\bripening\b", r"\bagglomer", r"\bsinter", r"烧结", r"团聚"],
     "growth_kinetics": [r"\bkinetic", r"\bactivation energy\b", r"动力学"],
     "boundary_layer_effect": [r"\bboundary layer\b", r"边界层"],
+    # 中文键
+    "扩散": [r"\bdiffusion\b", r"扩散"],
+    "催化剂失活": [r"\bdeactivation\b", r"\bpoison", r"失活", r"中毒"],
+    "催化剂团聚": [r"\bripening\b", r"\bagglomer", r"\bsinter", r"烧结", r"团聚"],
+    "生长动力学": [r"\bkinetic", r"\bactivation energy\b", r"动力学"],
+    "边界层效应": [r"\bboundary layer\b", r"边界层"],
 }
 
 MECHANISM_PATTERNS = [r"mechanism", r"机理"] + [
@@ -110,29 +371,109 @@ DEFAULT_TASK_PROFILES = (
 )
 
 
+# ==================== 双语翻译函数 ====================
+
+def translate_relation_type_zh(relation_type: str) -> str:
+    """将关系类型转换为中文"""
+    return RELATION_TYPE_MAPPING.get(relation_type, relation_type)
+
+
+def translate_entity_zh(entity: str) -> str:
+    """将实体转换为中文（实体类型+因子名）"""
+    if not entity or ':' not in entity:
+        return entity
+
+    entity_type, factor_name = entity.split(':', 1)
+    entity_type_cn = ENTITY_TYPE_MAPPING.get(entity_type.strip().lower(), entity_type)
+
+    # 转换因子名称
+    all_factor_mappings = {
+        **PROCESS_FACTOR_MAPPING,
+        **MORPHOLOGY_FACTOR_MAPPING,
+        **PERFORMANCE_FACTOR_MAPPING,
+        **MECHANISM_FACTOR_MAPPING,
+    }
+    factor_cn = all_factor_mappings.get(factor_name.strip(), factor_name)
+
+    return f"{entity_type_cn}:{factor_cn}"
+
+
+def translate_direction_zh(direction: Optional[str]) -> Optional[str]:
+    """将效果方向转换为中文"""
+    if not direction:
+        return None
+    return DIRECTION_MAPPING.get(direction, direction)
+
+
+def translate_result_zh(result: Dict, language: str = "zh") -> Dict:
+    """将结果翻译为指定语言（中文或保留英文）"""
+    if language == "en" or not result:
+        return result
+
+    translated = {}
+    for key, value in result.items():
+        if key == "chains":
+            translated[key] = [
+                translate_chain_zh(chain, language) for chain in value
+            ]
+        elif key in ["visualization", "explanation"]:
+            translated[key] = value  # 可视化和解释暂不翻译
+        elif key == "summary":
+            translated[key] = value  # summary中的文本保持原样
+        else:
+            translated[key] = value
+
+    return translated
+
+
+def translate_chain_zh(chain: Dict, language: str) -> Dict:
+    """翻译单个证据链"""
+    if language == "en":
+        return chain  # 英文直接返回
+
+    translated = chain.copy()
+    path = translated.get("path", {})
+    msfus = path.get("msfus", [])
+
+    # 翻译MSFU中的实体
+    for msfu in msfus:
+        assertion = msfu.get("assertion", {})
+        if "source_entity" in assertion:
+            assertion["source_entity"] = translate_entity_zh(assertion["source_entity"])
+        if "target_entity" in assertion:
+            assertion["target_entity"] = translate_entity_zh(assertion["target_entity"])
+        if "relation_type" in assertion:
+            assertion["relation_type"] = translate_relation_type_zh(assertion["relation_type"])
+
+    translated["path"] = path
+    return translated
+
+
+# ==================== 知识库服务类 ====================
+
 class KnowledgeBaseService:
-    # TCCER 关系转换矩阵 - 控制允许的路径扩展
+    # TCCER 关系转换矩阵 - 控制允许的路径扩展（中文）
     RELATION_TRANSITION_MATRIX = {
-        "process_to_morphology": ["morphology_to_performance", "mechanism_to_morphology"],
-        "process_to_mechanism": ["mechanism_to_morphology", "mechanism_evidence"],
-        "mechanism_to_morphology": ["morphology_to_performance", "process_to_morphology"],
-        "morphology_to_performance": [],
-        "process_to_performance": [],
-        "mechanism_evidence": [],
+        "工艺→形貌": ["形貌→性能", "机理→形貌"],
+        "工艺→机理": ["机理→形貌", "机理证据"],
+        "机理→形貌": ["形貌→性能", "工艺→形貌"],
+        "形貌→性能": [],
+        "工艺→性能": [],
+        "机理证据": [],
     }
 
-    # 任务类型配置
+    # 任务类型配置（中文）
     TASK_TYPES = {
         "morphology_interpretation": {
-            "preferred_relations": ["process_to_morphology", "mechanism_to_morphology"],
+            "preferred_relations": ["工艺→形貌", "机理→形貌"],
             "direction_bias": 0.2,
         },
         "process_analysis": {
-            "preferred_relations": ["process_to_morphology", "process_to_mechanism"],
+            "preferred_relations": ["工艺→形貌", "工艺→机理"],
             "direction_bias": 0.1,
         },
         "prediction_explanation": {
-            "preferred_relations": ["morphology_to_performance", "process_to_performance"],
+            "preferred_relations": ["形貌→性能", "工艺→性能"],
             "direction_bias": 0.15,
         },
     }
@@ -1177,14 +1518,14 @@ class KnowledgeBaseService:
                 "type": node["type"],
             })
 
-        # 边样式配置
+        # 边样式配置（中文）
         edge_styles = {
-            "process_to_morphology": {"color": "#FF9800", "width": 2},
-            "process_to_mechanism": {"color": "#9C27B0", "width": 2},
-            "mechanism_to_morphology": {"color": "#E91E63", "width": 2},
-            "morphology_to_performance": {"color": "#00BCD4", "width": 2},
-            "process_to_performance": {"color": "#795548", "width": 2},
-            "mechanism_evidence": {"color": "#607D8B", "width": 1, "style": "dashed"},
+            "工艺→形貌": {"color": "#FF9800", "width": 2},
+            "工艺→机理": {"color": "#9C27B0", "width": 2},
+            "机理→形貌": {"color": "#E91E63", "width": 2},
+            "形貌→性能": {"color": "#00BCD4", "width": 2},
+            "工艺→性能": {"color": "#795548", "width": 2},
+            "机理证据": {"color": "#607D8B", "width": 1, "style": "dashed"},
         }
 
         for edge in edges:
@@ -1623,15 +1964,18 @@ class KnowledgeBaseService:
             conn.close()
 
         relation_counts = {
-            "process_to_morphology": 0,
-            "morphology_to_performance": 0,
-            "process_to_performance": 0,
-            "process_to_mechanism": 0,
-            "mechanism_to_morphology": 0,
-            "mechanism_evidence": 0,
+            "工艺→形貌": 0,
+            "形貌→性能": 0,
+            "工艺→性能": 0,
+            "工艺→机理": 0,
+            "机理→形貌": 0,
+            "机理证据": 0,
         }
         for rel_type, rel_count in relation_rows:
             key = str(rel_type or "")
+            # 兼容英文键值，统一转为中文
+            if key in RELATION_TYPE_MAPPING and key not in relation_counts:
+                key = RELATION_TYPE_MAPPING[key]
             if key in relation_counts:
                 relation_counts[key] = int(rel_count)
 
@@ -1808,15 +2152,15 @@ class KnowledgeBaseService:
                             doc_id,
                             chunk_id,
                             relation.get("relation_type"),
-                            row["source_node"],
-                            row["target_node"],
-                            row["process_factor"],
-                            row["morphology_factor"],
-                            row["performance_factor"],
-                            row["effect_direction"],
-                            row["confidence"] if row["confidence"] is not None else 0.5,
-                            row["mechanism_summary"],
-                            row["evidence_text"] if row["evidence_text"] is not None else "",
+                            relation.get("source_node"),
+                            relation.get("target_node"),
+                            relation.get("process_factor"),
+                            relation.get("morphology_factor"),
+                            relation.get("performance_factor"),
+                            relation.get("effect_direction"),
+                            relation.get("confidence") if relation.get("confidence") is not None else 0.5,
+                            relation.get("mechanism_summary"),
+                            relation.get("evidence_text") if relation.get("evidence_text") is not None else "",
                         ),
                     )
                     link_count += 1
@@ -1850,12 +2194,17 @@ class KnowledgeBaseService:
 
     def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
         query_tokens = self._expand_link_query_tokens(query)
+
+        all_rows = self._load_link_rows()
+
+        # 空 query 时按置信度降序返回 top_k（展示全量概览）
         if not query_tokens:
-            return []
+            all_rows.sort(key=lambda r: float(r.get("confidence") or 0.0), reverse=True)
+            return all_rows[:top_k]
 
         scored = []
         profile = self._build_query_relation_profile(query)
-        for row_dict in self._load_link_rows():
+        for row_dict in all_rows:
             haystack = " ".join(
                 str(row_dict.get(key) or "")
                 for key in (
@@ -1913,17 +2262,49 @@ class KnowledgeBaseService:
         return tokens
 
     def get_relation_chain_summary(self, query: str, top_k: int = 20) -> Dict[str, List[Dict[str, object]]]:
+        grouped = {
+            "工艺→形貌": [],
+            "形貌→性能": [],
+            "工艺→性能": [],
+            "工艺→机理": [],
+            "机理→形貌": [],
+            "机理证据": [],
+        }
+
+        # 空 query：按类型均匀取 top_k 条，展示全量概览
+        if not query or not query.strip():
+            conn = self._connect()
+            try:
+                for rel_type in grouped:
+                    rows = conn.execute(
+                        "SELECT * FROM kb_links WHERE relation_type = ? ORDER BY confidence DESC LIMIT ?",
+                        (rel_type, top_k),
+                    ).fetchall()
+                    conn.row_factory = sqlite3.Row
+                    # Re-query with Row factory
+                    rows = conn.execute(
+                        "SELECT * FROM kb_links WHERE relation_type = ? ORDER BY confidence DESC LIMIT ?",
+                        (rel_type, top_k),
+                    ).fetchall()
+                    grouped[rel_type] = [dict(r) for r in rows]
+            finally:
+                conn.close()
+            return grouped
+
         links = self.search_links(query, top_k=top_k)
         grouped = {
-            "process_to_morphology": [],
-            "morphology_to_performance": [],
-            "process_to_performance": [],
-            "process_to_mechanism": [],
-            "mechanism_to_morphology": [],
-            "mechanism_evidence": [],
+            "工艺→形貌": [],
+            "形貌→性能": [],
+            "工艺→性能": [],
+            "工艺→机理": [],
+            "机理→形貌": [],
+            "机理证据": [],
         }
         for row in links:
             rel_type = str(row.get("relation_type") or "")
+            # 兼容旧的英文键值，统一转为中文
+            if rel_type in RELATION_TYPE_MAPPING and rel_type not in grouped:
+                rel_type = RELATION_TYPE_MAPPING[rel_type]
             if rel_type in grouped:
                 grouped[rel_type].append(row)
         return grouped
@@ -1965,12 +2346,12 @@ class KnowledgeBaseService:
         allowed_relation_types: Set[str] = set(profile.get("relation_types") or [])
         if not allowed_relation_types:
             allowed_relation_types = {
-                "process_to_morphology",
-                "morphology_to_performance",
-                "process_to_performance",
-                "process_to_mechanism",
-                "mechanism_to_morphology",
-                "mechanism_evidence",
+                "工艺→形貌",
+                "形貌→性能",
+                "工艺→性能",
+                "工艺→机理",
+                "机理→形貌",
+                "机理证据",
             }
 
         all_rows = self._load_link_rows()
@@ -2082,24 +2463,24 @@ class KnowledgeBaseService:
     ) -> Dict[str, object]:
         links = self.search_links(query, top_k=max(40, top_k * 20))
         if not links:
-            return {"query": query, "path_type": "process_mechanism_morphology", "items": []}
+            return {"query": query, "path_type": "工艺_机理_形貌", "items": []}
 
         p2m = [
             row
             for row in links
-            if str(row.get("relation_type") or "") == "process_to_mechanism"
+            if str(row.get("relation_type") or "") == "工艺→机理"
             and float(row.get("confidence") or 0.0) >= min_confidence
         ]
         m2m = [
             row
             for row in links
-            if str(row.get("relation_type") or "") == "mechanism_to_morphology"
+            if str(row.get("relation_type") or "") == "机理→形貌"
             and float(row.get("confidence") or 0.0) >= min_confidence
         ]
         p2morph = [
             row
             for row in links
-            if str(row.get("relation_type") or "") == "process_to_morphology"
+            if str(row.get("relation_type") or "") == "工艺→形貌"
             and float(row.get("confidence") or 0.0) >= min_confidence
         ]
 
@@ -2154,7 +2535,7 @@ class KnowledgeBaseService:
                         "score": round(score, 4),
                         "steps": [
                             {
-                                "relation_type": "process_to_mechanism",
+                                "relation_type": "工艺→机理",
                                 "source_node": row_a.get("source_node"),
                                 "target_node": row_a.get("target_node"),
                                 "effect_direction": row_a.get("effect_direction"),
@@ -2163,7 +2544,7 @@ class KnowledgeBaseService:
                                 "evidence_text": row_a.get("evidence_text"),
                             },
                             {
-                                "relation_type": "mechanism_to_morphology",
+                                "relation_type": "机理→形貌",
                                 "source_node": row_b.get("source_node"),
                                 "target_node": row_b.get("target_node"),
                                 "effect_direction": row_b.get("effect_direction"),
@@ -2174,7 +2555,7 @@ class KnowledgeBaseService:
                         ],
                         "support": (
                             {
-                                "relation_type": "process_to_morphology",
+                                "relation_type": "工艺→形貌",
                                 "source_node": support_link.get("source_node"),
                                 "target_node": support_link.get("target_node"),
                                 "effect_direction": support_link.get("effect_direction"),
@@ -2191,21 +2572,21 @@ class KnowledgeBaseService:
         chain_items.sort(key=lambda item: item["score"], reverse=True)
         return {
             "query": query,
-            "path_type": "process_mechanism_morphology",
+            "path_type": "工艺_机理_形貌",
             "items": chain_items[: max(1, top_k)],
         }
 
     def get_theme_level_aggregation(self, query: str, top_k: int = 30) -> Dict[str, object]:
         links = self.search_links(query, top_k=max(top_k, 20))
         bucket_map = {
-            "process_to_morphology": "process_morphology",
-            "process_to_mechanism": "process_mechanism",
-            "morphology_to_performance": "morphology_performance",
+            "工艺→形貌": "工艺_形貌",
+            "工艺→机理": "工艺_机理",
+            "形貌→性能": "形貌_性能",
         }
         grouped: Dict[str, Dict[Tuple[str, str, str], Dict[str, object]]] = {
-            "process_morphology": {},
-            "process_mechanism": {},
-            "morphology_performance": {},
+            "工艺_形貌": {},
+            "工艺_机理": {},
+            "形貌_性能": {},
         }
 
         for row in links:
@@ -2236,7 +2617,7 @@ class KnowledgeBaseService:
 
         def _finalize_bucket(bucket_name: str) -> Dict[str, object]:
             records = []
-            for unit in grouped[bucket_name].values():
+            for unit in grouped.get(bucket_name, {}).values():
                 count = int(unit["count"])
                 avg_conf = float(unit["confidence_sum"]) / max(1, count)
                 records.append(
@@ -2494,17 +2875,17 @@ class KnowledgeBaseService:
 
         relation_types = set()
         if process_hits and morph_hits:
-            relation_types.add("process_to_morphology")
+            relation_types.add("工艺→形貌")
         if process_hits and perf_hits:
-            relation_types.add("process_to_performance")
+            relation_types.add("工艺→性能")
         if morph_hits and perf_hits:
-            relation_types.add("morphology_to_performance")
+            relation_types.add("形貌→性能")
         if process_hits and mechanism_hits:
-            relation_types.add("process_to_mechanism")
+            relation_types.add("工艺→机理")
         if mechanism_hits and morph_hits:
-            relation_types.add("mechanism_to_morphology")
+            relation_types.add("机理→形貌")
         if mechanism_hits:
-            relation_types.add("mechanism_evidence")
+            relation_types.add("机理证据")
 
         return {
             "process_hits": set(process_hits),
@@ -2646,9 +3027,9 @@ class KnowledgeBaseService:
                 for morphology_factor in morph_hits:
                     relations.append(
                         {
-                            "relation_type": "process_to_morphology",
-                            "source_node": f"process:{process_factor}",
-                            "target_node": f"morphology:{morphology_factor}",
+                            "relation_type": "工艺→形貌",
+                            "source_node": f"工艺:{process_factor}",
+                            "target_node": f"形貌:{morphology_factor}",
                             "process_factor": process_factor,
                             "morphology_factor": morphology_factor,
                             "performance_factor": None,
@@ -2663,9 +3044,9 @@ class KnowledgeBaseService:
                 for mechanism_factor in mechanism_hits:
                     relations.append(
                         {
-                            "relation_type": "process_to_mechanism",
-                            "source_node": f"process:{process_factor}",
-                            "target_node": f"mechanism:{mechanism_factor}",
+                            "relation_type": "工艺→机理",
+                            "source_node": f"工艺:{process_factor}",
+                            "target_node": f"机理:{mechanism_factor}",
                             "process_factor": process_factor,
                             "morphology_factor": None,
                             "performance_factor": None,
@@ -2680,9 +3061,9 @@ class KnowledgeBaseService:
                 for morphology_factor in morph_hits:
                     relations.append(
                         {
-                            "relation_type": "mechanism_to_morphology",
-                            "source_node": f"mechanism:{mechanism_factor}",
-                            "target_node": f"morphology:{morphology_factor}",
+                            "relation_type": "机理→形貌",
+                            "source_node": f"机理:{mechanism_factor}",
+                            "target_node": f"形貌:{morphology_factor}",
                             "process_factor": None,
                             "morphology_factor": morphology_factor,
                             "performance_factor": None,
@@ -2697,9 +3078,9 @@ class KnowledgeBaseService:
                 for performance_factor in perf_hits:
                     relations.append(
                         {
-                            "relation_type": "morphology_to_performance",
-                            "source_node": f"morphology:{morphology_factor}",
-                            "target_node": f"performance:{performance_factor}",
+                            "relation_type": "形貌→性能",
+                            "source_node": f"形貌:{morphology_factor}",
+                            "target_node": f"性能:{performance_factor}",
                             "process_factor": None,
                             "morphology_factor": morphology_factor,
                             "performance_factor": performance_factor,
@@ -2714,9 +3095,9 @@ class KnowledgeBaseService:
                 for performance_factor in perf_hits:
                     relations.append(
                         {
-                            "relation_type": "process_to_performance",
-                            "source_node": f"process:{process_factor}",
-                            "target_node": f"performance:{performance_factor}",
+                            "relation_type": "工艺→性能",
+                            "source_node": f"工艺:{process_factor}",
+                            "target_node": f"性能:{performance_factor}",
                             "process_factor": process_factor,
                             "morphology_factor": None,
                             "performance_factor": performance_factor,
@@ -2729,17 +3110,17 @@ class KnowledgeBaseService:
 
             if has_mechanism and (process_hits or morph_hits or perf_hits):
                 # mechanism_evidence 的 source 应该总是 mechanism 类型
-                source = f"mechanism:{mechanism_hits[0]}" if mechanism_hits else (
-                    f"process:{process_hits[0]}"
+                source = f"机理:{mechanism_hits[0]}" if mechanism_hits else (
+                    f"工艺:{process_hits[0]}"
                     if process_hits
-                    else f"morphology:{morph_hits[0]}" if morph_hits else f"performance:{perf_hits[0]}"
+                    else f"形貌:{morph_hits[0]}" if morph_hits else f"性能:{perf_hits[0]}"
                 )
                 # 注意：mechanism_evidence 的因子字段应保持为 None，因为 source 是 mechanism 类型
                 relations.append(
                     {
-                        "relation_type": "mechanism_evidence",
+                        "relation_type": "机理证据",
                         "source_node": source,
-                        "target_node": "evidence:literature",
+                        "target_node": "证据:文献",
                         "process_factor": process_hits[0] if process_hits else None,
                         "morphology_factor": morph_hits[0] if morph_hits else None,
                         "performance_factor": perf_hits[0] if perf_hits else None,
@@ -2752,12 +3133,35 @@ class KnowledgeBaseService:
         return self._expand_inverse_performance_relations(relations)
 
     @staticmethod
+    def _translate_factor_to_chinese(factor: str) -> str:
+        """将英文因子名转换为中文"""
+        # 尝试各个映射表
+        all_mappings = {
+            **PROCESS_FACTOR_MAPPING,
+            **MORPHOLOGY_FACTOR_MAPPING,
+            **PERFORMANCE_FACTOR_MAPPING,
+            **MECHANISM_FACTOR_MAPPING,
+        }
+        val = all_mappings.get(factor, factor)
+        # 映射中可能有中文键对应的 list（pattern），直接忽略
+        if isinstance(val, list):
+            return factor
+        return val
+
+    @staticmethod
+    def _translate_entity_type_to_chinese(entity_type: str) -> str:
+        """将实体类型转换为中文"""
+        return ENTITY_TYPE_MAPPING.get(entity_type, entity_type)
+
+    @staticmethod
     def _match_factors(text: str, factor_patterns: Dict[str, List[str]]) -> List[str]:
         lowered = text.lower()
         hits: List[str] = []
         for factor, patterns in factor_patterns.items():
             if any(re.search(pattern, lowered) for pattern in patterns):
-                hits.append(factor)
+                # 如果是英文键，转换为中文
+                translated = KnowledgeBaseService._translate_factor_to_chinese(factor)
+                hits.append(translated)
         return hits
 
     @staticmethod
@@ -2790,13 +3194,15 @@ class KnowledgeBaseService:
             inverse_factor = INVERSE_PERFORMANCE_FACTORS.get(performance_factor)
             if not inverse_factor:
                 continue
-            if relation.get("relation_type") not in {"morphology_to_performance", "process_to_performance"}:
+            if relation.get("relation_type") not in {"形貌→性能", "工艺→性能"}:
                 continue
 
+            # 转换中文因子名
+            inverse_factor_chinese = cls._translate_factor_to_chinese(inverse_factor)
             derived_relation = {
                 **relation,
-                "target_node": f"performance:{inverse_factor}",
-                "performance_factor": inverse_factor,
+                "target_node": f"性能:{inverse_factor_chinese}",
+                "performance_factor": inverse_factor_chinese,
                 "effect_direction": cls._invert_effect_direction(relation.get("effect_direction")),
                 "confidence": min(float(relation.get("confidence") or 0.5) + 0.04, 0.9),
             }

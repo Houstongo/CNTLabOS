@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNTA 实验特征驾驶?- Lab-OS</title>
+    <title>CNTA 实验特征驾驶舱 - Lab-OS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
@@ -64,6 +66,36 @@
         .sidebar.collapsed .sidebar-footer { padding: 16px 0; }
         .sidebar.collapsed .sidebar-footer-item { flex-direction: column; gap: 12px; padding: 10px 0; }
         .sidebar.collapsed .sidebar-footer-item .status-dot { margin-right: 0; }
+
+        /* 语言切换按钮样式 */
+        .lang-btn {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .lang-btn:hover {
+            transform: translateY(-1px);
+        }
+        .lang-btn-zh {
+            background: #3b82f6;
+            color: white;
+        }
+        .lang-btn-zh.active {
+            background: #2563eb;
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.1);
+        }
+        .lang-btn-en {
+            background: #f1f5f5;
+            color: #334155;
+        }
+        .lang-btn-en.active {
+            background: #16a34a;
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.1);
+        }
         .sidebar.collapsed .sidebar-footer-item .icon-box { margin-right: 0; width: 36px; height: 36px; }
         .sidebar.collapsed .sidebar-footer-item .nav-text { display: none; }
 
@@ -484,7 +516,7 @@
             transform: scale(1.05);
         }
 
-        /* 左扩展解释面?*/
+        /* 左扩展解释面板*/
         .interpret-panel { 
             position: fixed; 
             top: 0; 
@@ -507,7 +539,7 @@
 
         /* 解释面板 markdown 内容样式 */
 
-        /* ==================== 时间轴样?==================== */
+        /* ==================== 时间轴样式==================== */
         #process-timeline {
             position: relative;
             padding: 20px;
@@ -524,7 +556,7 @@
             transform: translateY(-4px);
         }
 
-        /* ==================== 数据清洗模块算法可视化样?==================== */
+        /* ==================== 数据清洗模块算法可视化样式==================== */
         #clean-algo-panel {
             background: #fff;
             border-top: 2px solid #e2e8f0;
@@ -881,7 +913,7 @@
         }
     </style>
 
-    <!-- 模块?CSS (优先级低于内联样式，逐步迁移) -->
+    <!-- 模块级CSS (优先级低于内联样式，逐步迁移) -->
     <link rel="stylesheet" href="frontend/styles/base.css">
     <link rel="stylesheet" href="frontend/styles/layout.css">
     <link rel="stylesheet" href="frontend/styles/sidebar.css">
@@ -963,6 +995,12 @@
     <div class="main-container">
         <header id="main-header" class="glass-header px-8 py-4 flex justify-between items-center">
             <div id="header-actions-block" class="flex gap-3">
+                <!-- 语言切换 -->
+                <div id="language-switcher" class="flex items-center gap-2">
+                    <button onclick="setLanguage('zh')" class="lang-btn lang-btn-zh" id="btn-zh">中文</button>
+                    <button onclick="setLanguage('en')" class="lang-btn lang-btn-en" id="btn-en">English</button>
+                </div>
+
                 <select id="ml-subpage-switch-top" onchange="switchMlSubPage(this.value)" class="hidden px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-sm outline-none min-w-[150px]">
                     <option value="visual">可视化子页面</option>
                     <option value="data">数据子页</option>
@@ -1347,7 +1385,7 @@
             <div id="clean-summary-grid" class="hidden"></div>
         </div>
 
-    <!-- ══ RAG 文献知识库页?══ -->
+    <!-- ══ RAG 文献知识库页面══ -->
     <div id="rag-page" class="hidden flex-1 p-4 xl:p-5 bg-slate-50/50">
         <div class="rag-workspace">
             <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
@@ -1369,8 +1407,8 @@
                         <div class="flex-1 flex gap-2">
                             <input id="rag-link-query" type="text"
                                 class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
-                                placeholder="输入查询词，例如：生长温?取向?导电?生长机理"
-                                value="生长温度 取向?导电?生长机理"
+                                placeholder="输入查询词，例如：生长温度·取向·导电·生长机理"
+                                value="生长温度·取向·导电·生长机理"
                                 onkeydown="if(event.key==='Enter'){event.preventDefault();loadRagLinks();}">
                             <button onclick="loadRagLinks()"
                                 class="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shrink-0">
@@ -1378,7 +1416,7 @@
                             </button>
                         </div>
                         <div class="flex items-center gap-2 text-[11px] text-slate-400">
-                            <span>主分析链：工艺参??形貌特征 ?生长机理 ?文献证据</span>
+                            <span>主分析链：工艺参数→形貌特征→生长机理→文献证据</span>
                             <button onclick="loadRagLinks()" class="text-slate-400 hover:text-indigo-500 transition font-bold shrink-0">
                                 <i class="fas fa-sync-alt mr-1"></i>刷新关联
                             </button>
@@ -1409,28 +1447,28 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1 min-h-0">
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between gap-2 mb-3">
-                            <div class="rag-subpage-title">工艺 ?形貌</div>
+                            <div class="rag-subpage-title">工艺→形貌</div>
                             <button id="rag-overview-more-p2m" class="text-[11px] font-bold text-indigo-500 hover:text-indigo-700" onclick="switchRagSubPage('graph')">查看更多</button>
                         </div>
                         <div id="rag-chain-p2m" class="space-y-2 text-xs rag-panel-scroll"></div>
                     </div>
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between gap-2 mb-3">
-                            <div class="rag-subpage-title">形貌 ?性能</div>
+                            <div class="rag-subpage-title">形貌→性能</div>
                             <button id="rag-overview-more-m2p" class="text-[11px] font-bold text-emerald-500 hover:text-emerald-700" onclick="switchRagSubPage('performance')">查看更多</button>
                         </div>
                         <div id="rag-chain-m2p" class="space-y-2 text-xs rag-panel-scroll"></div>
                     </div>
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between gap-2 mb-3">
-                            <div class="rag-subpage-title">工艺 ?性能</div>
+                            <div class="rag-subpage-title">工艺→性能</div>
                             <button id="rag-overview-more-p2p" class="text-[11px] font-bold text-sky-500 hover:text-sky-700" onclick="switchRagSubPage('performance')">查看更多</button>
                         </div>
                         <div id="rag-chain-p2p" class="space-y-2 text-xs rag-panel-scroll"></div>
                     </div>
                     <div class="data-card p-4 min-h-0">
                         <div class="flex items-center justify-between gap-2 mb-3">
-                            <div class="rag-subpage-title">机理 ?文献证据</div>
+                            <div class="rag-subpage-title">机理→文献证据</div>
                             <button id="rag-overview-more-mech" class="text-[11px] font-bold text-slate-500 hover:text-slate-700" onclick="switchRagSubPage('graph')">查看更多</button>
                         </div>
                         <div id="rag-chain-mech" class="space-y-2 text-xs rag-panel-scroll"></div>
@@ -1447,9 +1485,9 @@
                         </div>
                         <div class="space-y-2 mb-3">
                             <button id="rag-graph-filter-all" class="rag-graph-filter-btn active flex items-center justify-between gap-2" onclick="setRagGraphFilter('all')"><span>全部关系</span><span id="rag-graph-filter-count-all" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">0</span></button>
-                            <button id="rag-graph-filter-process_to_morphology" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_morphology')"><span>仅看工艺 ?形貌</span><span id="rag-graph-filter-count-process_to_morphology" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">0</span></button>
-                            <button id="rag-graph-filter-morphology_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('morphology_to_performance')"><span>仅看形貌 ?性能</span><span id="rag-graph-filter-count-morphology_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">0</span></button>
-                            <button id="rag-graph-filter-process_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_performance')"><span>仅看工艺 ?性能</span><span id="rag-graph-filter-count-process_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">0</span></button>
+                            <button id="rag-graph-filter-process_to_morphology" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_morphology')"><span>仅看工艺→形貌</span><span id="rag-graph-filter-count-process_to_morphology" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">0</span></button>
+                            <button id="rag-graph-filter-morphology_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('morphology_to_performance')"><span>仅看形貌→性能</span><span id="rag-graph-filter-count-morphology_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">0</span></button>
+                            <button id="rag-graph-filter-process_to_performance" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('process_to_performance')"><span>仅看工艺→性能</span><span id="rag-graph-filter-count-process_to_performance" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">0</span></button>
                             <button id="rag-graph-filter-mechanism_evidence" class="rag-graph-filter-btn flex items-center justify-between gap-2" onclick="setRagGraphFilter('mechanism_evidence')"><span>仅看机理证据</span><span id="rag-graph-filter-count-mechanism_evidence" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">0</span></button>
                         </div>
                         <div id="rag-graph-link-summary" class="rag-stat-grid text-xs mb-3"></div>
@@ -1495,30 +1533,92 @@
             </div>
 
             <div id="rag-subpage-manage" class="rag-subpage hidden">
-                <div class="grid grid-cols-1 xl:grid-cols-[0.42fr_0.58fr] gap-4 h-full min-h-0">
-                    <div class="data-card p-6">
-                        <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <i class="fas fa-cloud-upload-alt text-blue-400"></i>上传新文?                        </h3>
-                        <div class="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-blue-300 transition-colors group">
-                            <i class="fas fa-file-pdf text-5xl text-red-200 mb-4 block group-hover:text-red-300 transition-colors"></i>
-                            <p class="text-sm text-slate-400 mb-4">仅支?PDF 格式，单文件建议不超?50MB</p>
-                            <label class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100">
-                                <i class="fas fa-plus"></i>选择 PDF 文件
-                                <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
-                            </label>
+                <div class="grid grid-cols-1 xl:grid-cols-[0.38fr_0.62fr] gap-4 h-full min-h-0">
+                    <!-- 左侧：上传与管理工具 -->
+                    <div class="space-y-4">
+                        <!-- PDF 上传 -->
+                        <div class="data-card p-6">
+                            <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-file-pdf text-red-400"></i>上传 PDF 文献
+                            </h3>
+                            <div class="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-300 transition-colors group">
+                                <i class="fas fa-cloud-upload-alt text-4xl text-blue-200 mb-3 block group-hover:text-blue-300 transition-colors"></i>
+                                <p class="text-sm text-slate-400 mb-3">仅支持 PDF 格式，单文件建议不超过 50MB</p>
+                                <label class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-100 w-full justify-center">
+                                    <i class="fas fa-plus"></i>选择 PDF 文件
+                                    <input type="file" accept=".pdf" class="hidden" onchange="uploadPDF(this)">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 文本导入 -->
+                        <div class="data-card p-6">
+                            <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-file-alt text-emerald-400"></i>导入文本知识
+                            </h3>
+                            <div class="space-y-3">
+                                <input id="kb-ingest-title" type="text"
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400"
+                                    placeholder="文档标题">
+                                <select id="kb-ingest-source-type" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400">
+                                    <option value="notes">笔记</option>
+                                    <option value="paper">论文</option>
+                                    <option value="experiment">实验记录</option>
+                                    <option value="manual">手动录入</option>
+                                </select>
+                                <select id="kb-ingest-theme" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400">
+                                    <option value="">默认主题</option>
+                                    <option value="growth_mechanism">生长机理</option>
+                                    <option value="process_morphology">工艺-形貌</option>
+                                    <option value="characterization">表征方法</option>
+                                    <option value="applications">应用领域</option>
+                                </select>
+                                <textarea id="kb-ingest-text" rows="4"
+                                    class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400 resize-none"
+                                    placeholder="输入文本内容..."></textarea>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="kb-ingest-core" class="w-4 h-4 rounded border-slate-300">
+                                    <label for="kb-ingest-core" class="text-sm text-slate-600">标记为核心文献</label>
+                                </div>
+                                <button onclick="ingestKnowledgeText()"
+                                    class="w-full h-10 px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition shadow-lg shadow-emerald-100">
+                                    <i class="fas fa-upload mr-2"></i>导入知识
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 管理工具 -->
+                        <div class="data-card p-6">
+                            <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-tools text-amber-400"></i>管理工具
+                            </h3>
+                            <div class="space-y-3">
+                                <button onclick="rebuildKnowledgeLinks()"
+                                    class="w-full h-10 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-2">
+                                    <i class="fas fa-sync-alt"></i>重建关系链接
+                                </button>
+                                <div class="text-xs text-slate-500 text-center">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    重建链接会重新从文档中提取关系
+                                </div>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- 右侧：文档列表 -->
                     <div class="data-card p-6 min-h-0">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-sm font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                                <i class="fas fa-list text-slate-400"></i>已收录文?                            </h3>
-                            <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
-                                <i class="fas fa-sync-alt mr-1"></i>刷新列表
-                            </button>
+                                <i class="fas fa-database text-slate-400"></i>已收录文档
+                            </h3>
+                            <div class="flex gap-2">
+                                <button onclick="loadRagDocs()" class="text-xs text-slate-400 hover:text-blue-500 transition font-bold">
+                                    <i class="fas fa-sync-alt mr-1"></i>刷新
+                                </button>
+                            </div>
                         </div>
                         <div id="rag-doc-list" class="space-y-2 min-h-[60px] text-sm rag-panel-scroll">
-                            <span class="text-slate-300">暂无文献，请上传 PDF 文件</span>
+                            <span class="text-slate-300">暂无文档，请上传或导入知识</span>
                         </div>
                     </div>
                 </div>
@@ -1540,10 +1640,10 @@
         </div>
     </div>
 
-    <!-- ══ TCCER 证据链检索页?══ -->
+    <!-- ══ TCCER 证据链检索页面══ -->
     <div id="tccer-page" class="hidden flex-1 p-4 xl:p-5 bg-slate-50/50">
         <div class="tccer-workspace">
-            <!-- 标题?-->
+            <!-- 标题区-->
             <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
                 <div>
                     <h2 class="text-2xl font-black text-slate-800">TCCER 证据链检索</h2>
@@ -1551,12 +1651,12 @@
                 </div>
                 <div class="flex gap-2">
                     <button id="tccer-tab-chains" class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm">证据链</button>
-                    <button id="tccer-tab-stats" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50">MSFU统计</button>
-                    <button id="tccer-tab-extract" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50">手动提取</button>
+                    <button id="tccer-tab-stats" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50" onclick="showMSFUStats()">MSFU统计</button>
+                    <button id="tccer-tab-extract" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50" onclick="showMSFUExtractPanel()">手动提取</button>
                 </div>
             </div>
 
-            <!-- 查询?-->
+            <!-- 查询区-->
             <div class="tccer-query-box">
                 <div class="flex flex-col xl:flex-row gap-3">
                     <div class="flex-1">
@@ -1612,7 +1712,7 @@
                 </div>
             </div>
 
-            <!-- 结果展示?-->
+            <!-- 结果展示区-->
             <div class="grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] gap-4 flex-1 min-h-0">
                 <!-- 左侧：证据链列表 -->
                 <div class="flex flex-col gap-4 min-h-0 overflow-hidden">
@@ -1647,28 +1747,28 @@
     <!-- QA Chat Assistant Page -->
     <div id="qa-page" class="hidden flex-1 flex flex-col overflow-hidden bg-slate-50/50">
         <div class="flex flex-row h-full gap-0">
-            <!-- 侧边?-->
+            <!-- 侧边栏-->
             <div class="bg-white border-r border-slate-200 flex flex-col h-full w-[280px] shrink-0">
-                <!-- 侧边栏头?-->
+                <!-- 侧边栏头部-->
                 <div class="p-4 border-b border-slate-100">
                     <h3 class="text-lg font-black text-slate-800 mb-2">科研问答助手</h3>
                     <p class="text-xs text-slate-500">基于RAG知识库的智能问答</p>
                 </div>
 
-                <!-- 新对话按?-->
+                <!-- 新对话按钮-->
                 <div class="p-4">
                     <button onclick="startNewQASession()"
                         class="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                        <i class="fas fa-plus"></i> 新对?                    </button>
+                        <i class="fas fa-plus"></i> 新对话                    </button>
                 </div>
 
                 <!-- 预设问题 -->
                 <div class="flex-1 overflow-y-auto px-4 pb-4">
                     <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">快速提</div>
                     <div id="qa-templates" class="space-y-2">
-                        <!-- 预设问题将通过JS动态加?-->
+                        <!-- 预设问题将通过JS动态加载-->
                         <div class="text-center text-slate-300 py-4">
-                            <i class="fas fa-spinner fa-spin"></i> 加载?..
+                            <i class="fas fa-spinner fa-spin"></i> 加载中.....
                         </div>
                     </div>
                 </div>
@@ -1677,12 +1777,12 @@
                 <div class="border-t border-slate-100 p-4 max-h-[200px] overflow-y-auto">
                     <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">历史对话</div>
                     <div id="qa-sessions" class="space-y-1">
-                        <!-- 会话历史将通过JS动态加?-->
+                        <!-- 会话历史将通过JS动态加载-->
                     </div>
                 </div>
             </div>
 
-            <!-- 主对话区?-->
+            <!-- 主对话区域-->
             <div class="flex flex-col h-full bg-slate-50 flex-1 min-w-0">
                 <!-- 对话头部 -->
                 <div class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
@@ -1707,7 +1807,7 @@
                     </div>
                 </div>
 
-                <!-- 对话消息?-->
+                <!-- 对话消息区-->
                 <div id="qa-messages" class="flex-1 overflow-y-auto p-6 space-y-4">
                     <!-- 欢迎消息 -->
                     <div class="flex justify-start">
@@ -1746,7 +1846,7 @@
     </div>
 
     <div id="details-panel" class="details-panel">
-        <!-- 头部?-->
+        <!-- 头部区-->
         <div class="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
             <div class="flex items-center gap-3">
                 <button id="toggle-interpret-btn" onclick="toggleInterpretPanel()"
@@ -1759,7 +1859,7 @@
         </div>
 
         <div class="flex-1 overflow-y-auto p-8 space-y-8">
-            <!-- 剧场级图像预?-->
+            <!-- 剧场级图像预览-->
             <div class="relative rounded-2xl overflow-hidden shadow-2xl bg-black aspect-video group">
                 <img id="detail-img" src="" class="w-full h-full object-contain cursor-zoom-in" alt="Sample Analysis">
                 <div id="d-status" class="absolute top-4 right-4 px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-lg uppercase tracking-widest shadow-lg">校验通过</div>
@@ -1850,10 +1950,10 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- 左扩展可解释性分析面?                                        -->
+    <!-- 左扩展可解释性分析面板                                        -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div id="interpret-panel" class="interpret-panel">
-        <!-- 顶部标题?-->
+        <!-- 顶部标题区-->
         <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
             <div class="flex items-center gap-2.5">
                 <div id="interpret-badge" class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
@@ -1869,7 +1969,7 @@
             </button>
         </div>
 
-        <!-- Tab 切换?-->
+        <!-- Tab 切换栏-->
         <div class="flex border-b border-slate-100 shrink-0">
             <button id="tab-algo" class="tab-btn active-tab" onclick="showAlgoTab()">
                 <i class="fas fa-microscope mr-1.5"></i>算法解析
@@ -1879,7 +1979,7 @@
             </button>
         </div>
 
-        <!-- ── 算法 Tab 包装?── -->
+        <!-- ── 算法 Tab 包装器── -->
         <div id="algo-tab-wrapper" class="flex-1 overflow-y-auto px-6 py-5">
             <div id="algo-content" class="interp-md text-slate-700">
                 <div class="text-center text-slate-300 mt-16 select-none">
@@ -1889,7 +1989,7 @@
             </div>
         </div>
 
-        <!-- ── AI Tab：统一对话?── -->
+        <!-- ── AI Tab：统一对话框── -->
         <div id="ai-tab-wrapper" class="hidden flex-1 flex flex-col min-h-0">
 
             <!-- 工具栏：模型 / 温度 / RAG / 生成 -->
@@ -1898,7 +1998,7 @@
                 <div class="flex items-center gap-2">
                     <select id="interpret-model-select"
                         class="flex-1 min-w-0 text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 outline-none font-bold text-slate-600 cursor-pointer">
-                        <!-- ?_syncInterpretModelSelect() 动态填?-->
+                        <!-- ?_syncInterpretModelSelect() 动态填充-->
                     </select>
                     <!-- 温度滑块 -->
                     <div class="flex items-center gap-1.5 shrink-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
@@ -1908,7 +2008,7 @@
                             class="w-14 h-1 accent-indigo-500 cursor-pointer">
                         <span id="temp-display" class="text-[10px] font-black text-indigo-500 w-6 text-right">0.5</span>
                     </div>
-                    <!-- RAG 开?-->
+                    <!-- RAG 开关-->
                     <label class="flex items-center gap-1.5 shrink-0 cursor-pointer bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 hover:border-indigo-300 transition has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50/60">
                         <input type="checkbox" id="rag-toggle" checked class="w-3.5 h-3.5 accent-indigo-500 cursor-pointer">
                         <span class="text-[10px] font-black text-slate-500">RAG</span>
@@ -1928,7 +2028,7 @@
                 </div>
             </div>
 
-            <!-- 统一对话历史区（flex-1，可滚动?-->
+            <!-- 统一对话历史区（flex-1，可滚动区-->
             <div id="chat-history" class="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2.5 min-h-0">
                 <div id="chat-placeholder" class="text-center text-slate-300 mt-16 select-none">
                     <i class="fas fa-brain text-4xl mb-3 block"></i>
@@ -1936,16 +2036,16 @@
                 </div>
             </div>
 
-            <!-- 相似实验参考（RAG，生成解读后展示?-->
+            <!-- 相似实验参考（RAG，生成解读后展示区-->
             <div id="similar-exps-section" class="hidden shrink-0 border-t border-slate-100 px-4 py-2 bg-slate-50/60">
                 <button onclick="toggleSimilar()" class="w-full flex items-center text-[10px] font-bold text-slate-400 uppercase py-1 hover:text-slate-600 transition">
-                    <i class="fas fa-database mr-1.5 text-indigo-300"></i>相似实验参?(RAG)
+                    <i class="fas fa-database mr-1.5 text-indigo-300"></i>相似实验参数(RAG)
                     <i id="similar-chevron" class="fas fa-chevron-down ml-auto transition-transform text-slate-300"></i>
                 </button>
                 <div id="similar-exps-list" class="hidden mt-1 space-y-1.5 max-h-28 overflow-y-auto"></div>
             </div>
 
-            <!-- 输入?-->
+            <!-- 输入区-->
             <div class="shrink-0 border-t border-slate-100 px-4 py-3">
                 <div class="flex gap-2">
                     <input type="text" id="chat-input"
@@ -1984,7 +2084,7 @@
                                 <input type="text" name="sample_id" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-bold text-sm" placeholder="? XR-2024-001">
                             </div>
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">所属批?(Source)</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">所属批次(Source)</label>
                                 <select name="source" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm cursor-pointer">
                                     <option value="XR">XR 梯度系列</option>
                                     <option value="ZZY">ZZY 工艺系列</option>
@@ -2000,14 +2100,14 @@
 
                     <!-- Catalyst Info -->
                     <div>
-                        <h4 class="text-[11px] font-black text-orange-500 uppercase tracking-[0.2em] mb-4 border-l-4 border-orange-500 pl-3">催化剂参?(Catalyst)</h4>
+                        <h4 class="text-[11px] font-black text-orange-500 uppercase tracking-[0.2em] mb-4 border-l-4 border-orange-500 pl-3">催化剂参数(Catalyst)</h4>
                         <div class="grid grid-cols-4 gap-4">
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">Al₂O?厚度 (nm)</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">Al₂O₃厚度 (nm)</label>
                                 <input type="number" step="0.1" name="al2o3_thickness" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-black text-sm text-slate-700">
                             </div>
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">Al₂O?功率 (W)</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">Al₂O₃功率 (W)</label>
                                 <input type="number" name="al2o3_power" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
                             </div>
                             <div class="space-y-2">
@@ -2026,7 +2126,7 @@
                         <h4 class="text-[11px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-4 border-l-4 border-emerald-500 pl-3">生长工艺 (Growth CV)</h4>
                         <div class="grid grid-cols-3 gap-6 mb-6">
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">生长温度 (?</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">生长温度 (℃)</label>
                                 <input type="number" name="growth_temp" class="w-full px-4 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl outline-none font-black text-lg text-blue-700 focus:ring-4 focus:ring-blue-100">
                             </div>
                             <div class="space-y-2">
@@ -2044,11 +2144,11 @@
                                 <input type="number" name="ar_flow" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold">
                             </div>
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">氢气 H?(sccm)</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">氢气 H₂(sccm)</label>
                                 <input type="number" name="h2_flow" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold">
                             </div>
                             <div class="space-y-2">
-                                <label class="text-xs font-bold text-slate-500 ml-1">乙烯 C₂H?(sccm)</label>
+                                <label class="text-xs font-bold text-slate-500 ml-1">乙烯 C₂H₄(sccm)</label>
                                 <input type="number" name="c2h4_flow" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold">
                             </div>
                         </div>
@@ -2108,7 +2208,7 @@
                         </button>
                     </div>
                     <div class="relative group mb-5">
-                        <input type="password" id="dynamic-key-input" class="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50 text-sm font-mono transition-all shadow-sm" placeholder="请输?API Key...">
+                        <input type="password" id="dynamic-key-input" class="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-50 text-sm font-mono transition-all shadow-sm" placeholder="请输入API Key...">
                         <i class="fas fa-key absolute left-4 top-[14px] text-slate-300 group-focus-within:text-purple-400 transition-colors"></i>
                     </div>
 
@@ -2117,7 +2217,7 @@
                     </div>
                     <div class="relative">
                         <select id="dynamic-model-select" class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-purple-400 text-xs font-bold text-slate-600 appearance-none cursor-pointer">
-                            <!-- 动态填?-->
+                            <!-- 动态填充-->
                         </select>
                         <i class="fas fa-microchip absolute left-4 top-[14px] text-slate-300"></i>
                         <i class="fas fa-chevron-down absolute right-4 top-[14px] text-slate-300 pointer-events-none text-[10px]"></i>
@@ -2374,7 +2474,7 @@
         async function runDataBatchAnalyze() {
             const imageIds = [...selectedDataIds];
             if (!imageIds.length) return;
-            if (!confirm(`确认对选中?${imageIds.length} 项进行批量分析？`)) return;
+            if (!confirm(`确认对选中项${imageIds.length} 项进行批量分析？`)) return;
             const button = document.getElementById('data-batch-analyze-btn');
             const original = button.innerHTML;
             button.disabled = true;
@@ -2406,7 +2506,7 @@
         async function runDataBatchDelete() {
             const imageIds = [...selectedDataIds];
             if (!imageIds.length) return;
-            if (!confirm(`确认将选中?${imageIds.length} 项移入回收站？`)) return;
+            if (!confirm(`确认将选中项${imageIds.length} 项移入回收站？`)) return;
             const button = document.getElementById('data-batch-delete-btn');
             const original = button.innerHTML;
             button.disabled = true;
@@ -3350,7 +3450,7 @@
         async function loadCleanVisualizations(item) {
             const tabsContainer = document.getElementById('clean-step-tabs');
             if (!tabsContainer || !item?.id) return;
-            tabsContainer.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">加载?..</div>';
+            tabsContainer.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">加载中.....</div>';
 
             try {
                 const res = await fetch(`${API_BASE}/api/images/${item.id}/visualize`);
@@ -3640,7 +3740,7 @@
             }
         }
 
-        // ─── 全局状?───
+        // ─── 全局状态───
             let currentItem = null;
         let currentListItemsById = {};
         let selectedDataIds = new Set();
@@ -3660,6 +3760,8 @@
             currentSubgraph: null,
             currentConstrainedChain: null,
             currentThemeAggregation: null,
+            msfuByEdge: {},   // "source|||target" => [item, ...]
+            msfuByNode: {},   // nodeId => [item, ...]
         };
 
         // ─── 工具：获取当前选择的模型和 API Key ───
@@ -3673,19 +3775,19 @@
             return localStorage.getItem('CNTA_PROVIDER') || 'glm';
         }
 
-        // ─── 配置 & API 状?(单例重构) ───
+        // ─── 配置 & API 状态(单例重构) ───
             const MODEL_CONFIGS = {
             glm: { 
                 name: 'GLM', 
                 color: 'purple',
                 models: [
-                    { id: 'glm-4.7-plus', name: 'GLM-4.7 Plus (最新增?' },
-                    { id: 'glm-4-plus', name: 'GLM-4 Plus (旗舰?' },
+                    { id: 'glm-4.7-plus', name: 'GLM-4.7 Plus (最新增强' },
+                    { id: 'glm-4-plus', name: 'GLM-4 Plus (旗舰版' },
                     { id: 'glm-4-flash', name: 'GLM-4 Flash (极速版)' },
-                    { id: 'glm-4-air', name: 'GLM-4 Air (平衡?' },
+                    { id: 'glm-4-air', name: 'GLM-4 Air (平衡版' },
                     { id: 'glm-4.5-air', name: 'GLM-4.5 Air (经典平衡)' },
-                    { id: 'glm-4.6v', name: 'GLM-4.6v (多模态增?' },
-                    { id: 'glm-4', name: 'GLM-4 (标准?' },
+                    { id: 'glm-4.6v', name: 'GLM-4.6v (多模态增强' },
+                    { id: 'glm-4', name: 'GLM-4 (标准版' },
                     { id: 'glm-5', name: 'GLM-5.0 (前瞻支持)' }
                 ],
                 testUrl: 'https://open.bigmodel.cn/api/paas/v4/models'
@@ -3695,13 +3797,13 @@
                 color: 'blue',
                 models: [
                     { id: 'deepseek-chat', name: 'DeepSeek-V3' },
-                    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (推理?' }
+                    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (推理版' }
                 ],
                 testUrl: 'https://api.deepseek.com/models'
             }
         };
 
-        let tempConfigCache = {}; // 临时保管切换时没保存的配?{ provider: { key, model } }
+        let tempConfigCache = {}; // 临时保管切换时没保存的配置{ provider: { key, model } }
         function togglePwdVisibility() {
             const input = document.getElementById('dynamic-key-input');
             const btn = document.getElementById('toggle-pwd-btn');
@@ -3731,15 +3833,15 @@
             label.className = `block text-[11px] font-black text-${conf.color}-600 uppercase tracking-widest transition-colors`;
             input.className = `w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-${conf.color}-400 focus:ring-4 focus:ring-${conf.color}-50 text-sm font-mono transition-all shadow-sm`;
             input.nextElementSibling.className = `fas fa-key absolute left-4 top-[14px] text-slate-300 group-focus-within:text-${conf.color}-400 transition-colors`;
-            input.placeholder = `请输?${conf.name} API Key...`;
+            input.placeholder = `请输入${conf.name} API Key...`;
             
             select.className = `w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-${conf.color}-400 text-xs font-bold text-slate-600 appearance-none cursor-pointer transition-all`;
             select.nextElementSibling.className = `fas fa-microchip absolute left-4 top-[14px] text-slate-300 group-focus-within:text-${conf.color}-400 transition-colors`;
 
-            // 模型下拉框填?
+            // 模型下拉框填充
             select.innerHTML = conf.models.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 
-            // 值回?
+            // 值回填
             if (!tempConfigCache[provider]) {
                 tempConfigCache[provider] = {
                     key: localStorage.getItem('CNTA_KEY_' + provider) || '',
@@ -3749,7 +3851,7 @@
             input.value = tempConfigCache[provider].key;
             select.value = tempConfigCache[provider].model;
             
-            // 隐藏上一次的连接状?
+            // 隐藏上一次的连接状态
             document.getElementById('connection-status').classList.add('hidden');
 
             // 监听变化
@@ -3814,17 +3916,38 @@
             const dot = document.getElementById('status-dot');
             const label = document.getElementById('status-label');
 
-            // 同步解读面板的模型选择?
             _syncInterpretModelSelect();
-            if (key && key.trim().length > 10) {
-                dot.className = 'status-dot bg-emerald-500';
-                label.innerText = `AI 引擎就绪 (${MODEL_CONFIGS[provider].name} / ${model.split('-').pop()})`;
-                label.className = 'nav-text text-emerald-600 font-bold';
-            } else {
+            if (!key || key.trim().length < 10) {
                 dot.className = 'status-dot bg-slate-400';
-                label.innerText = "AI 引擎未配置";
+                label.innerText = 'AI 引擎未配置';
                 label.className = 'nav-text text-slate-400';
+                return;
             }
+            // 异步验证 Key 是否有效
+            dot.className = 'status-dot bg-amber-500 animate-pulse';
+            label.innerText = `正在验证...`;
+            label.className = 'nav-text text-amber-500';
+            fetch(MODEL_CONFIGS[provider].testUrl, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${key.trim()}` }
+            }).then(res => {
+                if (res.ok) {
+                    dot.className = 'status-dot bg-emerald-500';
+                    label.innerText = `AI 引擎就绪 (${MODEL_CONFIGS[provider].name} / ${model.split('-').pop()})`;
+                    label.className = 'nav-text text-emerald-600 font-bold';
+                    localStorage.setItem('CNTA_KEY_STATUS_' + provider, 'valid');
+                } else {
+                    dot.className = 'status-dot bg-red-500';
+                    label.innerText = 'API Key 无效';
+                    label.className = 'nav-text text-red-500';
+                    localStorage.setItem('CNTA_KEY_STATUS_' + provider, 'invalid');
+                }
+            }).catch(() => {
+                dot.className = 'status-dot bg-red-500';
+                label.innerText = 'API Key 无效';
+                label.className = 'nav-text text-red-500';
+                localStorage.setItem('CNTA_KEY_STATUS_' + provider, 'invalid');
+            });
         }
 
         function toggleConfigModal() {
@@ -3845,37 +3968,59 @@
             }
         }
 
-        function saveApiKey() {
+        async function saveApiKey() {
             const provider = document.querySelector('input[name="default-provider"]:checked')?.value || 'glm';
             const btn = document.getElementById('save-cfg-btn');
-            
-            // 写入 localStorage
-            localStorage.setItem('CNTA_PROVIDER', provider);
-            for (const [p, cfg] of Object.entries(tempConfigCache)) {
-                if (cfg.key !== undefined) localStorage.setItem('CNTA_KEY_' + p, cfg.key);
-                if (cfg.model !== undefined) localStorage.setItem('CNTA_MODEL_' + p, cfg.model);
+            const key = tempConfigCache[provider]?.key || '';
+
+            if (!key || key.length < 10) {
+                btn.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i> 请输入有效的 API Key';
+                btn.className = "flex-1 bg-red-600 text-white py-4 rounded-xl font-black text-sm transition-all flex justify-center items-center shadow-lg shadow-red-100";
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-save mr-2"></i> 保存并生效';
+                    btn.className = "flex-1 bg-slate-800 text-white py-4 rounded-xl font-black text-sm hover:bg-slate-700 hover:shadow-lg hover:shadow-slate-200 transition-all flex justify-center items-center";
+                }, 1200);
+                return;
             }
 
-            checkApiStatus();
-            
-            // UX 反馈
-            const ogHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> 配置已生效';
-            btn.className = "flex-1 bg-emerald-600 text-white py-4 rounded-xl font-black text-sm transition-all flex justify-center items-center shadow-lg shadow-emerald-100";
-            
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> 验证中...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(MODEL_CONFIGS[provider].testUrl, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${key.trim()}` }
+                });
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status);
+                }
+                // 验证通过才保存
+                localStorage.setItem('CNTA_PROVIDER', provider);
+                for (const [p, cfg] of Object.entries(tempConfigCache)) {
+                    if (cfg.key !== undefined) localStorage.setItem('CNTA_KEY_' + p, cfg.key);
+                    if (cfg.model !== undefined) localStorage.setItem('CNTA_MODEL_' + p, cfg.model);
+                }
+                checkApiStatus();
+                btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> 验证通过，配置已生效';
+                btn.className = "flex-1 bg-emerald-600 text-white py-4 rounded-xl font-black text-sm transition-all flex justify-center items-center shadow-lg shadow-emerald-100";
+            } catch (e) {
+                btn.innerHTML = '<i class="fas fa-times-circle mr-2"></i> Key 无效，保存已取消';
+                btn.className = "flex-1 bg-red-600 text-white py-4 rounded-xl font-black text-sm transition-all flex justify-center items-center shadow-lg shadow-red-100";
+            }
+            btn.disabled = false;
             setTimeout(() => {
-                btn.innerHTML = ogHtml;
+                btn.innerHTML = '<i class="fas fa-save mr-2"></i> 保存并生效';
                 btn.className = "flex-1 bg-slate-800 text-white py-4 rounded-xl font-black text-sm hover:bg-slate-700 hover:shadow-lg hover:shadow-slate-200 transition-all flex justify-center items-center";
                 toggleConfigModal();
-            }, 800);
+            }, 1200);
         }
 
-        // ─── AI 提取图像特征 ?自动展开算法解析面板 ───
+        // ─── AI 提取图像特征 · 自动展开算法解析面板 ───
         async function reanalyzeImage() {
             if (!currentItem) return;
             const btn = document.getElementById('reanalyze-btn');
             const orig = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>提取?..';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>提取中...';
             btn.disabled = true;
             try {
                 const res = await fetch(`${API_BASE}/api/images/${currentItem.id}/analyze`, { method: 'POST' });
@@ -3892,7 +4037,7 @@
                     Object.assign(currentItem, r);
                     loadData();
                     openInterpretPanel('algo');
-                    // 加载算法可视?
+                    // 加载算法可视化
             await loadAlgorithmVisualization();
                     return true;
                 }
@@ -3912,7 +4057,7 @@
                 showAlgoTab();
             } else {
                 showAITab();
-                // 如果是科研诊断模式且第一次打开，自动触发一次诊断生?
+                // 如果是科研诊断模式且第一次打开，自动触发一次诊断生成
             if (chatHistory.length === 0) {
                     startAIInterpret();
                 }
@@ -4009,7 +4154,7 @@
                     showVisualizationPanel();
                 }
             } catch (err) {
-                console.error('加载算法可视化失?', err);
+                console.error('加载算法可视化失败', err);
             }
         }
 
@@ -4032,7 +4177,7 @@
             // 加载对应数据
             await loadVisualizationData(backend);
 
-            // 更新可视化展?
+            // 更新可视化展示
             updateVisualizationDisplay(backend);
         }
 
@@ -4089,7 +4234,7 @@
                 visualizationData.wcntsegnet = data.comparison.wcntsegnet || data.comparison.threshold;
                 visualizationData.threshold = visualizationData.wcntsegnet;
                 visualizationData.cntsegnet = data.comparison.cntsegnet;
-                // 保存元数?
+                // 保存元数据
             if (data.comparison.metadata) {
                     visualizationData.metadata = data.comparison.metadata;
                 }
@@ -4109,13 +4254,13 @@
             const legacyStepNav = document.getElementById('legacy-step-nav');
 
             if (backend === 'both') {
-                // 对比模式：并排显?
+                // 对比模式：并排显示
             renderComparisonView();
                 timelineContainer.classList.add('hidden');
                 phaseDetailsPanel.classList.add('hidden');
                 legacyStepNav.classList.add('hidden');
             } else {
-                // 单一模式：显示对应后端步?
+                // 单一模式：显示对应后端步骤
             const data = visualizationData[backend];
             if (data) {
                     visualizationSteps = data.steps;
@@ -4124,7 +4269,7 @@
                     phaseDetailsPanel.classList.add('hidden');
                     legacyStepNav.classList.remove('hidden');
 
-                    // 更新步骤图像和说?
+                    // 更新步骤图像和说明
             const stepImage = document.getElementById('step-image');
                     const stepDesc = document.getElementById('step-description');
                     if (stepImage) stepImage.src = `data:image/jpeg;base64,${visualizationSteps[currentStepIndex].image}`;
@@ -4154,9 +4299,9 @@
 
             const algoContent = document.getElementById('algo-content');
 
-            // 创建可视化面?
+            // 创建可视化面板
             let html = `
-                <!-- 分割后端选择?-->
+                <!-- 分割后端选择器-->
                 <div class="flex items-center gap-4 mb-6 p-4 bg-gradient-to-r from-slate-50 to-indigo-50 rounded-xl border border-indigo-100">
                     <span class="text-sm font-bold text-slate-700">分割后端</span>
 
@@ -4182,7 +4327,7 @@
                         </button>
                     </div>
 
-                    <!-- CNTSegNet配置（仅在cntsegnet模式显示?-->
+                    <!-- CNTSegNet配置（仅在cntsegnet模式显示器-->
                     <div id="cntsegnet-config" class="hidden flex items-center gap-2 ml-auto">
                         <select id="select-device" class="px-2 py-1 text-xs border rounded bg-white">
                             <option value="cpu">CPU</option>
@@ -4193,7 +4338,7 @@
                     </div>
                 </div>
 
-                <!-- 分割后端元数据展示（仅both模式?-->
+                <!-- 分割后端元数据展示（仅both模式)-->
                 <div id="backend-metadata" class="hidden mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <div class="flex items-center gap-2 text-xs text-amber-800">
                         <i class="fas fa-info-circle"></i>
@@ -4201,7 +4346,7 @@
                     </div>
                 </div>
 
-                <!-- 水平时间?-->
+                <!-- 水平时间轴-->
                 <div id="process-timeline" class="mb-6"></div>
 
                 <!-- 阶段详情面板 -->
@@ -4213,15 +4358,15 @@
                         <h4 class="font-bold text-sm text-slate-700">算法步骤可视</h4>
                         <div class="flex items-center gap-2">
                             <button onclick="prevStep()" class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold">
-                                <i class="fas fa-chevron-left mr-1"></i>上一?                            </button>
+                                <i class="fas fa-chevron-left mr-1"></i>上一步                            </button>
                             <span id="step-indicator" class="text-xs font-bold text-indigo-600">1 / ${visualizationSteps.length}</span>
                             <button onclick="nextStep()" class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold">
-                                下一?i class="fas fa-chevron-right ml-1"></i>
+                                下一步i class="fas fa-chevron-right ml-1"></i>
                             </button>
                         </div>
                     </div>
 
-                    <!-- 步骤导航?-->
+                    <!-- 步骤导航栏-->
                     <div class="flex gap-2 overflow-x-auto pb-2">
                         ${visualizationSteps.map((step, idx) => `
                             <button onclick="goToStep(${idx})"
@@ -4250,7 +4395,7 @@
 
             algoContent.innerHTML = html;
 
-            // ==================== 时间轴渲染函?====================
+            // ==================== 时间轴渲染函数====================
         function renderTimeline(backend) {
                 const timelineContainer = document.getElementById('process-timeline');
                 const phases = PHASE_CONFIG[backend] || [];
@@ -4275,7 +4420,7 @@
 
                 timelineContainer.innerHTML = html;
 
-                // 默认展开第一个阶?
+                // 默认展开第一个阶段
             if (phases.length > 0) {
                     expandPhase(0, backend);
                 }
@@ -4347,7 +4492,7 @@
                             </button>
                         </div>
 
-                        <!-- 子步骤网?-->
+                        <!-- 子步骤网络-->
                         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             ${phaseSteps.map((step, idx) => renderPhaseStepCard(step, idx)).join('')}
                         </div>
@@ -4444,7 +4589,7 @@
                     </div>
                 `;
 
-                // 显示元数?
+                // 显示元数据
             if (visualizationData.metadata) {
                     const meta = visualizationData.metadata;
                     html += `
@@ -4487,7 +4632,7 @@
                 `;
             }
 
-            // 默认渲染时间轴（如果当前不是both模式?
+            // 默认渲染时间轴（如果当前不是both模式)
             if (currentBackend !== 'both') {
                 renderTimeline(currentBackend);
             }
@@ -4502,10 +4647,10 @@
             // 更新说明
             document.getElementById('step-description').innerHTML = visualizationSteps[currentStepIndex].description || '暂无说明';
 
-            // 更新指示?
+            // 更新指示器
             document.getElementById('step-indicator').innerText = `${currentStepIndex + 1} / ${visualizationSteps.length}`;
 
-            // 更新导航按钮状?
+            // 更新导航按钮状态
             document.querySelectorAll('.step-nav-btn').forEach((btn, idx) => {
             if (idx === currentStepIndex) {
                     btn.classList.remove('bg-white', 'text-slate-600', 'border-slate-200', 'hover:border-indigo-300');
@@ -4547,7 +4692,7 @@
         function _syncInterpretModelSelect() {
             const sel = document.getElementById('interpret-model-select');
             if (!sel) return;
-            // 首次调用时动态填充（?MODEL_CONFIGS 完全同步?
+            // 首次调用时动态填充（与 MODEL_CONFIGS 完全同步）
             if (sel.options.length === 0) {
                 for (const [pid, conf] of Object.entries(MODEL_CONFIGS)) {
                     const grp = document.createElement('optgroup');
@@ -4561,7 +4706,7 @@
                     sel.appendChild(grp);
                 }
             }
-            // 同步到当前默?provider + 已保存的模型
+            // 同步到当前默认 provider + 已保存的模型
             const provider = getActiveProvider();
             const model = localStorage.getItem('CNTA_MODEL_' + provider) || '';
             const target = provider + ':' + model;
@@ -4579,7 +4724,7 @@
             chevron.style.transform = list.classList.contains('hidden') ? '' : 'rotate(180deg)';
         }
 
-        // ─── AI 解读：流式写入对话气?───
+        // ─── AI 解读：流式写入对话气泡───
         async function startAIInterpret() {
             if (!currentItem) return;
             const sel = document.getElementById('interpret-model-select');
@@ -4592,9 +4737,9 @@
             const temperature = document.getElementById('ai-temperature')?.value || '0.5';
             const btn = document.getElementById('start-ai-btn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>生成?..';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>生成中...';
 
-            // 移除 placeholder，新?AI 消息气泡
+            // 移除 placeholder，新 AI 消息气泡
             document.getElementById('chat-placeholder')?.remove();
             const aiEl = appendChatBubble('assistant', '');
             aiEl.classList.add('typing-cursor');
@@ -4634,7 +4779,7 @@
                 });
             } catch (err) {
                 aiEl.classList.remove('typing-cursor');
-                aiEl.innerHTML = `<span class="text-red-500 text-sm">请求失败: ${err.message}</span>`;
+                aiEl.innerHTML = `<span class="text-red-500 text-sm">请求失败: ${escapeHtml(err.message)}</span>`;
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sparkles mr-1.5"></i>重新生成';
@@ -4691,52 +4836,52 @@
 ## 算法一：面密度提取（Density）
 **提取结果：${den}%**
 
-**处理流程?*
+**处理流程：
 
-1. **CLAHE 自适应直方图均?* ?clipLimit=2.0，瓦?8×8，增强局部CNT与背景对比度
-2. **高斯降噪** ?5×5 卷积核，抑制椒盐噪声
-3. **自适应二值化** ??11×11 邻域高斯加权均值为阈值（偏移 C=2），将明亮CNT像素与背景分?4. **面积比统?* ?D = N\\_white / N\\_total × 100%
+1. **CLAHE 自适应直方图均衡** ·clipLimit=2.0，瓦片 8×8，增强局部CNT与背景对比度
+2. **高斯降噪** ·5×5 卷积核，抑制椒盐噪声
+3. **自适应二值化** ·11×11 邻域高斯加权均值为阈值（偏移 C=2），将明亮CNT像素与背景分离4. **面积比统计** ·D = N\\_white / N\\_total × 100%
 
-**物理意义?* 反映SEM视野中CNT阵列填充率，典型优质样品 25?0%，与催化剂活性位点密度正相关?
+**物理意义： 反映SEM视野中CNT阵列填充率，典型优质样品 25~60%，与催化剂活性位点密度正相关。
 ---
 
 ## 📐 算法二：取向性（Alignment 值）
 
 **提取结果：S = ${ali}**
 
-**处理流程?*
+**处理流程：
 
-1. **Sobel 梯度?* ?计算 X/Y 方向一阶梯度（ksize=3）得 Gx、Gy
-2. **强边缘筛?* ?幅?M=?Gx²+Gy²) > ?0百分位，过滤弱梯度区域噪?3. **轴向角转?* ?梯度法向 +90° ?CNT轴向?θ，计算加权主方向 θ̄
-4. **序参?* ?S = ?·cos²(θ ?θ̄) ?1⟩，S? 完美垂直，S=0 随机，S→−0.5 水平
+1. **Sobel 梯度** ·计算 X/Y 方向一阶梯度（ksize=3）得 Gx、Gy
+2. **强边缘筛选** ·幅值 M=√(Gx²+Gy²) > 第90百分位，过滤弱梯度区域噪声3. **轴向角转换** ·梯度法向 +90° = CNT轴向角θ，计算加权主方向 θ̄
+4. **序参量** ·S = ⟨cos²(θ −θ̄)⟩，S=1 完美垂直，S=0 随机，S→−0.5 水平
 
-**当前?* S=${ali}?{aliDesc}
+**当前值** S=${ali} — ${aliDesc}
 
 ---
 
 ## 📏 算法三：平均管径估计（Diameter Distribution?
-**提取结果：均?${diaMean} nm ± ${diaStd} nm，范?${diaMin}-${diaMax} nm**
+**提取结果：均值 ${diaMean} nm ± ${diaStd} nm，范围 ${diaMin}-${diaMax} nm**
 
-**处理流程?*
+**处理流程：
 
-1. **Otsu 二值化** ?自动最优灰度阈值，分离CNT前景与背?2. **形态学骨架?* ?scikit-image.skeletonize，将CNT区域细化?1px 宽中心线
-3. **欧氏距离变换** ?每个前景像素到最近背景像素的距离 = 局部半?4. **中位数管?* ?骨架点处 距离×2 = 局部直径，取中位数排除端部误差
-5. **单位换算** ?基于倍率?{mag}×）和 HFW 将像素换算为纳米
+1. **Otsu 二值化** ·自动最优灰度阈值，分离CNT前景与背景2. **形态学骨架化** ·scikit-image.skeletonize，将CNT区域细化为 1px 宽中心线
+3. **欧氏距离变换** ·每个前景像素到最近背景像素的距离 = 局部半径 **中位数管径** ·骨架点处 距离×2 = 局部直径，取中位数排除端部误差
+5. **单位换算** ·基于倍率（${mag}×）和 HFW 将像素换算为纳米
 
-**物理意义?* 管径由Fe纳米催化剂颗粒尺寸决定，MWCNT典型范围 8?0 nm?
+**物理意义： 管径由Fe纳米催化剂颗粒尺寸决定，MWCNT典型范围 8~30 nm?
 ---
 
 ## 🌀 算法四：弯曲度分类（Curvature?
-**提取结果?{cur}**
+**提取结果** ${cur}
 
-**处理流程?*
+**处理流程：
 
-1. **连通域标记** ?scipy.ndimage.label 识别骨架各独立CNT线段
-2. **直线度计?* ?直线?= 两端点欧氏距?÷ 骨架路径像素?3. **分类规则?*
+1. **连通域标记** ·scipy.ndimage.label 识别骨架各独立CNT线段
+2. **直线度计算** ·直线度= 两端点欧氏距离÷ 骨架路径像素3. **分类规则**
    - \\> 0.85 ?**Straight**（笔直，最优）
    - 0.60?.85 ?**Wavy**（波浪形，轻度应力不均）
-   - \\< 0.60 ?**Coiled**（螺?团簇，存在明显内应力?4. **加权投票** ?以各连通域面积为权重多数投?
-**当前?* ${cur} ?${curDesc}`;
+   - \\< 0.60 ?**Coiled**（螺旋团簇，存在明显内应力。4. **加权投票** ·以各连通域面积为权重多数投票
+**当前值** ${cur} — ${curDesc}`;
         }
 
         // ─── 对话：读取面板内模型/温度/RAG 设置 ───
@@ -4816,7 +4961,7 @@
                     }
                 });
             } catch (err) {
-                aiEl.innerHTML = `<span class="text-red-500">请求失败: ${err.message}</span>`;
+                aiEl.innerHTML = `<span class="text-red-500">请求失败: ${escapeHtml(err.message)}</span>`;
                 aiEl.classList.remove('typing-cursor');
             } finally {
                 sendBtn.disabled = false;
@@ -4892,7 +5037,7 @@
                     closeEditModal();
                     loadData();
                     if (id && currentItem && currentItem.id == id) {
-                        // 如果更新的是当前详情页，则关闭详情页以刷?
+                        // 如果更新的是当前详情页，则关闭详情页以刷新
             closeDetails();
                     }
                 } else {
@@ -5098,25 +5243,36 @@
                 const res = await fetch(`${API_BASE}/api/rag/documents`);
                 const docs = await res.json();
                 if (docs.length === 0) {
-                    listEl.innerHTML = '<span class="text-slate-300">暂无文献，上传PDF后可用于RAG检</span>';
+                    listEl.innerHTML = '<span class="text-slate-300">暂无文献，请上传 PDF 或导入文本知识</span>';
                     return;
                 }
                 listEl.innerHTML = docs.map(d => {
                     const displayName = d.title || d.filename || ((d.file_path || '').split(/[\\/]/).pop()) || `文献 #${d.id}`;
                     return `
-                    <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-slate-200 transition">
-                        <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex items-start justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-slate-200 transition">
+                        <div class="flex items-center gap-3 min-w-0 flex-1">
                             <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
                                 <i class="fas fa-file-pdf text-red-400 text-sm"></i>
                             </div>
-                            <div class="min-w-0">
+                            <div class="min-w-0 flex-1">
                                 <div class="font-bold text-slate-700 text-sm truncate" title="${String(displayName).replace(/"/g, '&quot;')}">${displayName}</div>
-                                <div class="text-[10px] text-slate-400">${d.chunk_count} 个文本块 · ${d.created_at ? d.created_at.slice(0,10) : ''}</div>
+                                <div class="text-[10px] text-slate-400 mt-1">
+                                    ${d.chunk_count} 个文本块 · ${escapeHtml(d.source_type) || 'unknown'} · ${escapeHtml(d.theme) || '默认'}
+                                    ${d.is_core ? ' · <span class="text-amber-500">核心</span>' : ''}
+                                </div>
+                                <div class="text-[10px] text-slate-400">${d.language || 'unknown'} · ${d.created_at ? d.created_at.slice(0,10) : ''}</div>
                             </div>
                         </div>
-                        <button onclick="deleteRagDoc(${d.id}, this)" class="text-slate-300 hover:text-red-400 transition shrink-0 ml-3 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50">
-                            <i class="fas fa-trash-alt text-sm"></i>
-                        </button>
+                        <div class="flex items-center gap-1 ml-2">
+                            <button onclick="updateDocTheme(${d.id}, this)"
+                                class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-blue-500 transition rounded-lg hover:bg-blue-50 shrink-0"
+                                data-current-theme="${escapeHtml(d.theme) || ''}">
+                                <i class="fas fa-edit text-sm"></i>
+                            </button>
+                            <button onclick="deleteRagDoc(${d.id}, this)" class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-400 transition rounded-lg hover:bg-red-50 shrink-0">
+                                <i class="fas fa-trash-alt text-sm"></i>
+                            </button>
+                        </div>
                     </div>
                 `}).join('');
             } catch (_) {
@@ -5148,17 +5304,17 @@
                         <div class="text-[11px] text-slate-500">核心文献</div>
                         <div class="text-xl font-black text-emerald-700 mt-1">${stats.core_document_count || 0}</div>
                     </div>
-                        <div class="text-[11px] text-slate-500">来源类型</div>
-                        <div class="text-[10px] text-slate-400 mt-1">候选文? ${candidateDocCount}</div>
                 `;
                 if (!ragState.currentChain) {
                     renderGlobalRagSummary(stats);
                     renderRagDefaultState();
                     renderRagGraphAdvanced(null, null, '');
                     renderRagThemeAggregation(null);
+                    // 自动加载全量知识图谱数据
+                    loadRagLinks();
                 }
             } catch (err) {
-                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${err.message}</div>`;
+                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${escapeHtml(err.message)}</div>`;
             }
         }
 
@@ -5193,7 +5349,7 @@
                 <div class="data-card p-3">
                     <div class="flex items-center justify-between mb-2">
                         <div class="rag-subpage-title">文献来源：类</div>
-                        <div class="text-[10px] text-slate-400">?${typeEntries.length} </div>
+                        <div class="text-[10px] text-slate-400">共 ${typeEntries.length} 类</div>
                     </div>
                     <div class="flex flex-wrap gap-2">${typeHtml || '<span class="text-slate-300 text-xs">暂无</span>'}</div>
                 </div>
@@ -5209,11 +5365,15 @@
 
         function renderGlobalRagSummary(stats) {
             const relationCounts = stats?.relation_counts || {};
+            const enCounts = {};
+            for (const [k, v] of Object.entries(relationCounts)) {
+                enCounts[RAG_ZH_TO_EN[k] || k] = v;
+            }
             const chain = {
-                process_to_morphology: new Array(Number(relationCounts.process_to_morphology || 0)),
-                morphology_to_performance: new Array(Number(relationCounts.morphology_to_performance || 0)),
-                process_to_performance: new Array(Number(relationCounts.process_to_performance || 0)),
-                mechanism_evidence: new Array(Number(relationCounts.mechanism_evidence || 0)),
+                process_to_morphology: new Array(Number(enCounts.process_to_morphology || 0)),
+                morphology_to_performance: new Array(Number(enCounts.morphology_to_performance || 0)),
+                process_to_performance: new Array(Number(enCounts.process_to_performance || 0)),
+                mechanism_evidence: new Array(Number(enCounts.mechanism_evidence || 0)),
             };
             renderLinkSummary(chain);
         }
@@ -5280,7 +5440,7 @@
                     renderRagDefaultState();
                 }
             } catch (err) {
-                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${err.message}</div>`;
+                el.innerHTML = `<div class="col-span-4 text-red-400 text-sm">统计加载失败: ${escapeHtml(err.message)}</div>`;
             }
         }
 
@@ -5333,10 +5493,10 @@
                 <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
                     <div class="font-bold text-slate-700">${it.source_node || '--'} ?${it.target_node || '--'}</div>
                     <div class="text-[10px] text-slate-500 mt-1">
-                        方向: ${it.effect_direction || '--'} · 置信? ${(Number(it.confidence || 0)).toFixed(2)}
+                        方向: ${it.effect_direction || '--'} · 置信度 ${(Number(it.confidence || 0)).toFixed(2)}
                     </div>
                     <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(it.title || '').replace(/"/g, '&quot;')}">
-                        ${it.title || '--'}
+                        ${escapeHtml(it.title) || '--'}
                     </div>
                 </div>
             `).join('');
@@ -5383,6 +5543,20 @@
             mechanism_to_morphology: '机理→形貌',
             mechanism_evidence: '机理证据',
         };
+
+        // 中文键 → 英文键（后端可能返回中文键，前端统一用英文键）
+        const RAG_ZH_TO_EN = Object.fromEntries(
+            Object.entries(RAG_RELATION_TYPE_LABELS).map(([en, zh]) => [zh, en])
+        );
+        function normalizeChainKeys(chain) {
+            if (!chain) return {};
+            const normalized = {};
+            for (const [k, v] of Object.entries(chain)) {
+                const key = RAG_ZH_TO_EN[k] || k;
+                normalized[key] = v;
+            }
+            return normalized;
+        }
 
         const RAG_DIRECTION_LABELS = {
             increase: '增强',
@@ -5435,6 +5609,7 @@
             ostwald_ripening: '奥斯特瓦尔德熟化',
             growth_mechanism: '生长机理',
             evidence: '文献证据',
+            literature: '文献来源',
             unknown: '未知节点',
         };
 
@@ -5459,9 +5634,22 @@
         }
 
         function ragNodeLabelOnly(nodeId) {
-            const { key } = normalizeRagNodeId(nodeId);
+            const { category, key } = normalizeRagNodeId(nodeId);
             if (!key) return '--';
-            return RAG_NODE_LABELS[key] || key.replace(/_/g, ' ');
+            if (RAG_NODE_LABELS[key]) return RAG_NODE_LABELS[key];
+            if (category === '证据') {
+                const raw = nodeId.split(':').slice(1).join(':').trim();
+                // "年份 - 期刊 - 标题" → "期刊 年份"
+                const ym = raw.match(/^(\d{4})\s*-\s*(\S+)/);
+                if (ym) return ym[2].substring(0, 15) + ' ' + ym[1];
+                // "1-s2.0-xxx-main" → 取末段
+                if (raw.startsWith('1-s2.0-')) {
+                    const p = raw.split('-');
+                    return p.slice(-1).join('').replace(/_/g, ' ');
+                }
+                return raw.substring(0, 18) + (raw.length > 18 ? '...' : '');
+            }
+            return key.replace(/_/g, ' ');
         }
 
         function formatRagNodeLabel(nodeId, withCategory = true) {
@@ -5562,7 +5750,7 @@
                 <div class="rag-mini-card">
                     <div class="text-slate-500 mb-2">页面说明</div>
                     <div class="text-[11px] leading-5 text-slate-500">
-                        该页专门用于查看关系图谱。可拖拽节点、缩放结构，适合答辩时单独展示“工?形貌-性能-机理”的主链?                    </div>
+                        该页专门用于查看关系图谱。可拖拽节点、缩放结构，适合答辩时单独展示“工艺→形貌→性能→机理”的主链路。                    </div>
                 </div>
             `;
         }
@@ -5596,7 +5784,7 @@
                 <div class="rag-mini-card col-span-2">
                     <div class="text-slate-500 mb-2">图谱使用建议</div>
                     <div class="text-[11px] text-slate-500 leading-5">
-                        当前总览页只保留图谱速览，完整知识图谱已拆分到单独子页，避免一屏挤不下?                    </div>
+                        当前总览页只保留图谱速览，完整知识图谱已拆分到单独子页，避免一屏挤不下。                    </div>
                 </div>
             `;
         }
@@ -5704,7 +5892,7 @@
                         当前查询暂无性能关联统计
                     </div>
                 `;
-                listEl.innerHTML = `<div class="text-slate-300">没有检索到与?{query}”相关的性能证据</div>`;
+                listEl.innerHTML = `<div class="text-slate-300">没有检索到与"${query}"”相关的性能证据</div>`;
                 return;
             }
 
@@ -5758,10 +5946,10 @@
                         </span>
                     </div>
                     <div class="text-[10px] text-slate-500 mt-1">
-                        方向: ${item.effect_direction || '--'} · 置信?${(Number(item.confidence || 0)).toFixed(2)}
+                        方向: ${item.effect_direction || '--'} · 置信度 ${(Number(item.confidence || 0)).toFixed(2)}
                     </div>
                     <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(item.title || '').replace(/"/g, '&quot;')}">
-                        ${item.title || '--'}
+                        ${escapeHtml(item.title) || '--'}
                     </div>
                 </div>
             `).join('');
@@ -5790,7 +5978,7 @@
                 chart.clear();
                 chart.setOption({
                     title: {
-                        text: `当前筛选暂无可视化关联?{ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
+                        text: `当前筛选暂无可视化关联\n${ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
                         left: 'center',
                         top: 'middle',
                         textStyle: { color: '#94a3b8', fontSize: 12, fontWeight: 700 },
@@ -5844,7 +6032,7 @@
                         if (params.dataType === 'edge') {
                             return `${params.data.source} ?${params.data.target}<br>${params.data.value || ''}`;
                         }
-                        return `${params.data.name}<br>关联? ${params.data.value}`;
+                        return `${params.data.name}<br>关联 ${params.data.value}`;
                     },
                 },
                 legend: {
@@ -5909,10 +6097,10 @@
                 <div class="bg-white border border-slate-200 rounded-lg px-2.5 py-2">
                     <div class="font-bold text-slate-700">${formatRagNodeLabel(it.source_node)} ?${formatRagNodeLabel(it.target_node)}</div>
                     <div class="text-[10px] text-slate-500 mt-1">
-                        方向?{effectDirectionLabel(it.effect_direction)} · 置信?${(Number(it.confidence || 0)).toFixed(2)}
+                        方向 ${effectDirectionLabel(it.effect_direction)} · 置信度 ${(Number(it.confidence || 0)).toFixed(2)}
                     </div>
                     <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(it.title || '').replace(/"/g, '&quot;')}">
-                        ${it.title || '--'}
+                        ${escapeHtml(it.title) || '--'}
                     </div>
                 </div>
             `).join('');
@@ -5956,7 +6144,7 @@
                 <div class="rag-mini-card">
                     <div class="text-slate-500 mb-2">页面说明</div>
                     <div class="text-[11px] leading-5 text-slate-500">
-                        该页用于单独查看知识图谱，可拖拽节点、缩放结构，适合答辩时展示“工?形貌-性能-机理”的主链路?                    </div>
+                        该页用于单独查看知识图谱，可拖拽节点、缩放结构，适合答辩时展示“工艺→形貌→性能→机理”的主链路。                    </div>
                 </div>
             `;
         }
@@ -5987,7 +6175,7 @@
                 <div class="rag-mini-card col-span-2">
                     <div class="text-slate-500 mb-2">图谱使用建议</div>
                     <div class="text-[11px] text-slate-500 leading-5">
-                        总览页只保留关系速览，完整知识图谱已拆分到独立子页，便于在第一屏完整展示?                    </div>
+                        总览页只保留关系速览，完整知识图谱已拆分到独立子页，便于在第一屏完整展示。                    </div>
                 </div>
             `;
         }
@@ -6007,7 +6195,7 @@
                         当前查询暂无性能关联统计
                     </div>
                 `;
-                listEl.innerHTML = `<div class="text-slate-300">没有检索到与?{query}”相关的性能证据链</div>`;
+                listEl.innerHTML = `<div class="text-slate-300">没有检索到与"${query}"”相关的性能证据链</div>`;
                 return;
             }
 
@@ -6059,10 +6247,10 @@
                         </span>
                     </div>
                     <div class="text-[10px] text-slate-500 mt-1">
-                        方向?{effectDirectionLabel(item.effect_direction)} · 置信?${(Number(item.confidence || 0)).toFixed(2)}
+                        方向 ${effectDirectionLabel(item.effect_direction)} · 置信度 ${(Number(item.confidence || 0)).toFixed(2)}
                     </div>
                     <div class="text-[10px] text-slate-400 mt-1 truncate" title="${(item.title || '').replace(/"/g, '&quot;')}">
-                        ${item.title || '--'}
+                        ${escapeHtml(item.title) || '--'}
                     </div>
                 </div>
             `).join('');
@@ -6082,7 +6270,7 @@
                 chart.clear();
                 chart.setOption({
                     title: {
-                        text: `当前筛选暂无可视化关联?{ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
+                        text: `当前筛选暂无可视化关联\n${ragState.graphFilter === 'all' ? query : relationTypeLabel(ragState.graphFilter)}`,
                         left: 'center',
                         top: 'middle',
                         textStyle: { color: '#94a3b8', fontSize: 12, fontWeight: 700 },
@@ -6091,38 +6279,40 @@
                 return;
             }
 
+            // 构建 MSFU 查找索引
+            ragState.msfuByEdge = {};
+            ragState.msfuByNode = {};
             const nodeMap = new Map();
-            const edges = [];
+            const edgeMap = new Map();
             for (const item of buckets) {
                 const source = item.source_node || 'unknown:source';
                 const target = item.target_node || 'unknown:target';
+                // 索引
+                const edgeKey = `${source}|||${target}`;
+                if (!ragState.msfuByEdge[edgeKey]) ragState.msfuByEdge[edgeKey] = [];
+                ragState.msfuByEdge[edgeKey].push(item);
+                if (!ragState.msfuByNode[source]) ragState.msfuByNode[source] = [];
+                ragState.msfuByNode[source].push(item);
+                if (!ragState.msfuByNode[target]) ragState.msfuByNode[target] = [];
+                ragState.msfuByNode[target].push(item);
+                // 节点
                 if (!nodeMap.has(source)) {
-                    nodeMap.set(source, {
-                        id: source,
-                        name: ragNodeShortLabel(source),
-                        category: nodeCategoryById(source),
-                        value: 1,
-                    });
-                } else {
-                    nodeMap.get(source).value += 1;
-                }
+                    nodeMap.set(source, { id: source, name: ragNodeShortLabel(source), category: nodeCategoryById(source), value: 1 });
+                } else { nodeMap.get(source).value += 1; }
                 if (!nodeMap.has(target)) {
-                    nodeMap.set(target, {
-                        id: target,
-                        name: ragNodeShortLabel(target),
-                        category: nodeCategoryById(target),
-                        value: 1,
-                    });
-                } else {
-                    nodeMap.get(target).value += 1;
+                    nodeMap.set(target, { id: target, name: ragNodeShortLabel(target), category: nodeCategoryById(target), value: 1 });
+                } else { nodeMap.get(target).value += 1; }
+                // 去重边
+                if (!edgeMap.has(edgeKey)) {
+                    edgeMap.set(edgeKey, { source, target, value: relationTypeLabel(item.relation_type), msfuCount: 0, maxConf: 0 });
                 }
-                edges.push({
-                    source,
-                    target,
-                    value: relationTypeLabel(item.relation_type),
-                    lineStyle: { width: 1 + Math.max(0.5, Number(item.confidence || 0.5) * 3) },
-                });
+                edgeMap.get(edgeKey).msfuCount++;
+                edgeMap.get(edgeKey).maxConf = Math.max(edgeMap.get(edgeKey).maxConf, Number(item.confidence || 0.5));
             }
+            const edges = Array.from(edgeMap.values()).map(e => ({
+                ...e,
+                lineStyle: { width: 1 + Math.max(0.5, e.maxConf * 3) + (e.msfuCount > 1 ? e.msfuCount * 0.5 : 0) },
+            }));
 
             const nodes = Array.from(nodeMap.values()).map(n => ({
                 ...n,
@@ -6134,9 +6324,10 @@
                     trigger: 'item',
                     formatter: params => {
                         if (params.dataType === 'edge') {
-                            return `${formatRagNodeLabel(params.data.source)} ?${formatRagNodeLabel(params.data.target)}<br>${params.data.value || ''}`;
+                            const cnt = params.data.msfuCount || 1;
+                            return `${formatRagNodeLabel(params.data.source)} → ${formatRagNodeLabel(params.data.target)}<br>${params.data.value || ''}${cnt > 1 ? ` (${cnt}条MSFU)` : ''}<br><span style="color:#3b82f6;font-size:10px;">点击查看详情</span>`;
                         }
-                        return `${formatRagNodeLabel(params.data.id)}<br>关联?${params.data.value}`;
+                        return `${formatRagNodeLabel(params.data.id)}<br>关联 ${params.data.value}<br><span style="color:#3b82f6;font-size:10px;">点击查看详情</span>`;
                     },
                 },
                 legend: {
@@ -6187,9 +6378,21 @@
                     },
                 ],
             });
+            // 注册点击事件
+            chart.off('click');
+            chart.on('click', (params) => {
+                if (params.dataType === 'edge') {
+                    const edgeKey = `${params.data.source}|||${params.data.target}`;
+                    const msfus = ragState.msfuByEdge[edgeKey] || [];
+                    showMsfuDetailModal('edge', params.data.source, params.data.target, msfus);
+                } else if (params.dataType === 'node') {
+                    const msfus = ragState.msfuByNode[params.data.id] || [];
+                    showMsfuDetailModal('node', params.data.id, null, msfus);
+                }
+            });
         }
 
-        // ========== TCCER 证据链检?==========
+        // ========== TCCER 证据链检索==========
         async function runTCCERQuery() {
             const queryInput = document.getElementById('tccer-query');
             const taskSelect = document.getElementById('tccer-task');
@@ -6209,7 +6412,8 @@
             summaryEl.textContent = '';
 
             try {
-                const res = await fetch(`${API_BASE}/api/tccer/query`, {
+                // 使用 /api/tccer/full 获取完整结果（检索 + 可视化 + 解释）
+                const res = await fetch(`${API_BASE}/api/tccer/full`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -6221,31 +6425,259 @@
                 const data = await res.json();
 
                 // 更新统计
-            document.getElementById('tccer-stat-msfu').textContent = data.msfu_count || 0;
+                const tccerData = data.tccer_retrieval || data;
+                document.getElementById('tccer-stat-msfu').textContent = tccerData.msfu_count || 0;
 
                 // 分类统计
-            const primary = data.chains.filter(c => c.path.chain_type === 'primary').length;
-                const supporting = data.chains.filter(c => c.path.chain_type === 'supporting').length;
-                const conflicting = data.chains.filter(c => c.path.chain_type === 'conflicting').length;
+                const primary = tccerData.chains.filter(c => c.path.chain_type === 'primary').length;
+                const supporting = tccerData.chains.filter(c => c.path.chain_type === 'supporting').length;
+                const conflicting = tccerData.chains.filter(c => c.path.chain_type === 'conflicting').length;
 
                 document.getElementById('tccer-stat-primary').textContent = primary;
                 document.getElementById('tccer-stat-supporting').textContent = supporting;
                 document.getElementById('tccer-stat-conflicting').textContent = conflicting;
 
                 // 更新摘要
-                summaryEl.textContent = `执行时间: ${data.execution_time_ms?.toFixed(0) || 0}ms`;
+                summaryEl.textContent = `执行时间: ${tccerData.execution_time_ms?.toFixed(0) || 0}ms | 路径数: ${tccerData.chains.length}`;
 
-                // 渲染证据?
-            renderTCCERChains(data.chains);
-            if (data.chains.length > 0) {
-                    renderTCCERVisual(data.chains[0]);
+                // 保存完整数据供后续使用
+                window.currentTCCERData = data;
+
+                // 渲染证据链
+                renderTCCERChains(tccerData.chains);
+
+                if (tccerData.chains.length > 0) {
+                    // 使用后端生成的可视化数据
+                    renderTCCERVisualWithGraph(data.visualization);
+                    // 渲染证据解释
+                    renderTCCERExplanation(data.explanation);
                 } else {
                     visualContainer.innerHTML = '<div class="text-center text-slate-300 py-16"><i class="fas fa-diagram-project text-4xl mb-3"></i><div class="text-sm">未找到相关证据链</div></div>';
                 }
 
             } catch (error) {
                 console.error('TCCER查询失败:', error);
-                chainsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><i class="fas fa-exclamation-circle text-2xl mb-2"></i><div class="text-sm">查询失败: ${error.message}</div></div>`;
+                chainsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><i class="fas fa-exclamation-circle text-2xl mb-2"></i><div class="text-sm">查询失败: ${escapeHtml(error.message)}</div></div>`;
+            }
+        }
+
+        function renderTCCERVisualWithGraph(vizData) {
+            const container = document.getElementById('tccer-visual');
+
+            if (!vizData || !vizData.summary) {
+                container.innerHTML = '<div class="text-center text-slate-300 py-16"><div class="text-sm">无可视化数据</div></div>';
+                return;
+            }
+
+            const graph = vizData.graph || {};
+            const paths = vizData.paths || [];
+            const summary = vizData.summary || {};
+
+            let html = `
+                <div class="space-y-4">
+                    <div class="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                        <div class="text-xs font-bold text-slate-600 mb-2">可视化摘要</div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>路径数: <span class="font-bold">${summary.total_paths || 0}</span></div>
+                            <div>节点数: <span class="font-bold">${summary.total_nodes || 0}</span></div>
+                            <div>边数: <span class="font-bold">${summary.total_edges || 0}</span></div>
+                            <div>平均深度: <span class="font-bold">${(summary.avg_depth || 0).toFixed(1)}</span></div>
+                        </div>
+                    </div>
+            `;
+
+            // 渲染路径列表
+            if (paths.length > 0) {
+                html += `
+                    <div class="bg-white rounded-xl p-3 border border-slate-200">
+                        <div class="text-xs font-bold text-slate-600 mb-2">检索路径</div>
+                        <div class="space-y-2">
+                `;
+
+                paths.forEach((path, idx) => {
+                    const nodes = path.nodes || [];
+                    const edges = path.edges || [];
+
+                    html += `
+                        <div class="tccer-viz-path" onclick="renderTCCERVisualPath(${idx})">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-bold text-slate-700">路径 ${idx + 1}</span>
+                                <span class="text-[10px] text-slate-400">深度: ${path.depth || 0} | 评分: ${(path.score || 0).toFixed(2)}</span>
+                            </div>
+                            <div class="flex items-center gap-1 text-xs overflow-x-auto">
+                                ${nodes.map((node, i) => `
+                                    <span class="px-2 py-1 bg-slate-100 rounded text-slate-700">${node.label || node.id}</span>
+                                    ${i < nodes.length - 1 ? '<i class="fas fa-arrow-right text-slate-400 text-[10px]"></i>' : ''}
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 渲染关系类型统计
+            if (summary.relation_types && summary.relation_types.length > 0) {
+                html += `
+                    <div class="bg-white rounded-xl p-3 border border-slate-200">
+                        <div class="text-xs font-bold text-slate-600 mb-2">关系类型</div>
+                        <div class="flex flex-wrap gap-1">
+                            ${summary.relation_types.map(rel => `
+                                <span class="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[10px]">${rel}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderTCCERVisualPath(pathIndex) {
+            const data = window.currentTCCERData;
+            if (!data || !data.visualization) return;
+
+            const paths = data.visualization.paths || [];
+            const path = paths[pathIndex];
+            if (!path) return;
+
+            const nodes = path.nodes || [];
+            const edges = path.edges || [];
+
+            const container = document.getElementById('tccer-visual');
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="text-xs font-bold text-slate-600">路径 ${pathIndex + 1} 详情</div>
+                        <button onclick="renderTCCERVisualWithGraph(window.currentTCCERData.visualization)" class="text-xs text-blue-600 hover:text-blue-700">
+                            <i class="fas fa-arrow-left mr-1"></i>返回
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-3 border border-slate-200">
+                        <div class="text-xs font-bold text-slate-600 mb-2">路径节点</div>
+                        <div class="space-y-2">
+                            ${nodes.map((node, i) => `
+                                <div class="flex items-start gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">${i + 1}</div>
+                                    <div class="flex-1">
+                                        <div class="text-xs font-bold text-slate-700">${node.label || node.id}</div>
+                                        <div class="text-[10px] text-slate-500">${node.text?.substring(0, 100)}...</div>
+                                        <div class="text-[10px] text-slate-400 mt-1">评分: ${(node.score || 0).toFixed(2)}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${edges.length > 0 ? `
+                        <div class="bg-white rounded-xl p-3 border border-slate-200">
+                            <div class="text-xs font-bold text-slate-600 mb-2">关系边</div>
+                            <div class="space-y-2">
+                                ${edges.map((edge, i) => `
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="text-slate-400">${i + 1}.</span>
+                                        <span class="font-bold text-slate-700">${edge.label || edge.relation_type}</span>
+                                        <span class="text-[10px] text-slate-400">(${edge.direction || '→'})</span>
+                                        <span class="text-[10px] text-slate-400">置信度: ${((edge.confidence || 0) * 100).toFixed(0)}%</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderTCCERExplanation(expData) {
+            const container = document.getElementById('tccer-visual');
+
+            // 如果已经有可视化内容，在下方添加解释面板
+            const existingContent = container.innerHTML;
+            const hasContent = existingContent && !existingContent.includes('text-center py-16');
+
+            if (!expData) {
+                return;
+            }
+
+            const explanationHtml = `
+                ${hasContent ? '<div class="border-t border-slate-200 pt-4 mt-4">' : '<div>'}
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-xs font-bold text-slate-600 flex items-center gap-2">
+                            <i class="fas fa-lightbulb text-amber-500"></i>
+                            证据解释
+                        </div>
+                        <button onclick="toggleTCCERExplanation()" class="text-xs text-blue-600 hover:text-blue-700">
+                            <i class="fas fa-expand mr-1"></i>展开/收起
+                        </button>
+                    </div>
+
+                    <div id="tccer-explanation-content" class="space-y-3">
+                        ${expData.summary ? `
+                            <div class="bg-indigo-50 rounded-xl p-3 border border-indigo-200">
+                                <div class="text-xs font-bold text-indigo-700 mb-2">总体摘要</div>
+                                <div class="text-xs text-slate-700 whitespace-pre-line">${renderLatex(expData.summary)}</div>
+                            </div>
+                        ` : ''}
+
+                        ${expData.chain_explanation ? `
+                            <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
+                                <div class="text-xs font-bold text-emerald-700 mb-2">链式推理</div>
+                                <div class="text-xs text-slate-700 whitespace-pre-line">${renderLatex(expData.chain_explanation)}</div>
+                            </div>
+                        ` : ''}
+
+                        ${expData.confidence_explanation ? `
+                            <div class="bg-blue-50 rounded-xl p-3 border border-blue-200">
+                                <div class="text-xs font-bold text-blue-700 mb-2">置信度说明</div>
+                                <div class="text-xs text-slate-700 whitespace-pre-line">${renderLatex(expData.confidence_explanation)}</div>
+                            </div>
+                        ` : ''}
+
+                        ${expData.evidence_integration ? `
+                            <div class="bg-amber-50 rounded-xl p-3 border border-amber-200">
+                                <div class="text-xs font-bold text-amber-700 mb-2">证据整合</div>
+                                <div class="text-xs text-slate-700 whitespace-pre-line">${renderLatex(expData.evidence_integration)}</div>
+                            </div>
+                        ` : ''}
+
+                        ${expData.detailed_paths && expData.detailed_paths.length > 0 ? `
+                            <div class="bg-white rounded-xl p-3 border border-slate-200">
+                                <div class="text-xs font-bold text-slate-600 mb-2">详细路径解释</div>
+                                <div class="space-y-2">
+                                    ${expData.detailed_paths.map((path, idx) => `
+                                        <div class="p-2 bg-slate-50 rounded-lg">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-xs font-bold text-slate-700">路径 ${idx + 1}</span>
+                                                <span class="text-[10px] text-slate-400">${path.description}</span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-600">${path.quality_assessment || ''}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            if (hasContent) {
+                container.innerHTML = existingContent + explanationHtml;
+            } else {
+                container.innerHTML = explanationHtml;
+            }
+        }
+
+        function toggleTCCERExplanation() {
+            const content = document.getElementById('tccer-explanation-content');
+            if (content) {
+                content.classList.toggle('hidden');
             }
         }
 
@@ -6286,8 +6718,8 @@
                                     <span class="text-xs text-slate-400 font-bold">${assertion.relation_type}</span>
                                     <span class="tccer-entity-badge ${getEntityBadgeClass(assertion.target_entity)}">${assertion.target_entity}</span>
                                 </div>
-                                <div class="text-xs text-slate-600 line-clamp-2">${msfu.content.substring(0, 150)}</div>
-                                <div class="text-[10px] text-slate-400 mt-1">置信? ${(msfu.evidence.confidence * 100).toFixed(0)}%</div>
+                                <div class="text-xs text-slate-600 line-clamp-2">${escapeHtml(msfu.content.substring(0, 150))}${msfu.content.length > 150 ? '...' : ''}</div>
+                                <div class="text-[10px] text-slate-400 mt-1">置信度 ${(msfu.evidence.confidence * 100).toFixed(0)}%</div>
                             </div>
                         </div>
                     `;
@@ -6310,9 +6742,10 @@
         }
 
         function getEntityBadgeClass(entity) {
-            if (entity.startsWith('process:')) return 'process';
-            if (entity.startsWith('morphology:')) return 'morphology';
-            if (entity.startsWith('performance:')) return 'performance';
+            if (entity.startsWith('工艺:') || entity.startsWith('process:')) return 'process';
+            if (entity.startsWith('形貌:') || entity.startsWith('morphology:')) return 'morphology';
+            if (entity.startsWith('性能:') || entity.startsWith('performance:')) return 'performance';
+            if (entity.startsWith('机理:') || entity.startsWith('mechanism:')) return 'mechanism';
             return 'process';
         }
 
@@ -6325,7 +6758,7 @@
                 return;
             }
 
-            // 构建可视?
+            // 构建可视化
             const nodes = [];
             const edges = [];
 
@@ -6385,6 +6818,118 @@
             return colors[relation] || '#94a3b8';
         }
 
+        // ========== LaTeX 渲染工具 ==========
+        function cleanLatexFormula(raw) {
+            // 修复 PDF 提取产生的空格：2 5 0 → 250, \mathrm { W } → \mathrm{W}
+            let s = raw.trim();
+            // 合并数字间的空格
+            s = s.replace(/(\d)\s+(?=\d)/g, '$1');
+            // 去掉花括号前的空格
+            s = s.replace(/\{\s+/g, '{').replace(/\s+\}/g, '}');
+            // 去掉 \command 后的空格（保留花括号内容）
+            s = s.replace(/(\\[a-zA-Z]+)\s+/g, '$1');
+            // 合并多余空格
+            s = s.replace(/\s+/g, ' ');
+            return s;
+        }
+        function renderLatex(text) {
+            if (!text || typeof katex === 'undefined') return escapeHtml(text || '');
+            // 先转义 HTML 标签（<sup> 等 PDF 提取残留）
+            let escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return escaped.replace(/\$([^$]+)\$/g, (match, formula) => {
+                try {
+                    const cleaned = cleanLatexFormula(formula);
+                    return katex.renderToString(cleaned, { throwOnError: false });
+                } catch { return match; }
+            });
+        }
+        function renderMarkdownLatex(text) {
+            // 用于 AI 回复：先 markdown 解析，再渲染 LaTeX（不转义 HTML）
+            if (!text) return '';
+            let html = marked.parse(text);
+            if (typeof katex !== 'undefined') {
+                html = html.replace(/\$([^$]+)\$/g, (match, formula) => {
+                    try {
+                        return katex.renderToString(cleanLatexFormula(formula), { throwOnError: false });
+                    } catch { return match; }
+                });
+            }
+            return html;
+        }
+        // ========== MSFU 详情弹窗（知识图谱点击） ==========
+        function showMsfuDetailModal(type, sourceId, targetId, msfus) {
+            if (!msfus || msfus.length === 0) return;
+            const seen = new Set();
+            const unique = [];
+            for (const m of msfus) {
+                if (!seen.has(m.id)) { seen.add(m.id); unique.push(m); }
+            }
+            const header = type === 'edge'
+                ? `${formatRagNodeLabel(sourceId)} → ${formatRagNodeLabel(targetId)}`
+                : `${formatRagNodeLabel(sourceId)} 的所有关联`;
+            const dirColor = (d) => {
+                const v = String(d || '').toLowerCase();
+                if (v === 'positive' || v === 'increase') return '#059669';
+                if (v === 'negative' || v === 'decrease') return '#dc2626';
+                return '#64748b';
+            };
+            const dirLabel = (d) => {
+                const v = String(d || '').toLowerCase();
+                if (v === 'positive' || v === 'increase') return '正相关';
+                if (v === 'negative' || v === 'decrease') return '负相关';
+                return '未知';
+            };
+            const confBar = (c) => {
+                const pct = Math.round(Number(c || 0) * 100);
+                return `<div style="background:#e2e8f0;border-radius:4px;height:6px;width:80px;display:inline-block;vertical-align:middle;">
+                    <div style="background:#3b82f6;border-radius:4px;height:6px;width:${pct}%;"></div></div>
+                    <span style="font-size:11px;color:#64748b;margin-left:4px;">${pct}%</span>`;
+            };
+            const cards = unique.map(m => `
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                        <div style="flex:1;">
+                            <div style="font-size:13px;font-weight:600;color:#1e293b;">
+                                ${formatRagNodeLabel(m.source_node)} → ${formatRagNodeLabel(m.target_node)}
+                            </div>
+                            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${m.relation_type || ''}</div>
+                        </div>
+                        <span style="padding:2px 10px;border-radius:9999px;font-size:10px;font-weight:700;
+                            background:${dirColor(m.effect_direction)}22;color:${dirColor(m.effect_direction)};">
+                            ${dirLabel(m.effect_direction)}
+                        </span>
+                    </div>
+                    <div style="margin-top:8px;display:flex;align-items:center;gap:4px;">
+                        <span style="font-size:11px;color:#64748b;">置信度</span>${confBar(m.confidence)}
+                    </div>
+                    ${m.mechanism_summary ? `<div style="margin-top:8px;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:4px;">机理概述</div>
+                        <div style="font-size:12px;color:#334155;line-height:1.6;">${renderLatex(m.mechanism_summary)}</div></div>` : ''}
+                    ${m.evidence_text ? `<div style="margin-top:8px;background:white;border-radius:6px;padding:10px;border:1px solid #e2e8f0;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:4px;">证据文本</div>
+                        <div style="font-size:12px;color:#475569;line-height:1.6;font-style:italic;">${renderLatex(m.evidence_text)}</div></div>` : ''}
+                    <div style="margin-top:6px;font-size:10px;color:#94a3b8;">
+                        来源: ${escapeHtml(m.title) || '未知文献'}${m.theme ? ` · ${escapeHtml(m.theme)}` : ''}
+                    </div>
+                </div>`).join('');
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9998;';
+            overlay.innerHTML = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+                background:white;border-radius:16px;padding:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);
+                max-width:640px;width:90%;z-index:9999;max-height:80vh;overflow-y:auto;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;position:sticky;top:0;background:white;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">
+                    <div>
+                        <h3 style="font-size:16px;font-weight:bold;color:#1e293b;margin:0;">MSFU 详情</h3>
+                        <div style="font-size:12px;color:#64748b;margin-top:4px;">${header} · ${unique.length} 条记录</div>
+                    </div>
+                    <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b;">×</button>
+                </div>
+                <div>${cards}</div>
+            </div>`;
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            document.body.appendChild(overlay);
+        }
+
         async function loadMSFUStats() {
             try {
                 const res = await fetch(`${API_BASE}/api/msfu/stats`);
@@ -6398,22 +6943,295 @@
             }
         }
 
+        // 显示 MSFU 统计面板
+        async function showMSFUStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/msfu/stats`);
+                const data = await res.json();
+
+                if (!data.stats) {
+                    alert('加载统计失败');
+                    return;
+                }
+
+                const stats = data.stats;
+                // 统一字段映射
+                const statsMap = {
+                    by_relation_type: stats.by_relation_type || {},
+                    by_direction: stats.by_direction || {},
+                    by_extraction_method: stats.by_extraction_method || {},
+                    by_doc: stats.by_doc || {},
+                    total_msfus: stats.total_msfus || 0,
+                    average_confidence: stats.average_confidence || 0
+                };
+
+                // 中英文映射
+                const relationTypeMap = {
+                    'causes': '导致',
+                    'increases': '促进',
+                    'decreases': '抑制',
+                    'affects': '影响',
+                    'promotes': '促进',
+                    'inhibits': '抑制',
+                    'does_not_lead_to': '不导致',
+                    'enlarges': '增大',
+                    'facilitates': '促进',
+                    'involves': '涉及',
+                    'characterizes': '表征',
+                    'enlarges': '增大',
+                    'inhibits': '抑制',
+                    'measures': '测量',
+                    'patterns': '模式',
+                    'unknown': '未知'
+                };
+
+                const directionMap = {
+                    'positive': '正向',
+                    'negative': '负向',
+                    'neutral': '中性',
+                    'unknown': '未知方向'
+                };
+
+                const methodMap = {
+                    'rule': '规则提取',
+                    'llm': 'LLM 提取',
+                    'hybrid': '混合提取'
+                };
+
+                const html = `
+                    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 600px; width: 90%; z-index: 9999;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="font-size: 18px; font-weight: bold; color: #1e293b; margin: 0;">MSFU 统计信息</h3>
+                            <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">&times;</button>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                            <div style="background: #f8fafc; border-radius: 8px; padding: 16px;">
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: bold;">MSFU 总数</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #059669;">${stats.total_msfus || 0}</div>
+                            </div>
+                            <div style="background: #f0fdf4; border-radius: 8px; padding: 16px;">
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: bold;">平均置信度</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #059669;">${((stats.avg_confidence || 0) * 100).toFixed(1)}%</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0 0 12px 0;">按关系类型分布</h4>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                                ${stats.relation_type_counts ? Object.entries(stats.relation_type_counts).map(([type, count]) => `
+                                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                                        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${relationTypeMap[type] || type}</div>
+                                        <div style="font-size: 20px; font-weight: bold; color: #1e40af;">${count}</div>
+                                    </div>
+                                `).join('') : '<div style="color: #94a3b8; grid-column: span 3;">暂无数据</div>'}
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0 0 12px 0;">按方向分布</h4>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                ${stats.by_direction ? Object.entries(stats.by_direction).map(([dir, count]) => `
+                                    <div style="background: ${dir === 'positive' ? '#d1fae5' : dir === 'negative' ? '#fee2e2' : '#e5e7eb'}; border-radius: 6px; padding: 8px 16px;">
+                                        <span style="color: ${dir === 'positive' ? '#065f46' : dir === 'negative' ? '#dc2626' : '#64748b'}; font-weight: bold;">${directionMap[dir] || dir}</span>
+                                        <span style="color: ${dir === 'positive' ? '#065f46' : dir === 'negative' ? '#dc2626' : '#64748b'}; font-size: 18px; font-weight: bold;">${count}</span>
+                                    </div>
+                                `).join('') : '<div style="color: #94a3b8;">暂无数据</div>'}
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h4 style="font-size: 14px; font-weight: bold; color: #1e293b; margin: 0 0 12px 0;">按提取方法分布</h4>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                ${stats.by_extraction_method ? Object.entries(stats.by_extraction_method).map(([method, count]) => `
+                                    <div style="background: ${method === 'rule' ? '#dbeafe' : '#fef3c7'}; border-radius: 6px; padding: 8px 16px;">
+                                        <span style="color: ${method === 'rule' ? '#1e40af' : '#d97706'}; font-weight: bold;">${methodMap[method] || method}</span>
+                                        <span style="color: ${method === 'rule' ? '#1e40af' : '#d97706'}; font-size: 18px; font-weight: bold;">${count}</span>
+                                    </div>
+                                `).join('') : '<div style="color: #94a3b8;">暂无数据</div>'}
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                            <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">文档分布 (Top 5)</div>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                ${stats.by_doc ? Object.entries(stats.by_doc).slice(0, 5).map(([docId, count]) => `
+                                    <div style="background: #f1f5f9; border-radius: 6px; padding: 6px 12px;">
+                                        <span style="color: #64748b; font-size: 11px;">文档 #${docId}</span>
+                                        <span style="color: #1e40af; font-weight: bold;">${count}</span>
+                                    </div>
+                                `).join('') : '<div style="color: #94a3b8;">暂无数据</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // 创建遮罩层
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998;';
+                overlay.innerHTML = html;
+                overlay.onclick = (e) => {
+                    if (e.target === overlay) overlay.remove();
+                };
+                document.body.appendChild(overlay);
+            } catch (error) {
+                console.error('显示MSFU统计失败:', error);
+                alert('加载统计失败: ' + error.message);
+            }
+        }
+
+        // 显示 MSFU 手动提取面板
+        function showMSFUExtractPanel() {
+            const html = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; border-radius: 16px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 700px; width: 90%; z-index: 9999;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="font-size: 18px; font-weight: bold; color: #1e293b; margin: 0;">MSFU 手动提取</h3>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">&times;</button>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 14px; font-weight: bold; color: #374151; margin-bottom: 8px;">文档标题</label>
+                        <input id="msfu-extract-title" type="text" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;" placeholder="例如：实验记录 2025-03-28">
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 14px; font-weight: bold; color: #374151; margin-bottom: 8px;">文本内容</label>
+                        <textarea id="msfu-extract-text" rows="6" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: none;" placeholder="输入需要提取 MSFU 的文本内容..."></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #374151; font-weight: bold;">
+                            <input type="checkbox" id="msfu-extract-llm" style="width: 18px; height: 18px;">
+                            使用 LLM 进行精细化提取（需要配置 API Key）
+                        </label>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button onclick="extractMSFU()" style="flex: 1; padding: 12px 24px; background: #059669; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer;">
+                            提取 MSFU
+                        </button>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex: 1; padding: 12px 24px; background: #e5e7eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer;">
+                            取消
+                        </button>
+                    </div>
+
+                    <div id="msfu-extract-result" style="margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 8px; display: none;">
+                        <h4 style="font-size: 14px; font-weight: bold; color: #374151; margin: 0 0 12px 0;">提取结果</h4>
+                        <div id="msfu-extract-content" style="font-size: 12px; color: #64748b;"></div>
+                    </div>
+                </div>
+            `;
+
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998;';
+            overlay.innerHTML = html;
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+            document.body.appendChild(overlay);
+        }
+
+        // 提取 MSFU
+        async function extractMSFU() {
+            const titleInput = document.getElementById('msfu-extract-title');
+            const textInput = document.getElementById('msfu-extract-text');
+            const llmCheckbox = document.getElementById('msfu-extract-llm');
+            const resultDiv = document.getElementById('msfu-extract-result');
+            const contentDiv = document.getElementById('msfu-extract-content');
+
+            const title = titleInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!title || !text) {
+                alert('请填写文档标题和文本内容');
+                return;
+            }
+
+            const btn = event.target;
+            btn.innerHTML = '<span style="display: inline-block; width: 16px; height: 16px; border: 2px solid #ffffff33; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>';
+            btn.style.pointerEvents = 'none';
+
+            // 中英文映射
+            const directionMap = {
+                'positive': '正向',
+                'negative': '负向',
+                'neutral': '中性',
+                'increase': '增加',
+                'decrease': '减少',
+                'N/A': '无方向'
+            };
+            const methodMap = {
+                'rule': '规则提取',
+                'llm': 'LLM 提取',
+                'mixed': '混合提取'
+            };
+
+            try {
+                const apiData = {
+                    text,
+                    doc_title: title,
+                    use_llm_refinement: llmCheckbox.checked
+                };
+
+                const res = await fetch(`${API_BASE}/api/msfu/extract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(apiData)
+                });
+                const data = await res.json();
+
+                // 显示结果
+                resultDiv.style.display = 'block';
+                if (data.msfus && data.msfus.length > 0) {
+                    contentDiv.innerHTML = `
+                        <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                            <strong>成功提取 ${data.msfus.length} 个 MSFU：</strong>
+                        </div>
+                        ${data.msfus.map((msfu, idx) => `
+                            <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #e2e8f0;">
+                                <div style="font-weight: bold; color: #1e40af; margin-bottom: 8px;">
+                                    ${idx + 1}. ${msfu.assertion.source_entity} ${msfu.assertion.relation_type} ${msfu.assertion.target_entity}
+                                </div>
+                                <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">
+                                    <strong>内容：</strong>${renderLatex(msfu.content)}
+                                </div>
+                                <div style="font-size: 11px; color: #94a3b8;">
+                                    <strong>方向：</strong>${directionMap[msfu.assertion.direction] || msfu.assertion.direction || '无方向'} |
+                                    <strong>置信度：</strong>${((msfu.evidence.confidence || 0) * 100).toFixed(1)}% |
+                                    <strong>方法：</strong>${methodMap[msfu.extraction_method] || msfu.extraction_method || '规则提取'}
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    contentDiv.innerHTML = '未提取到 MSFU，请检查文本内容。';
+                }
+
+                btn.innerHTML = '提取 MSFU';
+                btn.style.pointerEvents = 'auto';
+            } catch (error) {
+                console.error('MSFU提取失败:', error);
+                resultDiv.style.display = 'block';
+                contentDiv.innerHTML = `<span style="color: #dc2626;">提取失败: ${escapeHtml(error.message)}</span>`;
+                btn.innerHTML = '提取 MSFU';
+                btn.style.pointerEvents = 'auto';
+            }
+        }
+
         // ========== RAG 函数 ==========
         async function loadRagLinks() {
             const queryInput = document.getElementById('rag-link-query');
             const query = (queryInput?.value || '').trim();
-            if (!query) {
-                alert('请输入检索词');
-                return;
-            }
+            const top_k = query ? 20 : 50;
             try {
                 const res = await fetch(`${API_BASE}/api/rag/links`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query, top_k: 20 })
+                    body: JSON.stringify({ query: query || ' ', top_k })
                 });
                 const data = await res.json();
-                const chain = data.chain || {};
+                const chain = normalizeChainKeys(data.chain || {});
                 const subgraph = data.subgraph || null;
                 const constrainedChain = data.constrained_chain || null;
                 const themeAggregation = data.theme_aggregation || null;
@@ -6435,18 +7253,18 @@
             } catch (err) {
                 ['rag-chain-p2m', 'rag-chain-m2p', 'rag-chain-p2p', 'rag-chain-mech', 'rag-performance-list', 'rag-performance-summary', 'rag-graph-insights', 'rag-graph-glance', 'rag-subgraph-summary', 'rag-constrained-chain', 'rag-theme-aggregation'].forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) el.innerHTML = `<div class="text-red-300">加载失败: ${err.message}</div>`;
+                    if (el) el.innerHTML = `<div class="text-red-300">加载失败: ${escapeHtml(err.message)}</div>`;
                 });
                 ['rag-toolbar-summary', 'rag-overview-link-summary', 'rag-graph-link-summary'].forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) el.innerHTML = `<div class="col-span-2 lg:col-span-4 text-red-300">加载失败: ${err.message}</div>`;
+                    if (el) el.innerHTML = `<div class="col-span-2 lg:col-span-4 text-red-300">加载失败: ${escapeHtml(err.message)}</div>`;
                 });
                 const chart = ensureMlChart('ragGraph', 'rag-graph-chart');
                 if (chart) {
                     chart.clear();
                     chart.setOption({
                         title: {
-                            text: `图谱加载失败: ${err.message}`,
+                            text: `图谱加载失败: ${escapeHtml(err.message)}`,
                             left: 'center',
                             top: 'middle',
                             textStyle: { color: '#ef4444', fontSize: 12, fontWeight: 700 },
@@ -6470,7 +7288,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert(`文献导入成功?{data.chunk_count} 个文本块已建立索引`);
+                    alert(`文献导入成功，${data.chunk_count} 个文本块已建立索引`);
                     await loadRagDocs();
                 } else {
                     alert('上传失败: ' + (data.detail || '未知错误'));
@@ -6489,13 +7307,118 @@
                 await loadRagDocs();
             } catch (err) {
                 alert('删除失败: ' + err.message);
+            } finally {
+                btn.innerHTML = '<i class="fas fa-trash-alt text-sm"></i>';
+            }
+        }
+
+        // 导入文本知识
+        async function ingestKnowledgeText() {
+            const titleInput = document.getElementById('kb-ingest-title');
+            const sourceTypeInput = document.getElementById('kb-ingest-source-type');
+            const themeInput = document.getElementById('kb-ingest-theme');
+            const textInput = document.getElementById('kb-ingest-text');
+            const coreCheckbox = document.getElementById('kb-ingest-core');
+
+            const title = titleInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!title || !text) {
+                alert('请填写标题和文本内容');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/knowledge/ingest`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title,
+                        text,
+                        source_type: sourceTypeInput.value,
+                        theme: themeInput.value || null,
+                        is_core: coreCheckbox.checked
+                    })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert(`知识导入成功！已创建 ${data.chunk_count} 个文本块`);
+                    // 清空表单
+                    titleInput.value = '';
+                    textInput.value = '';
+                    themeInput.value = '';
+                    coreCheckbox.checked = false;
+                    await loadRagDocs();
+                } else {
+                    alert('导入失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (err) {
+                alert('导入失败: ' + err.message);
+            }
+        }
+
+        // 重建关系链接
+        async function rebuildKnowledgeLinks() {
+            if (!confirm('重建关系链接会重新从文档中提取关系，这可能需要一些时间。是否继续？')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/knowledge/rebuild-links`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        doc_ids: null,  // null 表示重建所有
+                        clear_existing: true
+                    })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert(`重建完成！已为 ${data.doc_count} 个文档重建 ${data.link_count} 条关系链接`);
+                } else {
+                    alert('重建失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (err) {
+                alert('重建失败: ' + err.message);
+            }
+        }
+
+        // 更新文档主题
+        async function updateDocTheme(id, btn) {
+            const currentTheme = btn.dataset.currentTheme || '';
+            const newTheme = prompt('请输入新主题:', currentTheme);
+
+            if (newTheme === null || newTheme === currentTheme) return;
+
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                const res = await fetch(`${API_BASE}/api/knowledge/documents/${id}/theme`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: newTheme.trim() || '' })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    btn.dataset.currentTheme = newTheme.trim();
+                    alert('主题更新成功');
+                    await loadRagDocs();
+                } else {
+                    alert('更新失败: ' + (data.detail || '未知错误'));
+                }
+            } catch (err) {
+                alert('更新失败: ' + err.message);
+            } finally {
+                btn.innerHTML = '<i class="fas fa-edit text-sm"></i>';
             }
         }
 
         function openDetailsById(id) {
             const item = currentListItemsById[String(id)];
             if (!item) {
-                console.warn('找不到对应记?', id);
+                console.warn('找不到对应记录', id);
                 return;
             }
             openDetails(item);
@@ -6545,7 +7468,7 @@
             document.getElementById('d-status').innerText = item.processed ? "解析完成" : "未解析";
             renderDetailDeleteActions(item);
 
-            // 切换到不同图像时才重置对话和关闭解释面板；同一图像重复点击保留状?
+            // 切换到不同图像时才重置对话和关闭解释面板；同一图像重复点击保留状态
             if (!isSameImage) {
                 closeInterpretPanel();
                 chatHistory = [];
@@ -6568,7 +7491,7 @@
             });
         }
 
-        // ─── 页面切换（SPA 路由?───
+        // ─── 页面切换（SPA 路由）───
         function showPage(name, el) {
             const mainHeader = document.getElementById('main-header');
             const dataPage = document.getElementById('data-page');
@@ -6671,7 +7594,7 @@
             }
         }
 
-        // 初始?
+        // 初始化
             window.onload = () => {
             repairOverlayMounts();
             // 设置默认配置（仅当不存在时）
@@ -6699,10 +7622,10 @@
             // 加载会话列表
             await loadQASessions();
 
-            // 检查知识库状?
+            // 检查知识库状态
             await checkQAStatus();
 
-            // 聚焦输入?
+            // 聚焦输入区
             document.getElementById('qa-input').focus();
         }
 
@@ -6714,7 +7637,7 @@
         // 开始新会话
         function startNewQASession() {
             currentQASessionId = null;
-            // 清空消息列表，保留欢迎消?
+            // 清空消息列表，保留欢迎消息
             const messagesContainer = document.getElementById('qa-messages');
             const welcomeMessage = messagesContainer.children[0];
             messagesContainer.innerHTML = '';
@@ -6817,7 +7740,7 @@
                     <div class="flex justify-start">
                         <div class="qa-bubble-ai">
                             <div class="text-sm text-slate-700">
-                                已加载历史对话，你可以继续对话或开始新问题?                            </div>
+                                已加载历史对话，你可以继续对话或开始新问题。                            </div>
                         </div>
                     </div>
                 `;
@@ -6833,19 +7756,19 @@
                     if (isUser) {
                         content = content;
                     } else {
-                        // Markdown渲染
-                        content = marked.parse(content);
+                        // Markdown + LaTeX渲染
+                        content = renderMarkdownLatex(content);
                     }
 
                     let html = `
                         <div class="flex ${justifyClass}">
                             <div class="${bubbleClass}">
-                                ${isUser ? content : `<div class="interp-md">${content}</div>`}
+                                ${isUser ? escapeHtml(content) : `<div class="interp-md">${content}</div>`}
                             </div>
                         </div>
                     `;
 
-                    // 添加来源信息（如果是AI消息?
+                    // 添加来源信息（如果是AI消息）
             if (!isUser && conv.sources) {
                         try {
                             const sources = JSON.parse(conv.sources);
@@ -6859,7 +7782,7 @@
                                                 <span class="qa-source-score">${sources.length} </span>
                                             </div>
                                             <div class="qa-source-content">
-                                                ${sources.slice(0, 2).map(s => `?${s.title || s.filename || '未知来源'}`).join('<br>')}
+                                                ${sources.slice(0, 2).map(s => `${escapeHtml(s.title || s.filename || '未知来源')}`).join('<br>')}
                                                 ${sources.length > 2 ? `...及更多` : ''}
                                             </div>
                                         </div>
@@ -6883,7 +7806,7 @@
             }
         }
 
-        // 检查知识库状?
+        // 检查知识库状态
         async function checkQAStatus() {
             const statusEl = document.getElementById('qa-kb-status');
 
@@ -6900,12 +7823,12 @@
                     statusEl.innerHTML = '<span class="text-amber-600">请先上传文献</span>';
                 }
             } catch (error) {
-                console.error('检查知识库状态失?', error);
-                statusEl.innerHTML = '<span class="text-rose-600">检查失</span>';
+                console.error('检查知识库状态失败', error);
+                statusEl.innerHTML = '<span class="text-rose-600">检查失败败</span>';
             }
         }
 
-        // 发送消?
+        // 发送消息
         async function sendQAMessage() {
             const input = document.getElementById('qa-input');
             const message = input.value.trim();
@@ -6915,11 +7838,11 @@
             isQALoading = true;
             updateQAButtons(true);
 
-            // 添加用户消息到界?
+            // 添加用户消息到界面
             addQAMessageToUI('user', message);
             input.value = '';
 
-            // 添加加载指示?
+            // 添加加载指示器
             const loadingId = addQALoadingIndicator();
 
             try {
@@ -6964,10 +7887,11 @@
                 `;
                 aiMessageContainer.innerHTML += aiBubbleHTML;
 
-                // 处理SSE?
+                // 处理SSE流
             const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let sources = null;
+                let rawContent = '';  // 累积原始 markdown 文本
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -6986,18 +7910,23 @@
                             const data = JSON.parse(dataStr);
 
                             if (data.type === 'content') {
-                                // 追加内容到AI消息
+                                // 追加原始文本并渲染
+            rawContent += data.text;
             const aiBubble = document.getElementById(aiBubbleId);
                                 if (aiBubble) {
                                     const contentDiv = aiBubble.querySelector('.interp-md');
-                                    const currentContent = contentDiv.innerHTML;
-                                    const newContent = currentContent + data.text;
-                                    contentDiv.innerHTML = marked.parse(newContent);
+                                    contentDiv.innerHTML = renderMarkdownLatex(rawContent);
                                     aiMessageContainer.scrollTop = aiMessageContainer.scrollHeight;
                                 }
                             } else if (data.type === 'sources') {
                                 // 保存来源信息
                                 sources = data.sources;
+                            } else if (data.type === 'error') {
+                                // 显示错误信息
+            const aiBubble = document.getElementById(aiBubbleId);
+                                if (aiBubble) {
+                                    aiBubble.querySelector('.interp-md').innerHTML = `<span class="text-rose-500">${escapeHtml(data.detail || '请求失败')}</span>`;
+                                }
                             } else if (data.type === 'done') {
                                 // 对话完成，保存会话ID
             if (data.session_id) {
@@ -7018,11 +7947,11 @@
                             <div class="qa-source-card">
                                 <div class="qa-source-header">
                                     <i class="fas fa-book"></i>
-                                    <span class="qa-source-title">${s.title || s.filename || '未知来源'}</span>
-                                    ${s.score ? `<span class="qa-source-score">相似? ${s.score.toFixed(2)}</span>` : ''}
+                                    <span class="qa-source-title">${escapeHtml(s.title || s.filename || '未知来源')}</span>
+                                    ${s.score ? `<span class="qa-source-score">相似度 ${s.score.toFixed(2)}</span>` : ''}
                                 </div>
                                 <div class="qa-source-content">
-                                    ${(s.text || '').substring(0, 150)}...
+                                    ${escapeHtml((s.text || '').substring(0, 150))}...
                                 </div>
                             </div>
                         `).join('');
@@ -7033,23 +7962,23 @@
                 }
 
             } catch (error) {
-                console.error('发送消息失?', error);
-                addQAMessageToUI('ai', `<span class="text-rose-500">抱歉，发生了错误?{error.message}</span>`);
+                console.error('发送消息失败', error);
+                addQAMessageToUI('ai', `<span class="text-rose-500">抱歉，发生了错误: ${escapeHtml(error.message)}</span>`);
             } finally {
-                // 移除加载指示?
+                // 移除加载指示器
             removeQALoadingIndicator(loadingId);
                 isQALoading = false;
                 updateQAButtons(false);
             }
         }
 
-        // 从预设问题发?
+        // 从预设问题发起
         function sendQAFromTemplate(question) {
             document.getElementById('qa-input').value = question;
             sendQAMessage();
         }
 
-        // 添加消息到界?
+        // 添加消息到界面
         function addQAMessageToUI(role, content) {
             const messagesContainer = document.getElementById('qa-messages');
             const isUser = role === 'user';
@@ -7059,7 +7988,7 @@
             const messageHTML = `
                 <div class="flex ${justifyClass}">
                     <div class="${bubbleClass}">
-                        ${isUser ? content : `<div class="interp-md">${marked.parse(content)}</div>`}
+                        ${isUser ? escapeHtml(content) : `<div class="interp-md">${marked.parse(content)}</div>`}
                     </div>
                 </div>
             `;
@@ -7068,7 +7997,7 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        // 添加加载指示?
+        // 添加加载指示器
         function addQALoadingIndicator() {
             const loadingId = 'qa-loading-' + Date.now();
             const messagesContainer = document.getElementById('qa-messages');
@@ -7089,7 +8018,7 @@
             return loadingId;
         }
 
-        // 移除加载指示?
+        // 移除加载指示器
         function removeQALoadingIndicator(loadingId) {
             const loadingEl = document.getElementById(loadingId);
             if (loadingEl) {
@@ -7156,7 +8085,7 @@
             }
         }
 
-        // 更新按钮状?
+        // 更新按钮状态
         function updateQAButtons(disabled) {
             const sendBtn = document.getElementById('qa-send-btn');
             if (sendBtn) {
@@ -7165,7 +8094,7 @@
         }
     </script>
 
-    <!-- 数据清洗模块算法可视化功?-->
+    <!-- 数据清洗模块算法可视化功能-->
     <script>
         // 㷨ӻرϴģרã
         let cleanAlgoCurrentBackend = 'wcntsegnet';
@@ -7647,7 +8576,7 @@
             }
         }
     </script>
-    <!-- 模块?JS -->
+    <!-- 模块级JS -->
     <script type="module" src="frontend/core/app.js"></script>
 </body>
 </html>

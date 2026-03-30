@@ -63,6 +63,17 @@ class FeatureExtractor:
     V3_MIN_BRANCH_POINTS = 6
     V3_MIN_BRANCH_LENGTH_FACTOR = 1.0
     V3_BRANCH_QUANTILE = 75.0
+    V3_TRIM_PERCENT = 10.0
+    BRANCH_CLEANUP_ENABLED = True
+    BRANCH_CLEANUP_ISOLATED_MIN_LENGTH_FACTOR = 2.0
+    BRANCH_CLEANUP_ISOLATED_MIN_POINTS_FACTOR = 1.2
+    BRANCH_CLEANUP_SPUR_LENGTH_FACTOR = 3.0
+    BRANCH_CLEANUP_MAX_ITERATIONS = 12
+    BRANCH_CLEANUP_NEIGHBOR_OFFSETS = [
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1),           (0, 1),
+        (1, -1),  (1, 0),  (1, 1),
+    ]
     LEGACY_STRAIGHT_CURVATURE_PX = 0.05 / 15.0
     LEGACY_WAVY_CURVATURE_PX = 0.15 / 15.0
 
@@ -154,63 +165,367 @@ class FeatureExtractor:
         return float(np.sum(np.hypot(deltas[:, 0], deltas[:, 1])))
 
     @staticmethod
-    def _trace_ordered_component_path(component_mask: np.ndarray) -> np.ndarray:
-        points = np.argwhere(component_mask > 0)
+    def _iter_labeled_component_points(labeled: np.ndarray, min_points: int = 1):
+        rows, cols = np.nonzero(labeled)
+        if rows.size == 0:
+            return
+
+        point_labels = labeled[rows, cols].astype(np.int64, copy=False)
+        positive = point_labels > 0
+        if not np.any(positive):
+            return
+
+        rows = rows[positive]
+        cols = cols[positive]
+        point_labels = point_labels[positive]
+        order = np.argsort(point_labels, kind="mergesort")
+        rows = rows[order]
+        cols = cols[order]
+        point_labels = point_labels[order]
+        unique_labels, start_idx, counts = np.unique(
+            point_labels,
+            return_index=True,
+            return_counts=True,
+        )
+        min_points = max(1, int(min_points))
+        for label_id, start, count in zip(unique_labels, start_idx, counts):
+            if int(count) < min_points:
+                continue
+            end = int(start + count)
+            yield int(label_id), np.column_stack((rows[start:end], cols[start:end]))
+
+    @staticmethod
+    def _trace_ordered_component_points(points: np.ndarray) -> np.ndarray:
+        points = np.asarray(points, dtype=int)
         if points.size == 0:
             return np.zeros((0, 2), dtype=float)
+        if points.shape[0] == 1:
+            return points.astype(float)
 
-        offsets = [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),           (0, 1),
-            (1, -1),  (1, 0),  (1, 1),
-        ]
-        point_set = {tuple(int(v) for v in point) for point in points}
-        adjacency = {}
-        for point in point_set:
-            y, x = point
-            neighbors = []
-            for dy, dx in offsets:
-                candidate = (y + dy, x + dx)
-                if candidate in point_set:
-                    neighbors.append(candidate)
-            adjacency[point] = neighbors
+        y = points[:, 0]
+        x = points[:, 1]
+        y0 = int(y.min())
+        x0 = int(x.min())
+        local_y = y - y0
+        local_x = x - x0
+        box_h = int(local_y.max()) + 1
+        box_w = int(local_x.max()) + 1
 
-        endpoints = sorted(point for point, neighbors in adjacency.items() if len(neighbors) <= 1)
-        start = endpoints[0] if endpoints else min(point_set)
+        local_mask = np.zeros((box_h, box_w), dtype=np.uint8)
+        local_mask[local_y, local_x] = 1
+        padded = np.pad(local_mask, 1, mode="constant")
+        neighbor_count = (
+            padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+            padded[1:-1, :-2] + padded[1:-1, 2:] +
+            padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
+        )
+        degrees = neighbor_count[local_y, local_x]
 
-        path = []
-        visited = set()
-        current = start
-        previous = None
+        endpoint_idx = np.flatnonzero(degrees <= 1)
+        if endpoint_idx.size > 0:
+            endpoint_points = points[endpoint_idx]
+            endpoint_order = np.lexsort((endpoint_points[:, 1], endpoint_points[:, 0]))
+            start_idx = int(endpoint_idx[endpoint_order[0]])
+        else:
+            start_idx = int(np.lexsort((points[:, 1], points[:, 0]))[0])
 
-        while current is not None and current not in visited:
-            path.append(current)
-            visited.add(current)
+        padded_index = np.full((box_h + 2, box_w + 2), -1, dtype=np.int32)
+        point_idx = np.arange(points.shape[0], dtype=np.int32)
+        padded_index[local_y + 1, local_x + 1] = point_idx
 
-            candidates = [neighbor for neighbor in adjacency[current] if neighbor != previous and neighbor not in visited]
+        ordered_idx = np.empty(points.shape[0], dtype=np.int32)
+        visited = np.zeros(points.shape[0], dtype=bool)
+        current_idx = start_idx
+        previous_idx = -1
+        count = 0
+
+        while current_idx >= 0 and not visited[current_idx]:
+            ordered_idx[count] = current_idx
+            count += 1
+            visited[current_idx] = True
+
+            cy = int(local_y[current_idx]) + 1
+            cx = int(local_x[current_idx]) + 1
+            candidates = []
+            for dy, dx in FeatureExtractor.BRANCH_CLEANUP_NEIGHBOR_OFFSETS:
+                neighbor_idx = int(padded_index[cy + dy, cx + dx])
+                if neighbor_idx < 0 or neighbor_idx == previous_idx or visited[neighbor_idx]:
+                    continue
+                candidates.append(neighbor_idx)
             if not candidates:
-                candidates = [neighbor for neighbor in adjacency[current] if neighbor not in visited]
+                for dy, dx in FeatureExtractor.BRANCH_CLEANUP_NEIGHBOR_OFFSETS:
+                    neighbor_idx = int(padded_index[cy + dy, cx + dx])
+                    if neighbor_idx >= 0 and not visited[neighbor_idx]:
+                        candidates.append(neighbor_idx)
+                if not candidates:
+                    break
+
+            if previous_idx < 0 or len(candidates) == 1:
+                candidate_points = points[np.asarray(candidates, dtype=int)]
+                candidate_order = np.lexsort((candidate_points[:, 1], candidate_points[:, 0]))
+                next_idx = int(candidates[int(candidate_order[0])])
+            else:
+                prev_vec = points[current_idx].astype(float) - points[previous_idx].astype(float)
+                best_score = None
+                next_idx = candidates[0]
+                for candidate_idx in candidates:
+                    cand_vec = points[candidate_idx].astype(float) - points[current_idx].astype(float)
+                    score = float(np.dot(prev_vec, cand_vec))
+                    if best_score is None or score > best_score:
+                        best_score = score
+                        next_idx = candidate_idx
+
+            previous_idx, current_idx = current_idx, int(next_idx)
+
+        if count < points.shape[0]:
+            remaining_idx = np.flatnonzero(np.logical_not(visited))
+            if remaining_idx.size > 0:
+                remaining_points = points[remaining_idx]
+                remaining_order = np.lexsort((remaining_points[:, 1], remaining_points[:, 0]))
+                tail = remaining_idx[remaining_order]
+                ordered_idx[count:count + tail.size] = tail
+                count += int(tail.size)
+
+        return points[ordered_idx[:count]].astype(float)
+
+    @staticmethod
+    def _trace_ordered_component_path(component_mask: np.ndarray) -> np.ndarray:
+        points = np.argwhere(component_mask > 0)
+        return FeatureExtractor._trace_ordered_component_points(points)
+
+    @classmethod
+    def _iter_skeleton_neighbors(cls, point, skeleton_mask: np.ndarray):
+        y, x = point
+        neighbors = []
+        h, w = skeleton_mask.shape
+        for dy, dx in cls.BRANCH_CLEANUP_NEIGHBOR_OFFSETS:
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and skeleton_mask[ny, nx] > 0:
+                neighbors.append((ny, nx))
+        return neighbors
+
+    @classmethod
+    def _neighbor_group_count(cls, point, skeleton_mask: np.ndarray) -> int:
+        y, x = point
+        local = np.zeros((3, 3), dtype=np.uint8)
+        h, w = skeleton_mask.shape
+        for dy, dx in cls.BRANCH_CLEANUP_NEIGHBOR_OFFSETS:
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and skeleton_mask[ny, nx] > 0:
+                local[dy + 1, dx + 1] = 1
+        return int(cv2.connectedComponents(local, connectivity=4)[0] - 1)
+
+    @classmethod
+    def _trace_spur_from_endpoint(cls, start, skeleton_mask: np.ndarray, neighbor_count: np.ndarray):
+        path = [start]
+        prev = None
+        current = start
+        while True:
+            candidates = [pt for pt in cls._iter_skeleton_neighbors(current, skeleton_mask) if pt != prev]
             if not candidates:
                 break
-
-            if previous is None or len(candidates) == 1:
-                next_point = sorted(candidates)[0]
+            if len(candidates) == 1:
+                nxt = candidates[0]
             else:
-                prev_vec = np.asarray(current, dtype=float) - np.asarray(previous, dtype=float)
+                prev_vec = None if prev is None else (current[0] - prev[0], current[1] - prev[1])
 
-                def direction_score(candidate):
-                    cand_vec = np.asarray(candidate, dtype=float) - np.asarray(current, dtype=float)
-                    return float(np.dot(prev_vec, cand_vec))
+                def candidate_score(candidate):
+                    group_count = cls._neighbor_group_count(candidate, skeleton_mask)
+                    degree_count = int(neighbor_count[candidate])
+                    if prev_vec is None:
+                        direction_score = 0.0
+                    else:
+                        cand_vec = (candidate[0] - current[0], candidate[1] - current[1])
+                        direction_score = float(prev_vec[0] * cand_vec[0] + prev_vec[1] * cand_vec[1])
+                    return (group_count, degree_count, direction_score)
 
-                next_point = max(candidates, key=direction_score)
+                nxt = max(candidates, key=candidate_score)
+            path.append(nxt)
+            if cls._neighbor_group_count(nxt, skeleton_mask) >= 3:
+                break
+            prev, current = current, nxt
+        return path
 
-            previous, current = current, next_point
+    def _remove_short_isolated_skeleton_components(
+        self,
+        skeleton: np.ndarray,
+        min_length_factor: float = None,
+        min_points_factor: float = None,
+    ):
+        skeleton_mask = (skeleton > 0).astype(np.uint8)
+        if not np.any(skeleton_mask):
+            return {
+                "cleaned_skeleton": skeleton_mask.astype(bool),
+                "removed_mask": np.zeros_like(skeleton_mask, dtype=bool),
+                "removed_component_count": 0,
+                "removed_pixel_count": 0,
+                "min_length_px": 0.0,
+                "min_points": 0,
+            }
 
-        if len(visited) < len(point_set):
-            remaining = sorted(point_set - visited)
-            path.extend(remaining)
+        if min_length_factor is None:
+            min_length_factor = self.BRANCH_CLEANUP_ISOLATED_MIN_LENGTH_FACTOR
+        if min_points_factor is None:
+            min_points_factor = self.BRANCH_CLEANUP_ISOLATED_MIN_POINTS_FACTOR
 
-        return np.asarray(path, dtype=float)
+        labeled = cv2.connectedComponents(skeleton_mask, connectivity=8)[1]
+        cleaned = skeleton_mask.copy()
+        removed_mask = np.zeros_like(skeleton_mask, dtype=np.uint8)
+
+        min_length_px = max(3.0, float(self.expected_tube_px * min_length_factor))
+        min_points = max(4, int(round(self.expected_tube_px * min_points_factor)))
+        removed_components = 0
+
+        for _, component_points in self._iter_labeled_component_points(labeled):
+            point_count = int(component_points.shape[0])
+            if point_count < min_points:
+                cleaned[component_points[:, 0], component_points[:, 1]] = 0
+                removed_mask[component_points[:, 0], component_points[:, 1]] = 1
+                removed_components += 1
+                continue
+            ordered = self._trace_ordered_component_points(component_points)
+            path_length = self._path_length(ordered)
+            if point_count < min_points or path_length < min_length_px:
+                cleaned[component_points[:, 0], component_points[:, 1]] = 0
+                removed_mask[component_points[:, 0], component_points[:, 1]] = 1
+                removed_components += 1
+
+        return {
+            "cleaned_skeleton": (cleaned > 0),
+            "removed_mask": (removed_mask > 0),
+            "removed_component_count": int(removed_components),
+            "removed_pixel_count": int(np.count_nonzero(removed_mask)),
+            "min_length_px": float(min_length_px),
+            "min_points": int(min_points),
+        }
+
+    def _prune_terminal_spurs(
+        self,
+        skeleton: np.ndarray,
+        spur_factor: float = None,
+        max_iterations: int = None,
+    ):
+        skeleton_mask = (skeleton > 0).astype(np.uint8)
+        if not np.any(skeleton_mask):
+            return {
+                "cleaned_skeleton": skeleton_mask.astype(bool),
+                "removed_spur_mask": np.zeros_like(skeleton_mask, dtype=bool),
+                "removed_spur_count": 0,
+                "removed_pixel_count": 0,
+                "spur_length_limit_px": 0.0,
+                "iterations": 0,
+            }
+
+        if spur_factor is None:
+            spur_factor = self.BRANCH_CLEANUP_SPUR_LENGTH_FACTOR
+        if max_iterations is None:
+            max_iterations = self.BRANCH_CLEANUP_MAX_ITERATIONS
+
+        removed_mask = np.zeros_like(skeleton_mask, dtype=np.uint8)
+        total_removed_spurs = 0
+        iteration = 0
+        spur_length_limit_px = max(3.0, float(self.expected_tube_px * spur_factor))
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        height, width = skeleton_mask.shape
+
+        while iteration < max_iterations:
+            iteration += 1
+            neighbor_count = self._neighbor_count_map(skeleton_mask)
+            junction_mask = (skeleton_mask > 0) & (neighbor_count >= 3)
+            branch_mask = (skeleton_mask > 0) & np.logical_not(junction_mask)
+            if not np.any(branch_mask):
+                break
+
+            junction_labels = label(junction_mask.astype(np.uint8), connectivity=2)
+            branch_labels = label(branch_mask.astype(np.uint8), connectivity=2)
+            valid_junction_labels = set()
+            for junction_label, junction_points in self._iter_labeled_component_points(junction_labels):
+                for point_row, point_col in junction_points:
+                    if self._neighbor_group_count((int(point_row), int(point_col)), skeleton_mask) >= 3:
+                        valid_junction_labels.add(int(junction_label))
+                        break
+            to_remove = []
+
+            for _, component_points in self._iter_labeled_component_points(branch_labels):
+                point_rows = component_points[:, 0]
+                point_cols = component_points[:, 1]
+                if not np.any(neighbor_count[point_rows, point_cols] <= 1):
+                    continue
+
+                y0 = max(int(point_rows.min()) - 1, 0)
+                y1 = min(int(point_rows.max()) + 2, height)
+                x0 = max(int(point_cols.min()) - 1, 0)
+                x1 = min(int(point_cols.max()) + 2, width)
+                local_component = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
+                local_component[point_rows - y0, point_cols - x0] = 1
+                touched = cv2.dilate(local_component, kernel, iterations=1).astype(bool)
+                touched_labels = np.unique(junction_labels[y0:y1, x0:x1][touched])
+                touched_labels = touched_labels[touched_labels > 0]
+                if touched_labels.size != 1 or int(touched_labels[0]) not in valid_junction_labels:
+                    continue
+
+                ordered = self._trace_ordered_component_points(component_points)
+                length_px = self._path_length(ordered)
+                if length_px >= spur_length_limit_px:
+                    continue
+                total_removed_spurs += 1
+                to_remove.append(component_points)
+
+            if not to_remove:
+                break
+
+            for component_points in to_remove:
+                point_rows = component_points[:, 0]
+                point_cols = component_points[:, 1]
+                skeleton_mask[point_rows, point_cols] = 0
+                removed_mask[point_rows, point_cols] = 1
+            # Re-thin the local topology after spur removal so junction halos
+            # collapse back onto the surviving trunk before the next iteration.
+            skeleton_mask = skeletonize(skeleton_mask > 0).astype(np.uint8)
+
+        return {
+            "cleaned_skeleton": (skeleton_mask > 0),
+            "removed_spur_mask": (removed_mask > 0),
+            "removed_spur_count": int(total_removed_spurs),
+            "removed_pixel_count": int(np.count_nonzero(removed_mask)),
+            "spur_length_limit_px": float(spur_length_limit_px),
+            "iterations": int(iteration),
+        }
+
+    def _clean_branch_skeleton(self, skeleton: np.ndarray):
+        skeleton_mask = (skeleton > 0)
+        if not self.BRANCH_CLEANUP_ENABLED:
+            return {
+                "branch_cleanup_enabled": False,
+                "cleaned_skeleton": skeleton_mask.astype(bool),
+                "removed_short_mask": np.zeros_like(skeleton_mask, dtype=bool),
+                "removed_spur_mask": np.zeros_like(skeleton_mask, dtype=bool),
+                "removed_short_component_count": 0,
+                "removed_short_pixel_count": 0,
+                "removed_spur_count": 0,
+                "removed_spur_pixel_count": 0,
+                "isolated_min_length_px": 0.0,
+                "isolated_min_points": 0,
+                "spur_length_limit_px": 0.0,
+                "spur_iterations": 0,
+            }
+
+        isolated = self._remove_short_isolated_skeleton_components(skeleton_mask)
+        pruned = self._prune_terminal_spurs(isolated["cleaned_skeleton"])
+        return {
+            "branch_cleanup_enabled": True,
+            "cleaned_skeleton": pruned["cleaned_skeleton"],
+            "removed_short_mask": isolated["removed_mask"],
+            "removed_spur_mask": pruned["removed_spur_mask"],
+            "removed_short_component_count": int(isolated["removed_component_count"]),
+            "removed_short_pixel_count": int(isolated["removed_pixel_count"]),
+            "removed_spur_count": int(pruned["removed_spur_count"]),
+            "removed_spur_pixel_count": int(pruned["removed_pixel_count"]),
+            "isolated_min_length_px": float(isolated["min_length_px"]),
+            "isolated_min_points": int(isolated["min_points"]),
+            "spur_length_limit_px": float(pruned["spur_length_limit_px"]),
+            "spur_iterations": int(pruned["iterations"]),
+        }
 
     def _smooth_path_coords(self, coords: np.ndarray, window: int = None) -> np.ndarray:
         if coords.shape[0] < 5:
@@ -264,13 +579,9 @@ class FeatureExtractor:
             return []
 
         branches = []
-        for branch_id in range(1, int(labeled.max()) + 1):
-            component_mask = labeled == branch_id
-            point_count = int(np.count_nonzero(component_mask))
-            if point_count < min_points:
-                continue
-
-            ordered = self._trace_ordered_component_path(component_mask)
+        for _, component_points in self._iter_labeled_component_points(labeled, min_points=min_points):
+            point_count = int(component_points.shape[0])
+            ordered = self._trace_ordered_component_points(component_points)
             if ordered.shape[0] < min_points:
                 continue
 
@@ -326,12 +637,14 @@ class FeatureExtractor:
         self,
         skel: np.ndarray,
         v2_min_points: int = 15,
+        apply_branch_cleanup: bool = True,
     ):
+        branch_source = self._clean_branch_skeleton(skel)["cleaned_skeleton"] if apply_branch_cleanup else (skel > 0)
         max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH if self.speed_profile == "fast" else None
         max_branches = self.FAST_CURVATURE_BRANCH_LIMIT if self.speed_profile == "fast" else None
 
         relaxed_branches = self._collect_ordered_branches_v2(
-            skel,
+            branch_source,
             min_points=max(self.V3_MIN_BRANCH_POINTS, int(round(self.expected_tube_px * 1.5))),
             min_length_factor=self.V3_MIN_BRANCH_LENGTH_FACTOR,
             max_points_per_branch=max_points_per_branch,
@@ -390,6 +703,171 @@ class FeatureExtractor:
         if not curvature_values_px:
             return np.empty((0,), dtype=float)
         return np.asarray(curvature_values_px, dtype=float)
+
+    @staticmethod
+    def _classify_curvature_nm(curvature_nm: float, straight_threshold: float, wavy_threshold: float) -> str:
+        if curvature_nm < straight_threshold:
+            return "Straight"
+        if curvature_nm < wavy_threshold:
+            return "Wavy"
+        return "Coiled"
+
+    def _classify_v2_curvature_nm(self, curvature_nm: float) -> str:
+        return self._classify_curvature_nm(curvature_nm, straight_threshold=5e-4, wavy_threshold=2.5e-3)
+
+    def _classify_v3_curvature_nm(self, curvature_nm: float) -> str:
+        return self._classify_curvature_nm(curvature_nm, straight_threshold=8e-4, wavy_threshold=4e-3)
+
+    @staticmethod
+    def _trimmed_mean(values: np.ndarray, trim_percent: float) -> float:
+        values = np.asarray(values, dtype=float)
+        if values.size == 0:
+            return 0.0
+        if values.size < 5:
+            return float(np.mean(values))
+        low, high = np.percentile(values, [trim_percent, 100.0 - trim_percent])
+        trimmed = values[(values >= low) & (values <= high)]
+        return float(np.mean(trimmed if trimmed.size > 0 else values))
+
+    def _prepare_curvature_v3_branches(
+        self,
+        skel: np.ndarray,
+        apply_branch_cleanup: bool = True,
+    ):
+        branch_source = self._clean_branch_skeleton(skel)["cleaned_skeleton"] if apply_branch_cleanup else (skel > 0)
+        max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH if self.speed_profile == "fast" else None
+        max_branches = self.FAST_CURVATURE_BRANCH_LIMIT if self.speed_profile == "fast" else None
+        return self._collect_ordered_branches_v2(
+            branch_source,
+            min_points=max(self.V3_MIN_BRANCH_POINTS, int(round(self.expected_tube_px * 1.5))),
+            min_length_factor=self.V3_MIN_BRANCH_LENGTH_FACTOR,
+            max_branches=max_branches,
+            max_points_per_branch=max_points_per_branch,
+        )
+
+    def _cache_branch_curvature_stats_nm(self, branches, sample_step: int = 1):
+        px_per_nm = max(self.px_per_um / 1000.0, 1e-6)
+        sample_step = max(1, int(sample_step))
+        for branch in branches:
+            if (
+                branch.get("_curvature_stats_nm") is not None
+                and int(branch.get("_curvature_stats_sample_step", 0)) == sample_step
+            ):
+                continue
+            coords = np.asarray(branch["coords"], dtype=float)
+            sampled_coords = self._sample_ordered_coords(coords, sample_step=sample_step)
+            point_curvature_px = self._compute_point_curvatures_px(sampled_coords)
+            curvature_nm = point_curvature_px * px_per_nm if point_curvature_px.size > 0 else np.empty((0,), dtype=float)
+            branch["_curvature_distribution_nm"] = curvature_nm
+            if curvature_nm.size > 0:
+                branch["_curvature_stats_nm"] = {
+                    "p50": float(np.median(curvature_nm)),
+                    "p75": float(np.percentile(curvature_nm, self.V3_BRANCH_QUANTILE)),
+                    "mean": float(np.mean(curvature_nm)),
+                    "trimmed_mean": self._trimmed_mean(curvature_nm, self.V3_TRIM_PERCENT),
+                }
+            else:
+                branch["_curvature_stats_nm"] = {}
+            branch["_curvature_stats_sample_step"] = sample_step
+        return branches
+
+    @staticmethod
+    def _aggregate_cached_branch_curvature_nm(branches, branch_stat: str, weight_mode: str) -> float:
+        branch_curvatures = []
+        weights = []
+        for branch in branches:
+            cached_stats = branch.get("_curvature_stats_nm") or {}
+            branch_curvature_nm = float(cached_stats.get(branch_stat, 0.0))
+            if branch_curvature_nm <= 0:
+                continue
+            branch_curvatures.append(branch_curvature_nm)
+            path_length_px = float(branch.get("path_length_px", 0.0))
+            if weight_mode == "sqrt_length":
+                weights.append(np.sqrt(max(path_length_px, 1.0)))
+            elif weight_mode == "length":
+                weights.append(max(path_length_px, 1.0))
+            else:
+                raise ValueError(f"Unsupported weight_mode: {weight_mode}")
+        if not branch_curvatures:
+            return 0.0
+        return float(np.average(np.asarray(branch_curvatures, dtype=float), weights=np.asarray(weights, dtype=float)))
+
+    @staticmethod
+    def _empty_curvature_v3_bundle():
+        return {
+            "curvature_v3": "Unknown",
+            "curvature_nm_v3": 0.0,
+            "curvature_nm_v3_sqrt_length": 0.0,
+            "curvature_nm_v3_length": 0.0,
+            "curvature_nm_v3_p50_sqrt_length": 0.0,
+            "curvature_nm_v3_p50_length": 0.0,
+            "curvature_nm_v3_p75_sqrt_length": 0.0,
+            "curvature_nm_v3_p75_length": 0.0,
+            "curvature_nm_v3_mean_sqrt_length": 0.0,
+            "curvature_nm_v3_mean_length": 0.0,
+            "curvature_nm_v3_trimmed_mean_sqrt_length": 0.0,
+            "curvature_nm_v3_trimmed_mean_length": 0.0,
+            "curvature_v2": "Unknown",
+            "curvature_nm_v2": 0.0,
+            "curvature_v3_branch_count": 0,
+        }
+
+    def calculate_curvature_v3_bundle(
+        self,
+        skel: np.ndarray,
+        max_branches: int = None,
+        max_points_per_branch: int = None,
+        sample_step: int = None,
+        ordered_branches=None,
+    ):
+        if max_branches is None and self.speed_profile == "fast":
+            max_branches = self.FAST_CURVATURE_BRANCH_LIMIT
+        if max_points_per_branch is None and self.speed_profile == "fast":
+            max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH
+        if sample_step is None:
+            sample_step = 2 if self.speed_profile == "fast" else 1
+
+        branches = ordered_branches
+        if branches is None:
+            branches = self._collect_ordered_branches_v2(
+                self._clean_branch_skeleton(skel)["cleaned_skeleton"],
+                min_points=max(self.V3_MIN_BRANCH_POINTS, int(round(self.expected_tube_px * 1.5))),
+                min_length_factor=self.V3_MIN_BRANCH_LENGTH_FACTOR,
+                max_branches=max_branches,
+                max_points_per_branch=max_points_per_branch,
+            )
+        if not branches:
+            return self._empty_curvature_v3_bundle()
+
+        self._cache_branch_curvature_stats_nm(branches, sample_step=sample_step)
+        bundle = self._empty_curvature_v3_bundle()
+        bundle["curvature_v3_branch_count"] = int(len(branches))
+
+        stat_to_key = {
+            "p50": "p50",
+            "p75": "p75",
+            "mean": "mean",
+            "trimmed_mean": "trimmed_mean",
+        }
+        for stat_name, stat_suffix in stat_to_key.items():
+            bundle[f"curvature_nm_v3_{stat_suffix}_length"] = self._aggregate_cached_branch_curvature_nm(
+                branches,
+                branch_stat=stat_name,
+                weight_mode="length",
+            )
+            bundle[f"curvature_nm_v3_{stat_suffix}_sqrt_length"] = self._aggregate_cached_branch_curvature_nm(
+                branches,
+                branch_stat=stat_name,
+                weight_mode="sqrt_length",
+            )
+
+        bundle["curvature_nm_v3_sqrt_length"] = float(bundle["curvature_nm_v3_p75_sqrt_length"])
+        bundle["curvature_nm_v3_length"] = float(bundle["curvature_nm_v3_p75_length"])
+        bundle["curvature_nm_v3"] = float(bundle["curvature_nm_v3_p75_sqrt_length"])
+        bundle["curvature_v3"] = self._classify_v3_curvature_nm(bundle["curvature_nm_v3"])
+        bundle["curvature_nm_v2"] = float(bundle["curvature_nm_v3_p50_length"])
+        bundle["curvature_v2"] = self._classify_v2_curvature_nm(bundle["curvature_nm_v2"])
+        return bundle
 
     @staticmethod
     def _coords_to_pixel_indices(coords: np.ndarray, image_shape) -> np.ndarray:
@@ -1711,8 +2189,9 @@ class FeatureExtractor:
 
         branches = ordered_branches
         if branches is None:
+            branch_source = self._clean_branch_skeleton(skel)["cleaned_skeleton"]
             branches = self._collect_ordered_branches_v2(
-                skel,
+                branch_source,
                 min_points=15,
                 max_branches=max_branches,
                 max_points_per_branch=max_points_per_branch,
@@ -1736,12 +2215,7 @@ class FeatureExtractor:
             return "Unknown", 0.0
 
         median_curvature_nm = float(np.average(branch_curvatures, weights=np.asarray(weights, dtype=float)))
-        if median_curvature_nm < 5e-4:
-            label_name = "Straight"
-        elif median_curvature_nm < 2.5e-3:
-            label_name = "Wavy"
-        else:
-            label_name = "Coiled"
+        label_name = self._classify_v2_curvature_nm(median_curvature_nm)
         return label_name, median_curvature_nm
 
     def calculate_curvature_v3(
@@ -1752,50 +2226,14 @@ class FeatureExtractor:
         sample_step: int = None,
         ordered_branches=None,
     ):
-        if max_branches is None and self.speed_profile == "fast":
-            max_branches = self.FAST_CURVATURE_BRANCH_LIMIT
-        if max_points_per_branch is None and self.speed_profile == "fast":
-            max_points_per_branch = self.FAST_MAX_POINTS_PER_BRANCH
-        if sample_step is None:
-            sample_step = 2 if self.speed_profile == "fast" else 1
-
-        branches = ordered_branches
-        if branches is None:
-            branches = self._collect_ordered_branches_v2(
-                skel,
-                min_points=max(self.V3_MIN_BRANCH_POINTS, int(round(self.expected_tube_px * 1.5))),
-                min_length_factor=self.V3_MIN_BRANCH_LENGTH_FACTOR,
-                max_branches=max_branches,
-                max_points_per_branch=max_points_per_branch,
-            )
-        if not branches:
-            return "Unknown", 0.0
-
-        px_per_nm = max(self.px_per_um / 1000.0, 1e-6)
-        branch_curvatures = []
-        weights = []
-
-        for branch in branches:
-            sampled_coords = self._sample_ordered_coords(branch["coords"], sample_step=sample_step)
-            curvature_values_px = self._compute_point_curvatures_px(sampled_coords)
-            if curvature_values_px.size == 0:
-                continue
-
-            branch_curvature_px = float(np.percentile(curvature_values_px, self.V3_BRANCH_QUANTILE))
-            branch_curvatures.append(branch_curvature_px * px_per_nm)
-            weights.append(np.sqrt(max(branch["path_length_px"], 1.0)))
-
-        if not branch_curvatures:
-            return "Unknown", 0.0
-
-        curvature_nm_v3 = float(np.average(branch_curvatures, weights=np.asarray(weights, dtype=float)))
-        if curvature_nm_v3 < 8e-4:
-            label_name = "Straight"
-        elif curvature_nm_v3 < 4e-3:
-            label_name = "Wavy"
-        else:
-            label_name = "Coiled"
-        return label_name, curvature_nm_v3
+        bundle = self.calculate_curvature_v3_bundle(
+            skel,
+            max_branches=max_branches,
+            max_points_per_branch=max_points_per_branch,
+            sample_step=sample_step,
+            ordered_branches=ordered_branches,
+        )
+        return bundle["curvature_v3"], float(bundle["curvature_nm_v3"])
 
     @staticmethod
     def _smooth_signal(values: np.ndarray, window: int = 5) -> np.ndarray:
@@ -2031,8 +2469,9 @@ class FeatureExtractor:
 
         branches = ordered_branches
         if branches is None:
+            branch_source = self._clean_branch_skeleton(skel)["cleaned_skeleton"]
             branches = self._collect_ordered_branches_v2(
-                skel,
+                branch_source,
                 min_points=20,
                 max_branches=max_branches,
                 max_points_per_branch=max_points_per_branch,
@@ -2153,6 +2592,8 @@ class FeatureExtractor:
         )
 
         base_components = self._collect_components(skel)
+        branch_cleanup = self._clean_branch_skeleton(skel)
+        cleaned_branch_skeleton = branch_cleanup["cleaned_skeleton"]
 
         alignment_metrics = self.calculate_hof_skeleton_adaptive(
             skel,
@@ -2168,19 +2609,20 @@ class FeatureExtractor:
             n_branches=int(n_br),
             rotation_correction_deg=int(alignment_metrics["rotation_correction_deg"]),
         )
-        curv_label, curvature_nm = self.calculate_curvature(skel, base_components=base_components)
-        ordered_branches_v2, ordered_branches_v3 = self._prepare_curvature_branch_sets(
-            skel,
-            v2_min_points=15,
+        ordered_branches_v3 = self._prepare_curvature_v3_branches(
+            cleaned_branch_skeleton,
+            apply_branch_cleanup=False,
         )
-        curv_label_v2, curvature_nm_v2 = self.calculate_curvature_v2(
-            skel,
-            ordered_branches=ordered_branches_v2,
-        )
-        curv_label_v3, curvature_nm_v3 = self.calculate_curvature_v3(
-            skel,
+        curvature_v3_bundle = self.calculate_curvature_v3_bundle(
+            cleaned_branch_skeleton,
             ordered_branches=ordered_branches_v3,
         )
+        curv_label = curvature_v3_bundle["curvature_v3"]
+        curvature_nm = curvature_v3_bundle["curvature_nm_v3"]
+        curv_label_v2 = curvature_v3_bundle["curvature_v2"]
+        curvature_nm_v2 = curvature_v3_bundle["curvature_nm_v2"]
+        curv_label_v3 = curvature_v3_bundle["curvature_v3"]
+        curvature_nm_v3 = curvature_v3_bundle["curvature_nm_v3"]
         emit_progress(
             "curvature",
             curvature=curv_label,
@@ -2189,12 +2631,25 @@ class FeatureExtractor:
             curvature_nm_v2=round(curvature_nm_v2, 6),
             curvature_v3=curv_label_v3,
             curvature_nm_v3=round(curvature_nm_v3, 6),
+            curvature_nm_v3_p50_length=round(curvature_v3_bundle["curvature_nm_v3_p50_length"], 6),
+            curvature_nm_v3_p50_sqrt_length=round(curvature_v3_bundle["curvature_nm_v3_p50_sqrt_length"], 6),
+            curvature_nm_v3_mean_length=round(curvature_v3_bundle["curvature_nm_v3_mean_length"], 6),
+            curvature_nm_v3_mean_sqrt_length=round(curvature_v3_bundle["curvature_nm_v3_mean_sqrt_length"], 6),
+            curvature_nm_v3_trimmed_mean_length=round(curvature_v3_bundle["curvature_nm_v3_trimmed_mean_length"], 6),
+            curvature_nm_v3_trimmed_mean_sqrt_length=round(curvature_v3_bundle["curvature_nm_v3_trimmed_mean_sqrt_length"], 6),
         )
-        waviness = self.calculate_waviness(skel, base_components=base_components)
-        waviness_v2 = self.calculate_waviness_v2(
-            skel,
-            ordered_branches=ordered_branches_v2,
+        waviness_v3 = self.calculate_waviness_v2(
+            cleaned_branch_skeleton,
+            ordered_branches=ordered_branches_v3,
         )
+        waviness = {
+            "waviness_ratio": waviness_v3["waviness_ratio_v2"],
+            "waviness_height_nm": waviness_v3["waviness_height_nm_v2"],
+            "waviness_wavelength_nm": waviness_v3["waviness_wavelength_nm_v2"],
+            "waviness_branches": waviness_v3["waviness_branches_v2"],
+            "tortuosity": waviness_v3["tortuosity_v2"],
+        }
+        waviness_v2 = waviness_v3
         emit_progress(
             "waviness",
             waviness_ratio=(
@@ -2217,24 +2672,30 @@ class FeatureExtractor:
             diameter_nm = -1.0
             curv_label, tortuosity = "N/A", 0.0
             curvature_nm = 0.0
-            curv_label_v2, tortuosity_v2 = "N/A", 0.0
-            curvature_nm_v2 = 0.0
-            curv_label_v3 = "N/A"
-            curvature_nm_v3 = 0.0
+            for key in list(curvature_v3_bundle.keys()):
+                if key.startswith("curvature_nm_"):
+                    curvature_v3_bundle[key] = 0.0
+            curvature_v3_bundle["curvature_v2"] = "N/A"
+            curvature_v3_bundle["curvature_v3"] = "N/A"
+            curvature_v3_bundle["curvature_v3_branch_count"] = 0
+            curv_label_v2, tortuosity_v2 = curvature_v3_bundle["curvature_v2"], None
+            curvature_nm_v2 = curvature_v3_bundle["curvature_nm_v2"]
+            curv_label_v3 = curvature_v3_bundle["curvature_v3"]
+            curvature_nm_v3 = curvature_v3_bundle["curvature_nm_v3"]
             diameter_method_name = "N/A"
             waviness = {
                 "waviness_ratio": None,
                 "waviness_height_nm": None,
                 "waviness_wavelength_nm": None,
                 "waviness_branches": 0,
-                "tortuosity": 0.0,
+                "tortuosity": None,
             }
             waviness_v2 = {
                 "waviness_ratio_v2": None,
                 "waviness_height_nm_v2": None,
                 "waviness_wavelength_nm_v2": None,
                 "waviness_branches_v2": 0,
-                "tortuosity_v2": 0.0,
+                "tortuosity_v2": None,
             }
 
         extra = {
@@ -2244,6 +2705,15 @@ class FeatureExtractor:
             "alignment_raw": round(alignment_metrics["alignment_raw"], 4),
             "mean_phi_raw_deg": round(alignment_metrics["mean_phi_raw_deg"], 2),
             "speed_profile": self.speed_profile,
+            "branch_cleanup_enabled": bool(branch_cleanup["branch_cleanup_enabled"]),
+            "removed_short_component_count": int(branch_cleanup["removed_short_component_count"]),
+            "removed_short_pixel_count": int(branch_cleanup["removed_short_pixel_count"]),
+            "removed_spur_count": int(branch_cleanup["removed_spur_count"]),
+            "removed_spur_pixel_count": int(branch_cleanup["removed_spur_pixel_count"]),
+            "isolated_min_length_px": round(branch_cleanup["isolated_min_length_px"], 4),
+            "isolated_min_points": int(branch_cleanup["isolated_min_points"]),
+            "spur_length_limit_px": round(branch_cleanup["spur_length_limit_px"], 4),
+            "spur_iterations": int(branch_cleanup["spur_iterations"]),
         }
 
         result = {
@@ -2260,8 +2730,19 @@ class FeatureExtractor:
             "curvature_nm": round(curvature_nm, 4),  # 鐪熸鐨勬洸鐜囷紙nm鈦宦癸級
             "curvature_nm_v2": round(curvature_nm_v2, 6),
             "curvature_nm_v3": round(curvature_nm_v3, 6),
-            "tortuosity":   round(tortuosity, 3),
-            "tortuosity_v2": round(tortuosity_v2, 3),
+            "curvature_nm_v3_sqrt_length": round(curvature_v3_bundle["curvature_nm_v3_sqrt_length"], 6),
+            "curvature_nm_v3_length": round(curvature_v3_bundle["curvature_nm_v3_length"], 6),
+            "curvature_nm_v3_p50_sqrt_length": round(curvature_v3_bundle["curvature_nm_v3_p50_sqrt_length"], 6),
+            "curvature_nm_v3_p50_length": round(curvature_v3_bundle["curvature_nm_v3_p50_length"], 6),
+            "curvature_nm_v3_p75_sqrt_length": round(curvature_v3_bundle["curvature_nm_v3_p75_sqrt_length"], 6),
+            "curvature_nm_v3_p75_length": round(curvature_v3_bundle["curvature_nm_v3_p75_length"], 6),
+            "curvature_nm_v3_mean_sqrt_length": round(curvature_v3_bundle["curvature_nm_v3_mean_sqrt_length"], 6),
+            "curvature_nm_v3_mean_length": round(curvature_v3_bundle["curvature_nm_v3_mean_length"], 6),
+            "curvature_nm_v3_trimmed_mean_sqrt_length": round(curvature_v3_bundle["curvature_nm_v3_trimmed_mean_sqrt_length"], 6),
+            "curvature_nm_v3_trimmed_mean_length": round(curvature_v3_bundle["curvature_nm_v3_trimmed_mean_length"], 6),
+            "curvature_v3_branch_count": int(curvature_v3_bundle["curvature_v3_branch_count"]),
+            "tortuosity":   round(tortuosity, 3) if tortuosity is not None else None,
+            "tortuosity_v2": round(tortuosity_v2, 3) if tortuosity_v2 is not None else None,
             "waviness_ratio": round(waviness["waviness_ratio"], 4) if waviness["waviness_ratio"] is not None else None,
             "waviness_height_nm": round(waviness["waviness_height_nm"], 2) if waviness["waviness_height_nm"] is not None else None,
             "waviness_wavelength_nm": round(waviness["waviness_wavelength_nm"], 2) if waviness["waviness_wavelength_nm"] is not None else None,

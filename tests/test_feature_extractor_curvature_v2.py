@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -34,6 +35,16 @@ class FeatureExtractorCurvatureV2Tests(unittest.TestCase):
         y_vals = 70 + amplitude_px * np.sin(phase)
         points = list(zip(x_vals, y_vals))
         return self._draw_polyline(points, (160, int(x_vals.max()) + 20))
+
+    def _make_spur_split_skeleton(self):
+        skel = self._draw_polyline([(x, 80) for x in range(20, 141)], (180, 180))
+        spur = self._draw_polyline([(90, y) for y in range(80, 74, -1)], skel.shape)
+        return np.logical_or(skel, spur)
+
+    def _make_long_terminal_branch_skeleton(self):
+        skel = self._draw_polyline([(x, 90) for x in range(20, 141)], (200, 200))
+        branch = self._draw_polyline([(90, y) for y in range(90, 45, -1)], skel.shape)
+        return np.logical_or(skel, branch)
 
     def test_calculate_curvature_v2_returns_near_zero_for_straight_centerline(self):
         extractor = FeatureExtractor(magnification=50000)
@@ -127,6 +138,92 @@ class FeatureExtractorCurvatureV2Tests(unittest.TestCase):
         self.assertIn(label_v3, {"Wavy", "Coiled"})
         self.assertGreater(curvature_nm_v3, 0.001)
         self.assertGreaterEqual(curvature_nm_v3, curvature_nm_v2)
+
+    def test_calculate_curvature_v3_bundle_returns_multi_stat_outputs(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_wave_skeleton()
+
+        bundle = extractor.calculate_curvature_v3_bundle(skel)
+
+        expected_keys = {
+            "curvature_v3",
+            "curvature_nm_v3",
+            "curvature_nm_v3_sqrt_length",
+            "curvature_nm_v3_length",
+            "curvature_nm_v3_p50_sqrt_length",
+            "curvature_nm_v3_p50_length",
+            "curvature_nm_v3_p75_sqrt_length",
+            "curvature_nm_v3_p75_length",
+            "curvature_nm_v3_mean_sqrt_length",
+            "curvature_nm_v3_mean_length",
+            "curvature_nm_v3_trimmed_mean_sqrt_length",
+            "curvature_nm_v3_trimmed_mean_length",
+            "curvature_v2",
+            "curvature_nm_v2",
+            "curvature_v3_branch_count",
+        }
+        self.assertTrue(expected_keys.issubset(bundle.keys()))
+        self.assertEqual(bundle["curvature_nm_v3"], bundle["curvature_nm_v3_p75_sqrt_length"])
+        self.assertEqual(bundle["curvature_nm_v3_sqrt_length"], bundle["curvature_nm_v3_p75_sqrt_length"])
+        self.assertEqual(bundle["curvature_nm_v3_length"], bundle["curvature_nm_v3_p75_length"])
+        self.assertEqual(bundle["curvature_nm_v2"], bundle["curvature_nm_v3_p50_length"])
+        self.assertGreater(bundle["curvature_nm_v3"], 0.001)
+        self.assertGreater(bundle["curvature_nm_v3_trimmed_mean_sqrt_length"], 0.0)
+        self.assertGreaterEqual(bundle["curvature_v3_branch_count"], 1)
+
+    def test_clean_branch_skeleton_removes_short_spur_and_reduces_false_branch_split(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_spur_split_skeleton()
+
+        min_points = max(extractor.V3_MIN_BRANCH_POINTS, int(round(extractor.expected_tube_px * 1.5)))
+        raw_branches = extractor._collect_ordered_branches_v2(
+            skel,
+            min_points=min_points,
+            min_length_factor=extractor.V3_MIN_BRANCH_LENGTH_FACTOR,
+        )
+        cleanup = extractor._clean_branch_skeleton(skel)
+        cleaned_branches = extractor._collect_ordered_branches_v2(
+            cleanup["cleaned_skeleton"],
+            min_points=min_points,
+            min_length_factor=extractor.V3_MIN_BRANCH_LENGTH_FACTOR,
+        )
+
+        self.assertGreaterEqual(cleanup["removed_spur_count"], 1)
+        self.assertLess(len(cleaned_branches), len(raw_branches))
+        self.assertGreater(np.count_nonzero(cleanup["removed_spur_mask"]), 0)
+
+    def test_collect_ordered_branches_v2_uses_component_points_instead_of_full_image_masks(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_wave_skeleton()
+
+        with mock.patch.object(
+            FeatureExtractor,
+            "_trace_ordered_component_path",
+            side_effect=AssertionError("full-image component masks should not be used here"),
+        ):
+            branches = extractor._collect_ordered_branches_v2(
+                skel,
+                min_points=max(extractor.V3_MIN_BRANCH_POINTS, int(round(extractor.expected_tube_px * 1.5))),
+                min_length_factor=extractor.V3_MIN_BRANCH_LENGTH_FACTOR,
+            )
+
+        self.assertTrue(branches)
+
+    def test_clean_branch_skeleton_keeps_long_terminal_branch(self):
+        extractor = FeatureExtractor(magnification=50000)
+        extractor.px_per_um = 100.0
+        skel = self._make_long_terminal_branch_skeleton()
+
+        cleanup = extractor._clean_branch_skeleton(skel)
+
+        self.assertEqual(cleanup["removed_spur_count"], 0)
+        self.assertEqual(
+            int(np.count_nonzero(cleanup["cleaned_skeleton"])),
+            int(np.count_nonzero(skel)),
+        )
 
 
 if __name__ == "__main__":

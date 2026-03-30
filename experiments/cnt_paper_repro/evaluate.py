@@ -20,12 +20,12 @@ if __package__ is None or __package__ == "":
     from experiments.cnt_paper_repro.config import load_config
     from experiments.cnt_paper_repro.data import CNTPatchDataset
     from experiments.cnt_paper_repro.metrics import pixel_metrics_from_logits
-    from experiments.cnt_paper_repro.model import ResNet34UNet
+    from experiments.cnt_paper_repro.model import build_model_from_config
 else:
     from .config import load_config
     from .data import CNTPatchDataset
     from .metrics import pixel_metrics_from_logits
-    from .model import ResNet34UNet
+    from .model import build_model_from_config
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,10 +56,11 @@ def main() -> None:
     )
     loader = DataLoader(dataset, batch_size=int(config["training"]["batch_size"]), shuffle=False, num_workers=int(config["training"].get("num_workers", 0)))
 
-    model = ResNet34UNet(
-        in_channels=int(config["model"].get("in_channels", 1)),
-        num_classes=int(config["model"].get("num_classes", 1)),
-        encoder_weights=None,
+    model = build_model_from_config(
+        {
+            **config["model"],
+            "encoder_weights": None,
+        }
     ).to(device)
     checkpoint = torch.load(args.checkpoint, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])

@@ -10,16 +10,17 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import torch.nn as nn
 
 if __package__ is None or __package__ == "":
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
     from experiments.cnt_paper_repro.config import load_config
-    from experiments.cnt_paper_repro.model import ResNet34UNet
+    from experiments.cnt_paper_repro.model import build_model_from_config
 else:
     from .config import load_config
-    from .model import ResNet34UNet
+    from .model import build_model_from_config
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,11 +49,12 @@ def write_image(path: Path, image: np.ndarray) -> None:
     path.write_bytes(encoded.tobytes())
 
 
-def load_model(config: dict, checkpoint_path: Path, device: torch.device) -> ResNet34UNet:
-    model = ResNet34UNet(
-        in_channels=int(config["model"].get("in_channels", 1)),
-        num_classes=int(config["model"].get("num_classes", 1)),
-        encoder_weights=None,
+def load_model(config: dict, checkpoint_path: Path, device: torch.device) -> nn.Module:
+    model = build_model_from_config(
+        {
+            **config["model"],
+            "encoder_weights": None,
+        }
     ).to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -60,7 +62,7 @@ def load_model(config: dict, checkpoint_path: Path, device: torch.device) -> Res
     return model
 
 
-def predict_binary(model: ResNet34UNet, image: np.ndarray, device: torch.device, threshold: float) -> np.ndarray:
+def predict_binary(model: nn.Module, image: np.ndarray, device: torch.device, threshold: float) -> np.ndarray:
     image_tensor = torch.from_numpy(((image - 0.5) / 0.5).astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
     with torch.no_grad():
         prob = torch.sigmoid(model(image_tensor))[0, 0].detach().cpu().numpy()

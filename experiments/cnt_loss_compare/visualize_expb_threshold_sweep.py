@@ -160,8 +160,9 @@ def main() -> None:
 
         threshold_masks: Dict[float, np.ndarray] = {}
         prob_map = None
+        input_mode = str(config["model"].get("input_mode", "rgb_replicated"))
         for threshold in thresholds:
-            mask, prob = predict_full_mask(prediction_model, image_gray, image_size, device, threshold)
+            mask, prob = predict_full_mask(prediction_model, image_gray, image_size, input_mode, device, threshold)
             threshold_masks[threshold] = mask
             if prob_map is None:
                 prob_map = prob
