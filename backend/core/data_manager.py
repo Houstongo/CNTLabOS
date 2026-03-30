@@ -32,7 +32,7 @@ class CNTADataParser:
             r"([\d.min]+)\s+"                 # Anneal Time
             r"([\d.minh]+)\s+"                # Growth Time
             r"(top|mid|bottom|Middle|Top|Bottom|Position-\w+|all|bpttom)?\s*"
-            r"(\d+)(?:\s+(\d+)-|-)(\d+)(?:-.*)?",
+            r"(\d+)[\s-]+(\d+)(?:-.*)?",
             re.IGNORECASE,
         )
 
@@ -74,11 +74,10 @@ class CNTADataParser:
 
         g = match.groups()
         mag = int(g[13])
-        prefix = g[14]  # 可能为 None
-        repeat = int(g[15])
+        repeat = int(g[14])
         
         # sample_id 包含样品号-倍率-重复号(含前缀)
-        full_repeat = f"{prefix}-{repeat}" if prefix is not None else str(repeat)
+        full_repeat = str(repeat)
         sample_id = f"No{g[0]}-{mag}-{full_repeat}"
         raw_position = (g[12] or "Unknown").strip()
         position_label = self.zzy_position_aliases.get(raw_position.lower(), raw_position)

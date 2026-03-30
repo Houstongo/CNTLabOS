@@ -4,9 +4,10 @@ import { getEl } from '../../utils/dom.js';
 import { getState, setState } from '../../core/store.js';
 import { emit, Events } from '../../core/events.js';
 import { api } from '../../utils/api.js';
-import { AI_BASE } from '../../core/constants.js';
+import { API_BASE } from '../../core/constants.js';
 import { formatNumber, formatTemp, formatPosition, formatMagnification, formatTime, formatMinutes, formatThickness } from '../../utils/format.js';
 import { aiStorage } from '../../config/local-storage.js';
+import * as Viz from '../visualization/index.js';
 
 /**
  * 打开详情面板
@@ -20,8 +21,8 @@ export async function openDetails(item) {
     const fileName = item.file_path.split('\\').pop();
     const isTif = item.url.toLowerCase().endsWith('.tif') || item.url.toLowerCase().endsWith('.tiff');
     const detailUrl = isTif
-        ? `${AI_BASE}/api/view/tif?path=${item.url.replace('/images/', '')}`
-        : `${AI_BASE}${item.url}`;
+        ? `${API_BASE}/api/view/tif?path=${item.url.replace('/images/', '')}`
+        : `${API_BASE}${item.url}`;
 
     // 更新 UI
     getEl('detail-img').src = detailUrl;
@@ -153,17 +154,16 @@ export async function reanalyzeImage() {
 }
 
 /**
- * 加载算法可视化
+ * 加载算法可视化（委托给 Viz 模块）
  */
-async function loadAlgorithmVisualization() {
+export async function loadAlgorithmVisualization() {
     const currentItem = getState('currentItem');
     if (!currentItem) return;
 
     try {
-        const data = await api.images.visualize(currentItem.id);
+        const data = await Viz.loadVisualizationData(currentItem.id);
         if (data.steps && data.steps.length > 0) {
-            setState('algorithm.steps', data.steps);
-            setState('algorithm.currentStepIndex', 0);
+            Viz.setSteps(data.steps);
             showVisualizationPanel();
         }
     } catch (err) {
@@ -172,137 +172,33 @@ async function loadAlgorithmVisualization() {
 }
 
 /**
- * 显示可视化面板
+ * 显示可视化面板（详情面板内嵌）
  */
 function showVisualizationPanel() {
-    const steps = getState('algorithm.steps');
-    const currentStepIndex = getState('algorithm.currentStepIndex') || 0;
-
+    const steps = Viz.getSteps();
     if (!steps || steps.length === 0) return;
-
-    const algoContent = getEl('algo-content');
-
-    let html = `
-        <div class="space-y-4">
-            <div class="flex justify-between items-center mb-4">
-                <h4 class="font-bold text-sm text-slate-700">算法步骤可视化</h4>
-                <div class="flex items-center gap-2">
-                    <button onclick="window.dispatchEvent(new CustomEvent('algo-prev-step'))" class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold">
-                        <i class="fas fa-chevron-left mr-1"></i>上一步
-                    </button>
-                    <span id="step-indicator" class="text-xs font-bold text-indigo-600">${currentStepIndex + 1} / ${steps.length}</span>
-                    <button onclick="window.dispatchEvent(new CustomEvent('algo-next-step'))" class="px-3 py-1 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold">
-                        下一步<i class="fas fa-chevron-right ml-1"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="flex gap-2 overflow-x-auto pb-2">
-                ${steps.map((step, idx) => `
-                    <button onclick="window.dispatchEvent(new CustomEvent('algo-goto-step', { detail: { index: ${idx} } }))"
-                        class="step-nav-btn shrink-0 px-3 py-2 rounded-lg text-xs font-bold border transition-all
-                        ${idx === currentStepIndex ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}">
-                        ${idx + 1}. ${step.name || '步骤 ' + (idx + 1)}
-                    </button>
-                `).join('')}
-            </div>
-            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <img id="step-image" src="data:image/jpeg;base64,${steps[currentStepIndex].image}"
-                    class="w-full rounded-lg shadow-sm">
-            </div>
-            <div class="bg-white rounded-lg p-4 border border-slate-200">
-                <div class="text-xs font-bold text-slate-400 uppercase mb-2">步骤说明</div>
-                <div id="step-description" class="text-sm text-slate-700">
-                    ${steps[currentStepIndex].description || '暂无说明'}
-                </div>
-            </div>
-        </div>
-    `;
-
-    algoContent.innerHTML = html;
+    Viz.renderStepPanel('algo-content');
 }
 
 /**
- * 上一步
+ * 步骤导航 — 兼容旧事件接口
  */
 export function prevStep() {
-    const steps = getState('algorithm.steps');
-    if (!steps) return;
-
-    const currentStepIndex = getState('algorithm.currentStepIndex') || 0;
-    if (currentStepIndex > 0) {
-        setState('algorithm.currentStepIndex', currentStepIndex - 1);
-        updateVisualization();
-    }
+    Viz.prevStep();
 }
 
-/**
- * 下一步
- */
 export function nextStep() {
-    const steps = getState('algorithm.steps');
-    if (!steps) return;
-
-    const currentStepIndex = getState('algorithm.currentStepIndex') || 0;
-    if (currentStepIndex < steps.length - 1) {
-        setState('algorithm.currentStepIndex', currentStepIndex + 1);
-        updateVisualization();
-    }
+    Viz.nextStep();
 }
 
-/**
- * 跳转到指定步骤
- */
 export function goToStep(index) {
-    const steps = getState('algorithm.steps');
-    if (!steps) return;
-
-    if (index >= 0 && index < steps.length) {
-        setState('algorithm.currentStepIndex', index);
-        updateVisualization();
-    }
-}
-
-/**
- * 更新可视化
- */
-function updateVisualization() {
-    const steps = getState('algorithm.steps');
-    const currentStepIndex = getState('algorithm.currentStepIndex') || 0;
-
-    if (!steps) return;
-
-    const stepImage = getEl('step-image');
-    const stepDescription = getEl('step-description');
-    const stepIndicator = getEl('step-indicator');
-
-    if (stepImage) {
-        stepImage.src = `data:image/jpeg;base64,${steps[currentStepIndex].image}`;
-    }
-
-    if (stepDescription) {
-        stepDescription.innerHTML = steps[currentStepIndex].description || '暂无说明';
-    }
-
-    if (stepIndicator) {
-        stepIndicator.innerText = `${currentStepIndex + 1} / ${steps.length}`;
-    }
-
-    // 更新导航按钮状态
-    document.querySelectorAll('.step-nav-btn').forEach((btn, idx) => {
-        if (idx === currentStepIndex) {
-            btn.classList.remove('bg-white', 'text-slate-600', 'border-slate-200', 'hover:border-indigo-300');
-            btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600');
-        } else {
-            btn.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600');
-            btn.classList.add('bg-white', 'text-slate-600', 'border-slate-200', 'hover:border-indigo-300');
-        }
-    });
+    Viz.goToStep(index);
 }
 
 /**
  * 打开解释面板
  */
-export function openInterpretPanel(tab) {
+export async function openInterpretPanel(tab) {
     getEl('interpret-panel').classList.add('open');
 
     const btn = getEl('toggle-interpret-btn');
@@ -351,7 +247,7 @@ export function toggleInterpretPanel() {
 /**
  * 显示算法标签页
  */
-function showAlgoTab() {
+async function showAlgoTab() {
     getEl('tab-algo').classList.add('active-tab');
     getEl('tab-ai').classList.remove('active-tab');
     getEl('algo-tab-wrapper').classList.remove('hidden');
@@ -363,7 +259,7 @@ function showAlgoTab() {
         getEl('algo-content').innerHTML = marked.parse(buildAlgoExplanation(currentItem, currentItem));
     }
 
-    const steps = getState('algorithm.steps');
+    const steps = Viz.getSteps();
     if (steps) {
         showVisualizationPanel();
     }

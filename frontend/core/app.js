@@ -1,8 +1,8 @@
 // 核心应用初始化
 // 职责将所有模块整合到单页应用中
 
-import { repairOverlayMounts } from '../utils/dom.js';
-import { emit, Events } from '../../core/events.js';
+import { repairOverlayMounts, getEl } from '../utils/dom.js';
+import { getState } from './store.js';
 
 // 等待 DOM 加载完成
 function domReady(callback) {
@@ -41,7 +41,7 @@ function bindGlobalEvents() {
         selectCleanItem(e.detail.id);
     });
 
-    // 殗法步骤导航事件
+    // 算法步骤导航事件（详情面板）
     window.addEventListener('algo-prev-step', async () => {
         const { prevStep } = await import('../modules/details/index.js');
         prevStep();
@@ -55,6 +55,17 @@ function bindGlobalEvents() {
     window.addEventListener('algo-goto-step', async (e) => {
         const { goToStep } = await import('../modules/details/index.js');
         goToStep(e.detail.index);
+    });
+
+    // 清洗模块算法可视化事件
+    window.addEventListener('clean-algo-toggle', async () => {
+        const { toggleAlgoPanel } = await import('../modules/data-clean/index.js');
+        toggleAlgoPanel();
+    });
+
+    window.addEventListener('clean-algo-hide', async () => {
+        const { hideAlgoPanel } = await import('../modules/data-clean/index.js');
+        hideAlgoPanel();
     });
 
     // RAG 文档删除事件
@@ -91,141 +102,166 @@ async function initApp() {
 
 /**
  * 暴露全局函数给 HTML onclick 使用
+ * 注意：export 不会挂到 window，必须显式 window.xxx 赋值
  */
-// 注意：这些函数需要被导出到 window 才能在 HTML onclick 中调用
-export function loadData() {
-    const { loadData } = require('../modules/data-list/index.js');
-    return loadData();
-}
 
-export function toggleSort(field) {
-    const { toggleSort } = require('../modules/data-list/index.js');
-    return toggleSort(field);
-}
+// ── 数据列表 ──
 
-export function changePage(dir) {
-    const { changePage } = require('../modules/data-list/index.js');
-    return changePage(dir);
-}
+window.loadData = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.loadData();
+};
 
-export function jumpToPage() {
-    const { jumpToPage } = require('../modules/data-list/index.js');
-    return jumpToPage();
-}
+window.toggleSort = async (field) => {
+    const m = await import('../modules/data-list/index.js');
+    return m.toggleSort(field);
+};
 
-export function toggleBatchMode() {
-    const { toggleBatchMode } = require('../modules/data-list/index.js');
-    return toggleBatchMode();
-}
+window.changePage = async (dir) => {
+    const m = await import('../modules/data-list/index.js');
+    return m.changePage(dir);
+};
 
-export function toggleDataRowSelection(id, checked) {
-    const { toggleDataRowSelection } = require('../modules/data-list/index.js');
-    return toggleDataRowSelection(id, checked);
-}
+window.jumpToPage = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.jumpToPage();
+};
 
-export function toggleSelectAllDataRows(checked) {
-    const { toggleSelectAllDataRows } = require('../modules/data-list/index.js');
-    return toggleSelectAllDataRows(checked);
-}
+window.toggleBatchMode = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.toggleBatchMode();
+};
 
-export function runDataBatchAnalyze() {
-    const { runDataBatchAnalyze } = require('../modules/data-list/index.js');
-    runDataBatchAnalyze();
-}
+window.toggleDataRowSelection = async (id, checked) => {
+    const m = await import('../modules/data-list/index.js');
+    return m.toggleDataRowSelection(id, checked);
+};
 
-export function runDataBatchDelete() {
-    const { runDataBatchDelete } = require('../modules/data-list/index.js');
-    runDataBatchDelete();
-}
+window.toggleSelectAllDataRows = async (checked) => {
+    const m = await import('../modules/data-list/index.js');
+    return m.toggleSelectAllDataRows(checked);
+};
 
-export function toggleDataTrashView() {
-    const { toggleDataTrashView } = require('../modules/data-list/index.js');
-    toggleDataTrashView();
-}
+window.runDataBatchAnalyze = async () => {
+    const m = await import('../modules/data-list/index.js');
+    m.runDataBatchAnalyze();
+};
 
-export function openDetailsById(id) {
-    const { openDetailsById } = require('../modules/details/index.js');
-    openDetailsById(id);
-}
+window.runDataBatchDelete = async () => {
+    const m = await import('../modules/data-list/index.js');
+    m.runDataBatchDelete();
+};
 
-export function closeDetails() {
-    const { closeDetails } = require('../modules/details/index.js');
-    return closeDetails();
-}
+window.toggleDataTrashView = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.toggleDataTrashView();
+};
 
-export function closeAll() {
-    const { closeAll } = require('../modules/details/index.js');
-    return closeAll();
-}
+// ── 详情面板 ──
 
-export function reanalyzeImage() {
-    const { reanalyzeImage } = require('../modules/details/index.js');
-    reanalyzeImage();
-}
+window.openDetailsById = async (id) => {
+    const m = await import('../modules/details/index.js');
+    m.openDetailsById(id);
+};
 
-export function openInterpretPanel(tab) {
-    const { openInterpretPanel } = require('../modules/details/index.js');
-    return openInterpretPanel(tab);
-}
+window.closeDetails = async () => {
+    const m = await import('../modules/details/index.js');
+    return m.closeDetails();
+};
 
-export function closeInterpretPanel() {
-    const { closeInterpretPanel } = require('../modules/details/index.js');
-    return closeInterpretPanel();
-}
+window.closeAll = async () => {
+    const m = await import('../modules/details/index.js');
+    return m.closeAll();
+};
 
-export function toggleInterpretPanel() {
-    const { toggleInterpretPanel } = require('../modules/details/index.js');
-    return toggleInterpretPanel();
-}
+window.reanalyzeImage = async () => {
+    const m = await import('../modules/details/index.js');
+    m.reanalyzeImage();
+};
 
-export function startAIInterpret() {
-    const { startAIInterpret } = require('../modules/ai-chat/index.js');
-    startAIInterpret();
-}
+window.openInterpretPanel = async (tab) => {
+    const m = await import('../modules/details/index.js');
+    return m.openInterpretPanel(tab);
+};
 
-export function sendChat() {
-    const { sendChat } = require('../modules/ai-chat/index.js');
-    return sendChat();
-}
+window.closeInterpretPanel = async () => {
+    const m = await import('../modules/details/index.js');
+    return m.closeInterpretPanel();
+};
 
-export function toggleConfigModal() {
+window.toggleInterpretPanel = async () => {
+    const m = await import('../modules/details/index.js');
+    return m.toggleInterpretPanel();
+};
+
+window.openAlgoVisualization = async () => {
+    const { openInterpretPanel, loadAlgorithmVisualization } = await import('../modules/details/index.js');
+    const { getSteps } = await import('../modules/visualization/index.js');
+    const currentItem = getState('currentItem');
+    if (!currentItem) {
+        alert('请先选择一张图像');
+        return;
+    }
+    if (!getSteps() || getSteps().length === 0) {
+        window.reanalyzeImage();
+        return;
+    }
+    openInterpretPanel('algo');
+};
+
+// ── AI 对话 ──
+
+window.startAIInterpret = async () => {
+    const m = await import('../modules/ai-chat/index.js');
+    m.startAIInterpret();
+};
+
+window.sendChat = async () => {
+    const m = await import('../modules/ai-chat/index.js');
+    return m.sendChat();
+};
+
+// ── 配置 ──
+
+window.toggleConfigModal = () => {
     const modal = getEl('config-modal');
     if (modal) {
         modal.classList.toggle('hidden');
-        if (!modal.classList.contains('hidden')) {
-            console.log('Config modal opened');
-        }
     }
-}
+};
 
-export function loadRagLinks() {
-    const { loadRagLinks } = require('../modules/rag/index.js');
-    return loadRagLinks();
-}
+// ── RAG ──
 
-export function uploadPDF(input) {
-    const { uploadPDF } = require('../modules/rag/index.js');
-    return uploadPDF(input);
-}
+window.loadRagLinks = async () => {
+    const m = await import('../modules/rag/index.js');
+    return m.loadRagLinks();
+};
 
-export function deleteRagDoc(id, btn) {
+window.uploadPDF = async (input) => {
+    const m = await import('../modules/rag/index.js');
+    return m.uploadPDF(input);
+};
+
+window.deleteRagDoc = async (id, btn) => {
     const docs = getState('rag.documents') || [];
     const doc = docs.find(d => d.id === id);
-    const { deleteRagDoc } = require('../modules/rag/index.js');
-    deleteRagDoc(id, doc?.filename || '');
-}
+    const m = await import('../modules/rag/index.js');
+    m.deleteRagDoc(id, doc?.filename || '');
+};
 
-export function switchRagSubPage(page) {
-    const { switchRagSubPage } = require('../modules/rag/index.js');
-    return switchRagSubPage(page);
-}
+window.switchRagSubPage = async (page) => {
+    const m = await import('../modules/rag/index.js');
+    return m.switchRagSubPage(page);
+};
 
-export function setRagGraphFilter(filter) {
-    const { setRagGraphFilter } = require('../modules/rag/index.js');
-    return setRagGraphFilter(filter);
-}
+window.setRagGraphFilter = async (filter) => {
+    const m = await import('../modules/rag/index.js');
+    return m.setRagGraphFilter(filter);
+};
 
-export function switchStepTab(btn) {
+// ── 清洗模块 ──
+
+window.switchStepTab = (btn) => {
     document.querySelectorAll('.step-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
 
@@ -236,9 +272,9 @@ export function switchStepTab(btn) {
         img.src = b64;
         window.currentLightboxTitle = name;
     }
-}
+};
 
-export function openCleanLightbox(src, title) {
+window.openCleanLightbox = (src, title) => {
     const modal = getEl('clean-lightbox');
     const img = getEl('clean-lightbox-image');
     const titleEl = getEl('clean-lightbox-title');
@@ -247,44 +283,68 @@ export function openCleanLightbox(src, title) {
     if (titleEl) titleEl.innerText = title;
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-}
+};
 
-export function closeCleanLightbox() {
+window.closeCleanLightbox = () => {
     const modal = getEl('clean-lightbox');
     const img = getEl('clean-lightbox-image');
     if (img) img.removeAttribute('src');
     if (modal) modal.classList.add('hidden');
     document.body.style.overflow = '';
-}
+};
 
-export function openCleanOriginal() {
+window.openCleanOriginal = () => {
     const img = getEl('clean-original-image');
     if (!img || img.classList.contains('hidden')) return;
     const src = img.src;
     const title = window.currentLightboxTitle || '图像放大查看';
-    const { openCleanLightbox } = require('../modules/data-clean/index.js');
-    openCleanLightbox(src, title);
-}
+    window.openCleanLightbox(src, title);
+};
 
-export function switchMlSubPage(page) {
-    const { switchMlSubPage } = require('../modules/charts/index.js');
-    switchMlSubPage(page);
-}
+// 清洗模块算法可视化全局入口
+window.toggleCleanAlgoPage = () => {
+    window.dispatchEvent(new CustomEvent('clean-algo-toggle'));
+};
 
-export function selectMlVizTarget(target) {
-    const { selectMlVizTarget } = require('../modules/charts/index.js');
-    selectMlVizTarget(target);
-}
+window.hideCleanAlgoPanel = () => {
+    window.dispatchEvent(new CustomEvent('clean-algo-hide'));
+};
 
-export function onMlVizOptionChange() {
-    const { onMlVizOptionChange } = require('../modules/charts/index.js');
-    onMlVizOptionChange();
-}
+window.switchCleanBackend = async (backend) => {
+    const { showAlgorithmVisualization } = await import('../modules/data-clean/index.js');
+    showAlgorithmVisualization();
+};
 
-export function switchMlInfoTab(tab) {
-    const { switchMlInfoTab } = require('../modules/charts/index.js');
-    switchMlInfoTab(tab);
-}
+window.expandCleanAlgoPhase = () => {};
 
-// 导出供测试使用
+window.showCleanAlgoStepDetail = () => {};
+
+window.hideCleanStepDetailPanel = () => {};
+
+// ── ML 图表 ──
+
+window.switchMlSubPage = async (page) => {
+    const m = await import('../modules/charts/index.js');
+    m.switchMlSubPage(page);
+};
+
+window.selectMlVizTarget = async (target) => {
+    const m = await import('../modules/charts/index.js');
+    m.selectMlVizTarget(target);
+};
+
+window.onMlVizOptionChange = async () => {
+    const m = await import('../modules/charts/index.js');
+    m.onMlVizOptionChange();
+};
+
+window.switchMlInfoTab = async (tab) => {
+    const m = await import('../modules/charts/index.js');
+    m.switchMlInfoTab(tab);
+};
+
+// ── 启动 ──
+
 export { initApp, bindGlobalEvents };
+
+domReady(initApp);

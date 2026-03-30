@@ -4,6 +4,9 @@ import { getEl } from '../../utils/dom.js';
 import { getState, setState } from '../../core/store.js';
 import { API_BASE } from '../../core/constants.js';
 import { fmtMl } from '../../utils/format.js';
+import * as Viz from '../visualization/index.js';
+
+// ── 清洗评估 ──────────────────────────────────────────
 
 /**
  * 计算清洗评估
@@ -105,10 +108,12 @@ export function normalizeCleanItem(item) {
     return { ...item, assessment, is_deleted: Number(item.is_deleted || 0) };
 }
 
+// ── 列表渲染 ──────────────────────────────────────────
+
 /**
  * 获取过滤后的清洗项
  */
-function getFilteredCleanItems() {
+export function getFilteredCleanItems() {
     const cleanState = getState('clean') || {};
     let rows = [...(cleanState.items || [])];
     const confidence = getEl('clean-confidence-filter')?.value || '';
@@ -128,6 +133,34 @@ function getFilteredCleanItems() {
     }
 
     return rows;
+}
+
+/**
+ * 获取当前选中的清洗项
+ * 兼容 inline JS 的 window.cleanState、ES module store、以及全局 currentItem
+ */
+export function getActiveCleanItem() {
+    // 优先从 ES store / inline 全局变量读取
+    const store = getState('clean') || {};
+    const inline = window.cleanState || {};
+    const selectedId = store.selectedId || inline.selectedId;
+    if (selectedId) {
+        const items = (store.items || inline.items || []);
+        const found = items.find(x => x.id === selectedId);
+        if (found) return found;
+    }
+    // 回退到当前查看的图像
+    return window.currentItem || null;
+}
+
+/**
+ * 选中清洗项
+ */
+export function selectCleanItem(id) {
+    const cleanState = getState('clean') || {};
+    cleanState.selectedId = id;
+    setState('clean', cleanState);
+    renderCleanList();
 }
 
 /**
@@ -176,9 +209,6 @@ export function renderCleanList() {
     `).join('');
 }
 
-/**
- * HTML 转义
- */
 function escapeHtml(text) {
     if (text == null) return '';
     const div = document.createElement('div');
@@ -186,10 +216,118 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ── 算法可视化（清洗模块内）────────────────────────────
+
+/**
+ * 显示算法可视化面板（清洗模块入口）
+ */
+export async function showAlgorithmVisualization() {
+    // 多种方式获取当前样品
+    let activeItem = getActiveCleanItem();
+    if (!activeItem?.id) {
+        const items = (window.cleanState?.items || []);
+        activeItem = items[0] || window.currentItem || null;
+    }
+    if (!activeItem?.id) {
+        alert('请先选择一个样品');
+        return;
+    }
+
+    const mainLayout = getEl('clean-main-layout');
+    const algoPanel = getEl('clean-algo-panel');
+    const caption = getEl('clean-algo-caption');
+    if (!mainLayout || !algoPanel) return;
+
+    mainLayout.classList.add('hidden');
+    algoPanel.classList.remove('hidden');
+    if (caption) {
+        caption.textContent = `当前样品：${activeItem.sample_id || activeItem.id} · ${activeItem.source || '--'}`;
+    }
+
+    const contentDiv = getEl('clean-algo-content');
+    if (contentDiv) {
+        contentDiv.innerHTML = '<div class="text-center text-slate-400 py-10">算法可视化加载中...</div>';
+    }
+
+    try {
+        const data = await Viz.loadVisualizationData(activeItem.id);
+        if (data.steps && data.steps.length > 0) {
+            Viz.setSteps(data.steps);
+            const backend = data.backend || 'threshold_fallback';
+            Viz.setBackend(backend === 'cldice' ? 'cldice' : 'wcntsegnet');
+            renderCleanAlgoView(data);
+        } else {
+            if (contentDiv) {
+                contentDiv.innerHTML = '<div class="text-sm text-slate-400 py-8 text-center">未获取到可视化步骤</div>';
+            }
+        }
+    } catch (error) {
+        const message = error?.message || '未知错误';
+        console.error('加载清洗模块算法可视化失败:', error);
+        if (contentDiv) {
+            contentDiv.innerHTML = `
+                <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                    <div class="font-bold mb-2">算法可视化加载失败</div>
+                    <div class="break-all">${escapeHtml(message)}</div>
+                </div>`;
+        }
+    }
+}
+
+/**
+ * 渲染清洗模块的算法可视化（左右分栏布局）
+ */
+function renderCleanAlgoView(data) {
+    const stepsContainer = getEl('clean-algo-steps');
+    const detailContainer = getEl('clean-algo-detail');
+    const backend = Viz.getBackend();
+
+    if (stepsContainer) {
+        Viz.renderStepCards('clean-algo-steps', (idx) => {
+            if (detailContainer) Viz.renderStepDetail('clean-algo-detail');
+        });
+    }
+    if (detailContainer) {
+        Viz.renderStepDetail('clean-algo-detail');
+    }
+
+    // 监听步骤变化更新卡片高亮和详情
+    const handler = () => {
+        if (stepsContainer) Viz.updateCardHighlight('clean-algo-steps');
+        if (detailContainer) Viz.renderStepDetail('clean-algo-detail');
+    };
+    window.addEventListener('viz-step-changed', handler);
+}
+
+/**
+ * 隐藏清洗模块算法可视化面板
+ */
+export function hideAlgoPanel() {
+    getEl('clean-main-layout')?.classList.remove('hidden');
+    getEl('clean-algo-panel')?.classList.add('hidden');
+}
+
+/**
+ * 切换清洗模块算法可视化面板
+ */
+export function toggleAlgoPanel() {
+    const panel = getEl('clean-algo-panel');
+    if (panel?.classList.contains('hidden')) {
+        showAlgorithmVisualization();
+    } else {
+        hideAlgoPanel();
+    }
+}
+
 // 导出默认对象
 export default {
     computeCleanAssessment,
     normalizeCleanItem,
     getFilteredCleanItems,
+    getActiveCleanItem,
+    selectCleanItem,
     renderCleanList,
+    showAlgorithmVisualization,
+    hideAlgoPanel,
+    toggleAlgoPanel,
 };

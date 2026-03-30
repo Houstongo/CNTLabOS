@@ -11,21 +11,6 @@ from fastapi.testclient import TestClient
 from backend import main as api_main
 
 
-class DummyExtractor:
-    def __init__(self, magnification=None, diameter_method=None):
-        self.magnification = magnification
-        self.diameter_method = diameter_method
-
-    def extract_all(self, img):
-        return {
-            "diameter": 12.3,
-            "density": 45.6,
-            "alignment": 0.78,
-            "curvature": 0.12,
-            "tortuosity": 8.0,
-        }
-
-
 class BatchImageActionsTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -79,7 +64,14 @@ class BatchImageActionsTests(unittest.TestCase):
         api_main.DB_PATH = self.prev_db_path
 
     def test_batch_analyze_updates_multiple_active_records(self):
-        with patch.object(api_main, "FeatureExtractor", DummyExtractor):
+        dummy_result = {
+            "diameter": 12.3,
+            "density": 45.6,
+            "alignment": 0.78,
+            "curvature_nm": 0.12,
+            "tortuosity": 8.0,
+        }
+        with patch("backend.main._extract_image_features", return_value=dummy_result):
             response = self.client.post("/api/images/batch/analyze", json={"image_ids": [1, 2]})
 
         self.assertEqual(response.status_code, 200, response.text)
@@ -95,7 +87,8 @@ class BatchImageActionsTests(unittest.TestCase):
         self.assertEqual(rows, [(1, 12.3, 45.6, 0.78, 0.12), (1, 12.3, 45.6, 0.78, 0.12)])
 
     def test_batch_analyze_skips_deleted_records(self):
-        with patch.object(api_main, "FeatureExtractor", DummyExtractor):
+        dummy_result = {"diameter": 12.3, "density": 45.6, "alignment": 0.78, "curvature_nm": 0.12}
+        with patch("backend.main._extract_image_features", return_value=dummy_result):
             response = self.client.post("/api/images/batch/analyze", json={"image_ids": [1, 3]})
 
         self.assertEqual(response.status_code, 200, response.text)
