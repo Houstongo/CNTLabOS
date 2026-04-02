@@ -101,9 +101,8 @@ function _dispatchStepChange() {
 
 // ── 数据加载 ──────────────────────────────────────────
 
-export async function loadVisualizationData(imageId, device = 'cpu') {
-    const response = await api.images.visualize(imageId);
-    return response;
+export async function loadVisualizationData(imageId, backend = 'threshold') {
+    return await api.images.visualize(imageId, backend);
 }
 
 // ── 渲染：步骤面板（单后端）───────────────────────────
@@ -136,9 +135,9 @@ export function renderStepPanel(containerId, options = {}) {
             `).join('')}
         </div>
         <!-- 步骤图像 -->
-        <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 mb-3">
+        <div class="bg-slate-50 rounded-xl p-2 border border-slate-200 mb-3" style="max-height: calc(100vh - 280px); min-height: 200px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             <img data-viz-image src="data:image/jpeg;base64,${step.image}"
-                class="w-full rounded-lg shadow-sm">
+                style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 0.5rem;">
         </div>
         <!-- 步骤说明 -->
         <div class="bg-white rounded-xl p-4 border border-slate-200">

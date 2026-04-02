@@ -575,7 +575,6 @@
         }
 
         .clean-algo-content {
-            min-height: 600px;
         }
 
         .timeline-phase {
@@ -995,12 +994,6 @@
     <div class="main-container">
         <header id="main-header" class="glass-header px-8 py-4 flex justify-between items-center">
             <div id="header-actions-block" class="flex gap-3">
-                <!-- 语言切换 -->
-                <div id="language-switcher" class="flex items-center gap-2">
-                    <button onclick="setLanguage('zh')" class="lang-btn lang-btn-zh" id="btn-zh">中文</button>
-                    <button onclick="setLanguage('en')" class="lang-btn lang-btn-en" id="btn-en">English</button>
-                </div>
-
                 <select id="ml-subpage-switch-top" onchange="switchMlSubPage(this.value)" class="hidden px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-sm outline-none min-w-[150px]">
                     <option value="visual">可视化子页面</option>
                     <option value="data">数据子页</option>
@@ -1010,7 +1003,14 @@
                     <option value="XR">XR 梯度实验序列</option>
                     <option value="ZZY">ZZY 工艺参数序列</option>
                 </select>
-                
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[11px]"></i>
+                    <input id="search-input" type="text" placeholder="搜索编号 / 文件名 / 部位..."
+                        class="pl-8 pr-3 py-2 w-52 bg-white border border-slate-200 rounded-lg text-xs font-bold shadow-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all"
+                        onkeydown="if(event.key==='Enter'){resetAndLoad()}"
+                    >
+                    <button id="search-clear-btn" onclick="clearSearch()" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 text-[11px] hidden"><i class="fas fa-times-circle"></i></button>
+                </div>
                 <!-- Batch Controls Area -->
                 <div id="batch-init-group" class="flex items-center">
                     <button id="batch-init-btn" onclick="toggleBatchMode()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-black transition-all flex items-center gap-2 border border-slate-200">
@@ -1129,8 +1129,9 @@
                              <button type="button" class="ml-target-tab" data-target="diameter" onclick="selectMlVizTarget('diameter')">管径分布模型</button>
                              <button type="button" class="ml-target-tab" data-target="density" onclick="selectMlVizTarget('density')">覆盖密度模型</button>
                              <button type="button" class="ml-target-tab" data-target="alignment" onclick="selectMlVizTarget('alignment')">取向度预</button>
-                             <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">平均曲率推断</button>
+                        <button type="button" class="ml-target-tab" data-target="curvature" onclick="selectMlVizTarget('curvature')">平均曲率推断 (um^-1)</button>
                             <button type="button" class="ml-target-tab" data-target="tortuosity" onclick="selectMlVizTarget('tortuosity')">波浪度分</button>
+                             <button type="button" class="ml-target-tab" data-target="waviness_ratio" onclick="selectMlVizTarget('waviness_ratio')">波曲度</button>
                          </div>
                         <div class="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                             <span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">视图设置</span>
@@ -1250,8 +1251,9 @@
                                 <th class="px-3 py-3 text-right text-blue-600">管径分布</th>
                                 <th class="px-3 py-3 text-right text-emerald-600">覆盖密度</th>
                                 <th class="px-3 py-3 text-right text-orange-600">取向</th>
-                                <th class="px-3 py-3 text-right text-purple-600">平均曲率</th>
+                                    <th class="px-3 py-3 text-right text-purple-600">平均曲率 (um^-1)</th>
                                 <th class="px-3 py-3 text-right text-rose-600">波浪</th>
+                                <th class="px-3 py-3 text-right text-cyan-600">波曲度</th>
                             </tr>
                         </thead>
                         <tbody id="ml-table-body" class="divide-y divide-slate-100/60"></tbody>
@@ -1281,6 +1283,7 @@
                             <option value="">全部来源</option>
                             <option value="XR">XR 梯度</option>
                             <option value="ZZY">ZZY 工艺</option>
+                            <option value="模型异常">模型异常</option>
                         </select>
                         <select id="clean-confidence-filter" onchange="onCleanFilterChange()" class="px-3 py-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold min-w-[130px] outline-none">
                             <option value="">全部可信度</option>
@@ -1342,37 +1345,9 @@
                         </div>
                     </div>
                 </div>
-
-                <div id="clean-review-panel" class="w-[420px] max-w-[420px] shrink-0 flex flex-col bg-slate-50 z-10 box-border overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 bg-white shrink-0 relative overflow-hidden">
-                        <div class="absolute -right-4 -bottom-4 opacity-[0.03]"><i class="fas fa-microscope text-9xl text-blue-900"></i></div>
-                        <h3 class="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-clipboard-check"></i> 清洗判定中心</h3>
-                        <p class="text-[11px] text-slate-500 mt-2 leading-relaxed tracking-wide z-10 relative">依据提取特征及规则逻辑进行的系统级可信度评估</p>
-                    </div>
-                    <div class="flex-1 overflow-y-auto">
-                        <div id="clean-review-content" class="p-5">
-                            <div class="text-center text-xs text-slate-500 font-bold mt-10">👈 选择左侧样品以显示其特征</div>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div id="clean-algo-panel" class="hidden flex-1 min-h-0 bg-slate-50 overflow-hidden">
                 <div class="flex h-full min-h-0 flex-col">
-                    <div class="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-4 shrink-0">
-                        <div>
-                            <div class="text-[10px] tracking-[0.2em] uppercase text-indigo-500 font-black mb-1 flex items-center gap-2"><i class="fas fa-microscope"></i> Algorithm Visualization Workspace</div>
-                            <h3 class="text-lg font-black text-slate-800">算法可视化页面</h3>
-                            <p id="clean-algo-caption" class="text-[11px] text-slate-500 mt-1">展示当前样品的完整算法过程，不再与审查页混排。</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button id="clean-btn-threshold" onclick="switchCleanBackend('wcntsegnet')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-indigo-600 text-white border-indigo-600">WCNTSegNET</button>
-                            <button id="clean-btn-cntsegnet" onclick="switchCleanBackend('cntsegnet')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-white text-slate-600 border-slate-200 hover:border-indigo-300">CNTSegNet</button>
-                            <button id="clean-btn-both" onclick="switchCleanBackend('both')" class="px-3 py-1.5 rounded-lg text-xs font-bold border-2 bg-white text-slate-600 border-slate-200 hover:border-indigo-300">对比</button>
-                            <button onclick="hideCleanAlgoPanel()" class="px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200">
-                                <i class="fas fa-times mr-1"></i>关闭
-                            </button>
-                        </div>
-                    </div>
                     <div class="flex-1 min-h-0 overflow-y-auto">
                         <div class="p-6">
                             <div id="clean-algo-content" class="clean-algo-content"></div>
@@ -1383,6 +1358,41 @@
 
             <!-- Keep hidden grid below for compatibility if needed -->
             <div id="clean-summary-grid" class="hidden"></div>
+
+            <!-- 模型异常数据面板（与 clean-main-layout 互斥） -->
+            <div id="clean-model-panel" class="hidden flex-1 flex min-h-0 bg-slate-50 overflow-hidden">
+                <!-- 左侧：异常候选列表 -->
+                <div class="w-[340px] flex flex-col border-r border-slate-200 bg-white shrink-0 z-10 box-border">
+                    <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                        <span class="text-xs font-black text-slate-500 uppercase tracking-widest">异常候选</span>
+                        <div id="model-clean-meta" class="text-[11px] font-bold text-violet-600 rounded bg-violet-50 px-2 py-0.5 border border-violet-100">--</div>
+                    </div>
+                    <!-- 模型概览 -->
+                    <div id="model-summary-bar" class="px-3 py-2 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-slate-50 shrink-0">
+                        <div class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">模型概览</div>
+                        <div id="model-summary-chips" class="flex flex-wrap gap-1"></div>
+                    </div>
+                    <div id="model-anomaly-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+                </div>
+                <!-- 右侧：详情查看区 -->
+                <div id="model-detail-stage" class="flex-1 min-w-0 flex flex-col bg-slate-100 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] font-black uppercase tracking-widest text-slate-400">异常详情</div>
+                            <div id="model-detail-caption" class="text-sm font-black text-slate-700 mt-1">选择左侧异常项查看详情</div>
+                        </div>
+                        <div id="model-detail-actions"></div>
+                    </div>
+                    <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                        <div id="model-detail-content" class="max-w-5xl mx-auto space-y-5">
+                            <div class="text-center text-slate-400 py-20">
+                                <div class="text-5xl mb-4 opacity-40"><i class="fas fa-flask"></i></div>
+                                <div class="text-sm font-black">选择左侧异常候选查看 SEM 图像与预测对比</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
     <!-- ══ RAG 文献知识库页面══ -->
@@ -1853,7 +1863,13 @@
                     class="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
                     <i class="fas fa-columns text-sm"></i>
                 </button>
+                <button onclick="navigateDetail(-1)" id="detail-prev-btn" class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50 transition-all" title="上一个">
+                    <i class="fas fa-chevron-left text-xs"></i>
+                </button>
                 <h2 class="text-lg font-black text-slate-800">样品精细特征分析</h2>
+                <button onclick="navigateDetail(1)" id="detail-next-btn" class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50 transition-all" title="下一个">
+                    <i class="fas fa-chevron-right text-xs"></i>
+                </button>
             </div>
             <button onclick="closeAll()" class="text-slate-300 hover:text-slate-600 transition-all"><i class="fas fa-times"></i></button>
         </div>
@@ -1888,15 +1904,19 @@
                         </div>
                     </div>
                     <div class="bg-purple-50/50 p-5 rounded-2xl border border-purple-100 flex flex-col justify-center">
-                        <div class="text-[10px] text-purple-500 font-black uppercase tracking-wider mb-2">平均曲率 (Curvature)</div>
+                                    <div class="text-[10px] text-purple-500 font-black uppercase tracking-wider mb-2">平均曲率 (Curvature, um^-1)</div>
                         <div id="f-cur" class="text-xl font-black text-purple-900 leading-tight">--</div>
                     </div>
                 </div>
                 <!-- Extra metrics -->
-                <div class="grid grid-cols-1 gap-4 mt-4">
+                <div class="grid grid-cols-2 gap-4 mt-4">
                     <div class="bg-rose-50/50 p-5 rounded-2xl border border-rose-100 flex flex-col justify-center">
                         <div class="text-[10px] text-rose-500 font-black uppercase tracking-wider mb-2">波浪度 (Tortuosity)</div>
                         <div id="f-tor" class="text-xl font-black text-rose-900 leading-none">--</div>
+                    </div>
+                    <div class="bg-cyan-50/50 p-5 rounded-2xl border border-cyan-100 flex flex-col justify-center">
+                        <div class="text-[10px] text-cyan-500 font-black uppercase tracking-wider mb-2">波曲度 (Waviness Ratio)</div>
+                        <div id="f-wav" class="text-xl font-black text-cyan-900 leading-none">--</div>
                     </div>
                 </div>
 
@@ -2343,6 +2363,12 @@
             await loadData();
         }
 
+        function clearSearch() {
+            const el = document.getElementById('search-input');
+            if (el) el.value = '';
+            return resetAndLoad();
+        }
+
         async function changePage(dir) {
             const newOffset = offset + (dir * LIMIT);
             if (newOffset < 0 || newOffset >= totalItems) return;
@@ -2538,9 +2564,14 @@
         async function loadData() {
             try {
                 const source = document.getElementById('source-filter').value;
+                const search = (document.getElementById('search-input')?.value || '').trim();
                 let url = `${API_BASE}/api/images?limit=${LIMIT}&offset=${offset}&sort_by=${currentSort}&order=${currentOrder}`;
                 if (source) url += `&source=${source}`;
                 url += `&deletion_view=${encodeURIComponent(dataViewMode)}`;
+                if (search) url += `&search=${encodeURIComponent(search)}`;
+
+                const clearBtn = document.getElementById('search-clear-btn');
+                if (clearBtn) clearBtn.classList.toggle('hidden', !search);
 
                 const res = await fetch(url);
                 const data = await res.json();
@@ -2643,8 +2674,9 @@
             diameter: { label: '管径分布', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
             density: { label: '覆盖密度', predKey: 'density_pred', actualKey: 'density_actual' },
             alignment: { label: '取向度', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
-            curvature: { label: '平均曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
+            curvature: { label: '平均曲率 (um^-1)', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
             tortuosity: { label: '波浪度', predKey: 'tortuosity_pred', actualKey: 'tortuosity_actual' },
+            waviness_ratio: { label: '波曲度', predKey: 'waviness_ratio_pred', actualKey: 'waviness_ratio_actual' },
         };
         const ML_X_META = {
             actual_temp: { label: '实际温度', unit: 'C' },
@@ -2884,7 +2916,7 @@
                     <div class="text-slate-500">管径分布(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
                     <div class="text-slate-500">覆盖密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
                     <div class="text-slate-500">取向度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
-                    <div class="text-slate-500">平均曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
+            <div class="text-slate-500">平均曲率 um^-1 (实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
                     <div class="text-slate-500">波浪度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.tortuosity_actual, 3)} / ${fmtMl(r.tortuosity_pred, 3)}</div>
                 </div>
             `;
@@ -2983,8 +3015,9 @@
                 { key: 'diameter_actual', label: '管径分布' },
                 { key: 'density_actual', label: '密度' },
                 { key: 'alignment_actual', label: '取向度' },
-                { key: 'curvature_actual', label: '曲率' },
-                { key: 'tortuosity_actual', label: '波浪度' }
+        { key: 'curvature_actual', label: '曲率 (um^-1)' },
+                { key: 'tortuosity_actual', label: '波浪度' },
+                { key: 'waviness_ratio_actual', label: '波曲度' }
             ];
             const chart = ensureMlChart('corrMatrix', 'ml-chart-corr-matrix');
             if (!chart) return;
@@ -3099,7 +3132,7 @@
                 { label: '模型数据总量', value: payload.total_rows || 0, icon: 'fa-database', color: 'blue' },
                 { label: '实验涉及批次', value: payload.run_count || 0, icon: 'fa-layer-group', color: 'indigo' },
                 { label: '特征维度 (Input)', value: 5, icon: 'fa-vial', color: 'emerald' },
-                { label: '目标标签 (Output)', value: 5, icon: 'fa-bullseye', color: 'orange' }
+                { label: '目标标签 (Output)', value: 6, icon: 'fa-bullseye', color: 'orange' }
             ];
             el.innerHTML = items.map(i => `
                 <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
@@ -3123,7 +3156,8 @@
                 density: '覆盖密度模型系数',
                 alignment: '取向度模型系数',
                 curvature: '平均曲率模型系数',
-                tortuosity: '波浪度模型系数'
+                tortuosity: '波浪度模型系数',
+                waviness_ratio: '波曲度模型系数'
             };
             coefPanel.innerHTML = Object.entries(coefs).map(([t, entries]) => {
                 return `
@@ -3182,6 +3216,7 @@
                     <td class="px-2 py-1.5 text-right text-orange-600/80 font-bold">${fmtMl(r.alignment_actual, 3)}</td>
                     <td class="px-2 py-1.5 text-right text-purple-600/80 font-bold">${fmtMl(r.curvature_actual, 3)}</td>
                     <td class="px-2 py-1.5 text-right text-rose-600/80 font-bold">${fmtMl(r.tortuosity_actual, 3)}</td>
+                    <td class="px-2 py-1.5 text-right text-cyan-600/80 font-bold">${fmtMl(r.waviness_ratio_actual, 3)}</td>
                 </tr>
             `).join('');
         }
@@ -3197,6 +3232,14 @@
             const shouldRenderTable = !!opts.forceTable || (!opts.skipTable && mlSubPage === 'data');
             if (shouldRenderTable) renderXrMlTable(rows);
         }
+
+        window.applyXrMlView = applyXrMlView;
+        window.loadXrMlPage = loadXrMlPage;
+        window.renderXrMlCharts = renderXrMlCharts;
+        window._origSelectMlVizTarget = selectMlVizTarget;
+        window._origOnMlVizOptionChange = onMlVizOptionChange;
+        window._origSwitchMlInfoTab = switchMlInfoTab;
+        window._origSwitchMlSubPage = switchMlSubPage;
 
         async function loadXrMlPage() {
             try {
@@ -3280,12 +3323,12 @@
             if (!Number.isFinite(curvature)) {
                 score -= 18;
                 reasons.push({ level: 'warn', text: '缺少 curvature，局部弯曲强度不可用。' });
-            } else if (curvature < 0 || curvature > 2.0) {
-                score -= 28;
-                reasons.push({ level: 'bad', text: `curvature=${fmtMl(curvature, 3)} 超出推荐范围。` });
-            } else if (curvature > 0.8) {
-                score -= 10;
-                reasons.push({ level: 'warn', text: `curvature=${fmtMl(curvature, 3)} 偏高，需检查骨架是否抖动。` });
+                    } else if (curvature < 0 || curvature > 100.0) {
+                        score -= 28;
+                        reasons.push({ level: 'bad', text: `curvature=${fmtMl(curvature, 3)} um^-1 超出推荐范围。` });
+                    } else if (curvature > 30.0) {
+                        score -= 10;
+                        reasons.push({ level: 'warn', text: `curvature=${fmtMl(curvature, 3)} um^-1 偏高，需检查骨架是否抖动。` });
             }
 
             if (!Number.isFinite(tortuosity)) {
@@ -3328,17 +3371,11 @@
             const el = document.getElementById('clean-summary-grid');
             if (!el) return;
             const total = items.length;
-            const high = items.filter(x => x.assessment.confidence === 'high').length;
-            const medium = items.filter(x => x.assessment.confidence === 'medium').length;
-            const low = items.filter(x => x.assessment.confidence === 'low').length;
             const processed = items.filter(x => Number(x.processed) === 1).length;
             const xr = items.filter(x => String(x.source || '') === 'XR').length;
             const zzy = items.filter(x => String(x.source || '') === 'ZZY').length;
             el.innerHTML = [
                 ['样品', total],
-                ['高可信', high],
-                ['可参考', medium],
-                ['低可信', low],
                 ['已提取', processed],
                 ['XR / ZZY', `${xr} / ${zzy}`],
             ].map(([k, v]) => `
@@ -3354,7 +3391,8 @@
             const confidence = document.getElementById('clean-confidence-filter')?.value || '';
             const processed = document.getElementById('clean-processed-filter')?.value || '';
             const keyword = (document.getElementById('clean-keyword-filter')?.value || '').trim().toLowerCase();
-            if (confidence) rows = rows.filter(x => x.assessment.confidence === confidence);
+            // confidence 过滤已移除（不再计算 assessment）
+            if (confidence) { /* noop */ }
             if (processed !== '') rows = rows.filter(x => String(Number(x.processed || 0)) === processed);
             if (keyword) {
                 rows = rows.filter(x => {
@@ -3432,8 +3470,7 @@
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             ${item.is_deleted ? '<span class="bg-red-100 text-red-700 text-xs px-2 py-1 rounded">已删</span>' : ''}
-                            <span class="clean-chip ${item.assessment.confidence}">${item.assessment.label}</span>
-                            <span class="text-[11px] font-black text-slate-500">分数 ${item.assessment.score}</span>
+                            ${item.processed ? '<span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded">已提取</span>' : '<span class="bg-slate-100 text-slate-500 text-xs px-2 py-1 rounded">待处理</span>'}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3 text-[11px] text-slate-500">
@@ -3447,13 +3484,17 @@
             `).join('');
         }
 
+        let _vizAbort = null;
         async function loadCleanVisualizations(item) {
             const tabsContainer = document.getElementById('clean-step-tabs');
             if (!tabsContainer || !item?.id) return;
+            if (_vizAbort) _vizAbort.abort();
+            _vizAbort = new AbortController();
+            const signal = _vizAbort.signal;
             tabsContainer.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">加载中.....</div>';
 
             try {
-                const res = await fetch(`${API_BASE}/api/images/${item.id}/visualize`);
+                const res = await fetch(`${API_BASE}/api/images/${item.id}/visualize?backend=threshold`, { signal });
                 const data = await res.json();
                 const steps = Array.isArray(data.steps) ? data.steps : [];
 
@@ -3522,6 +3563,7 @@
             const empty = document.getElementById('clean-viewer-empty');
             const caption = document.getElementById('clean-viewer-caption');
             const openBtn = document.getElementById('clean-open-original');
+            const stepStrip = document.getElementById('clean-step-strip');
             const stepTabs = document.getElementById('clean-step-tabs');
             if (!img || !empty || !caption || !openBtn || !stepTabs) return;
 
@@ -3533,6 +3575,7 @@
                 caption.innerText = '选择左侧样品开始审查';
                 openBtn.disabled = true;
                 window.currentLightboxTitle = '图像放大查看';
+                if (stepStrip) stepStrip.classList.add('hidden');
                 stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
                 return;
             }
@@ -3551,6 +3594,8 @@
             caption.innerText = title;
             openBtn.disabled = false;
             window.currentLightboxTitle = title;
+            // stepStrip 不再自动显示，可视化通过算法可视化按钮进入子页
+            if (stepStrip) stepStrip.classList.add('hidden');
         }
 
         function renderCleanReview(item) {
@@ -3614,7 +3659,7 @@
                         <div class="text-xl font-black text-slate-800 mt-1">${item.diameter != null ? fmtMl(item.diameter, 1) : '--'} <span class="text-sm text-slate-400">nm</span></div>
                     </div>
                     <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                        <div class="text-[10px] uppercase text-slate-400 font-black">曲率 (Curvature)</div>
+                <div class="text-[10px] uppercase text-slate-400 font-black">曲率 (Curvature, um^-1)</div>
                         <div class="text-xl font-black text-slate-800 mt-1">${typeof item.curvature === 'string' ? item.curvature : (item.curvature != null && !isNaN(item.curvature) ? fmtMl(item.curvature, 3) : '--')}</div>
                     </div>
                 </div>
@@ -3646,7 +3691,7 @@
             currentItem = item;
             renderCleanList();
             renderCleanViewer(item);
-            renderCleanReview(item);
+            // 不自动加载可视化，算法可视化通过顶部按钮进入子页查看
         }
 
         async function softDeleteCleanItem(id) {
@@ -3700,29 +3745,54 @@
         }
 
         function onCleanFilterChange() {
+            const source = document.getElementById('clean-source-filter')?.value;
+            // source 变更需要重新从后端加载，其他过滤条件只做本地过滤
+            if (source !== (cleanState._lastSource ?? 'XR')) {
+                loadCleanPage();
+                return;
+            }
+            if (source === '模型异常') {
+                // 模型异常模式不做本地过滤
+                return;
+            }
             renderCleanList();
             const rows = cleanState.filteredItems || [];
             if (!rows.length) {
                 renderCleanViewer(null);
-                renderCleanReview(null);
                 const stepTabs = document.getElementById('clean-step-tabs');
                 if (stepTabs) stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
                 return;
             }
             if (!rows.some(x => x.id === cleanState.selectedId)) {
                 selectCleanItem(rows[0].id);
-            } else {
-                renderCleanReview(cleanState.items.find(x => x.id === cleanState.selectedId) || null);
             }
         }
 
         async function loadCleanPage() {
             const source = document.getElementById('clean-source-filter')?.value || 'XR';
+            cleanState._lastSource = source;
+            cleanState.selectedId = null;
+
+            // 模型异常来源：切换到模型面板
+            if (source === '模型异常') {
+                document.getElementById('clean-main-layout')?.classList.add('hidden');
+                document.getElementById('clean-algo-panel')?.classList.add('hidden');
+                document.getElementById('clean-model-panel')?.classList.remove('hidden');
+                if (typeof window.loadModelAnomalyData === 'function') {
+                    await window.loadModelAnomalyData();
+                }
+                return;
+            }
+
+            // 正常来源：切换回主布局
+            document.getElementById('clean-model-panel')?.classList.add('hidden');
+            document.getElementById('clean-main-layout')?.classList.remove('hidden');
+
             try {
                 renderCleanTrashToggle();
                 const res = await fetch(`${API_BASE}/api/images?limit=400&offset=0&deletion_view=${encodeURIComponent(cleanState.view)}${source ? `&source=${encodeURIComponent(source)}` : ''}`);
                 const data = await res.json();
-                cleanState.items = (data.items || []).map(normalizeCleanItem);
+                cleanState.items = (data.items || []);
                 renderCleanSummary(cleanState.items);
                 renderCleanList();
                 const first = cleanState.filteredItems?.[0];
@@ -3730,7 +3800,6 @@
                     await selectCleanItem(first.id);
                 } else {
                     renderCleanViewer(null);
-                    renderCleanReview(null);
                     const stepTabs = document.getElementById('clean-step-tabs');
                     if (stepTabs) stepTabs.innerHTML = '<div class="text-[11px] text-slate-400 font-bold px-2 py-2">当前还没有选择样品</div>';
                 }
@@ -3760,119 +3829,88 @@
             currentSubgraph: null,
             currentConstrainedChain: null,
             currentThemeAggregation: null,
-            msfuByEdge: {},   // "source|||target" => [item, ...]
-            msfuByNode: {},   // nodeId => [item, ...]
         };
 
-        // ─── 工具：获取当前选择的模型和 API Key ───
-        function getApiHeaders() {
-            const provider = (localStorage.getItem('CNTA_PROVIDER') || 'glm').toLowerCase();
-            const key = localStorage.getItem('CNTA_KEY_' + provider) || '';
-            return { 'X-Provider': provider, 'X-Api-Key': key };
-        }
+        // ─── AI 配置───
+        var tempConfigCache = {};
+
+        const MODEL_CONFIGS = {
+            glm: {
+                name: 'GLM-4',
+                testUrl: 'https://open.bigmodel.cn/api/paas/v4/models',
+                models: ['glm-4-flash', 'glm-4-air', 'glm-4-plus', 'glm-4-long', 'glm-4'],
+            },
+            deepseek: {
+                name: 'DeepSeek',
+                testUrl: 'https://api.deepseek.com/models',
+                models: ['deepseek-chat', 'deepseek-reasoner'],
+            },
+        };
 
         function getActiveProvider() {
             return localStorage.getItem('CNTA_PROVIDER') || 'glm';
         }
 
-        // ─── 配置 & API 状态(单例重构) ───
-            const MODEL_CONFIGS = {
-            glm: { 
-                name: 'GLM', 
-                color: 'purple',
-                models: [
-                    { id: 'glm-4.7-plus', name: 'GLM-4.7 Plus (最新增强' },
-                    { id: 'glm-4-plus', name: 'GLM-4 Plus (旗舰版' },
-                    { id: 'glm-4-flash', name: 'GLM-4 Flash (极速版)' },
-                    { id: 'glm-4-air', name: 'GLM-4 Air (平衡版' },
-                    { id: 'glm-4.5-air', name: 'GLM-4.5 Air (经典平衡)' },
-                    { id: 'glm-4.6v', name: 'GLM-4.6v (多模态增强' },
-                    { id: 'glm-4', name: 'GLM-4 (标准版' },
-                    { id: 'glm-5', name: 'GLM-5.0 (前瞻支持)' }
-                ],
-                testUrl: 'https://open.bigmodel.cn/api/paas/v4/models'
-            },
-            deepseek: { 
-                name: 'DeepSeek', 
-                color: 'blue',
-                models: [
-                    { id: 'deepseek-chat', name: 'DeepSeek-V3' },
-                    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (推理版' }
-                ],
-                testUrl: 'https://api.deepseek.com/models'
-            }
-        };
-
-        let tempConfigCache = {}; // 临时保管切换时没保存的配置{ provider: { key, model } }
-        function togglePwdVisibility() {
-            const input = document.getElementById('dynamic-key-input');
-            const btn = document.getElementById('toggle-pwd-btn');
-            const icon = btn.querySelector('i');
-            const span = btn.querySelector('span') || btn.childNodes[2]; // 兼容结构
-            if (input.type === 'password') {
-                input.type = 'text';
-                if (icon) icon.className = 'fas fa-eye-slash mr-1.5';
-                if (span.nodeType === 3) span.textContent = ' 隐藏明文';
-                else span.innerText = '隐藏明文';
-            } else {
-                input.type = 'password';
-                if (icon) icon.className = 'fas fa-eye mr-1.5';
-                if (span.nodeType === 3) span.textContent = ' 显示明文';
-                else span.innerText = '显示明文';
-            }
-        }
-
         function switchModelConfig(provider) {
-            const conf = MODEL_CONFIGS[provider];
             const label = document.getElementById('dynamic-key-label');
-            const input = document.getElementById('dynamic-key-input');
-            const select = document.getElementById('dynamic-model-select');
-            
-            // 样式切换
-            label.innerText = `${conf.name} API KEY`;
-            label.className = `block text-[11px] font-black text-${conf.color}-600 uppercase tracking-widest transition-colors`;
-            input.className = `w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-${conf.color}-400 focus:ring-4 focus:ring-${conf.color}-50 text-sm font-mono transition-all shadow-sm`;
-            input.nextElementSibling.className = `fas fa-key absolute left-4 top-[14px] text-slate-300 group-focus-within:text-${conf.color}-400 transition-colors`;
-            input.placeholder = `请输入${conf.name} API Key...`;
-            
-            select.className = `w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-${conf.color}-400 text-xs font-bold text-slate-600 appearance-none cursor-pointer transition-all`;
-            select.nextElementSibling.className = `fas fa-microchip absolute left-4 top-[14px] text-slate-300 group-focus-within:text-${conf.color}-400 transition-colors`;
+            const keyInput = document.getElementById('dynamic-key-input');
+            const modelSelect = document.getElementById('dynamic-model-select');
+            if (!label || !keyInput || !modelSelect) return;
 
-            // 模型下拉框填充
-            select.innerHTML = conf.models.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+            const config = MODEL_CONFIGS[provider];
+            if (!config) return;
 
-            // 值回填
-            if (!tempConfigCache[provider]) {
-                tempConfigCache[provider] = {
-                    key: localStorage.getItem('CNTA_KEY_' + provider) || '',
-                    model: localStorage.getItem('CNTA_MODEL_' + provider) || conf.models[0].id
-                };
-            }
-            input.value = tempConfigCache[provider].key;
-            select.value = tempConfigCache[provider].model;
-            
-            // 隐藏上一次的连接状态
-            document.getElementById('connection-status').classList.add('hidden');
+            label.innerText = config.name + ' API Key';
+            label.className = 'block text-[11px] font-black ' + (provider === 'glm' ? 'text-purple-600' : 'text-blue-600') + ' uppercase tracking-widest';
+            keyInput.value = tempConfigCache[provider]?.key || localStorage.getItem('CNTA_KEY_' + provider) || '';
 
-            // 监听变化
-            input.oninput = (e) => { tempConfigCache[provider].key = e.target.value.trim(); };
-            select.onchange = (e) => { tempConfigCache[provider].model = e.target.value; };
+            modelSelect.innerHTML = '';
+            const savedModel = tempConfigCache[provider]?.model || localStorage.getItem('CNTA_MODEL_' + provider) || config.models[0];
+            config.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                if (m === savedModel) opt.selected = true;
+                modelSelect.appendChild(opt);
+            });
+
+            modelSelect.onchange = () => {
+                if (!tempConfigCache[provider]) tempConfigCache[provider] = {};
+                tempConfigCache[provider].model = modelSelect.value;
+            };
+            keyInput.oninput = () => {
+                if (!tempConfigCache[provider]) tempConfigCache[provider] = {};
+                tempConfigCache[provider].key = keyInput.value;
+            };
+
+            _syncInterpretModelSelect();
         }
 
-        async function testConnection() {
-            const provider = document.querySelector('input[name="default-provider"]:checked')?.value || 'glm';
-            const config = tempConfigCache[provider];
-            const statusBox = document.getElementById('connection-status');
+        function _syncInterpretModelSelect() {
+            const provider = getActiveProvider();
+            const config = MODEL_CONFIGS[provider];
+            const sel = document.getElementById('interpret-model-select');
+            if (!sel || !config) return;
+            const current = sel.value;
+            sel.innerHTML = '';
+            config.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                if (m === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+
+        async function testApiKey(provider) {
+            const config = { key: localStorage.getItem('CNTA_KEY_' + provider) || '' };
+            if (!config.key) return;
+            const container = document.getElementById('connection-status');
+            if (container) container.classList.remove('hidden');
             const iconBox = document.getElementById('conn-icon');
             const title = document.getElementById('conn-title');
             const desc = document.getElementById('conn-desc');
-
-            if (!config.key || config.key.length < 10) {
-                alert("请先输入 API Key 再进行测试");
-                return;
-            }
-
-            statusBox.classList.remove('hidden');
+            if (!iconBox || !title || !desc) return;
             iconBox.className = "w-8 h-8 rounded-full flex items-center justify-center mr-3 bg-blue-50 text-blue-500";
             iconBox.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             title.innerText = "正在握手...";
@@ -3906,6 +3944,22 @@
                 title.innerText = "校验失败";
                 title.className = "text-[11px] font-black uppercase tracking-tight text-red-500";
                 desc.innerText = e.message || "请求被拒绝，请检查 Key 或网络";
+            }
+        }
+
+        function togglePwdVisibility() {
+            const input = document.getElementById('dynamic-key-input');
+            const btn = document.getElementById('toggle-pwd-btn');
+            if (!input || !btn) return;
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (icon) icon.className = 'fas fa-eye-slash mr-1.5';
+                btn.lastChild.textContent = ' 隐藏明文';
+            } else {
+                input.type = 'password';
+                if (icon) icon.className = 'fas fa-eye mr-1.5';
+                btn.lastChild.textContent = ' 显示明文';
             }
         }
 
@@ -6496,13 +6550,23 @@
             }
         }
 
-        function openDetailsById(id) {
-            const item = currentListItemsById[String(id)];
-            if (!item) {
+        async function openDetailsById(id) {
+            const fallbackItem = currentListItemsById[String(id)];
+            try {
+                const res = await fetch(`${API_BASE}/api/images/${id}`);
+                if (res.ok) {
+                    const freshItem = await res.json();
+                    openDetails(freshItem);
+                    return;
+                }
+            } catch (err) {
+                console.warn('读取最新详情失败，回退使用列表缓存', id, err);
+            }
+            if (!fallbackItem) {
                 console.warn('找不到对应记录', id);
                 return;
             }
-            openDetails(item);
+            openDetails(fallbackItem);
         }
 
         // ─── 打开详情面板 ───
@@ -6542,6 +6606,7 @@
                 document.getElementById('f-cur').innerText = '--';
             }
             document.getElementById('f-tor').innerText = (item.tortuosity != null && !isNaN(item.tortuosity)) ? Number(item.tortuosity).toFixed(3) : (item.tortuosity ?? '--');
+            document.getElementById('f-wav').innerText = (item.waviness_ratio != null && !isNaN(item.waviness_ratio)) ? Number(item.waviness_ratio).toFixed(3) : (item.waviness_ratio ?? '--');
 
             document.getElementById('d-status').className = item.processed
                 ? "text-[10px] bg-emerald-100 text-emerald-600 px-2 rounded"
@@ -6557,10 +6622,28 @@
             }
 
             panel.classList.add('open');
+
+            // 更新上下页导航按钮状态
+            const ids = Object.keys(currentListItemsById).map(Number);
+            const idx = ids.indexOf(Number(item.id));
+            const prevBtn = document.getElementById('detail-prev-btn');
+            const nextBtn = document.getElementById('detail-next-btn');
+            if (prevBtn) prevBtn.disabled = idx <= 0;
+            if (nextBtn) nextBtn.disabled = idx < 0 || idx >= ids.length - 1;
         }
 
         function closeDetails() {
             document.getElementById('details-panel').classList.remove('open');
+        }
+
+        function navigateDetail(dir) {
+            if (!currentItem) return;
+            const ids = Object.keys(currentListItemsById).map(Number);
+            const idx = ids.indexOf(Number(currentItem.id));
+            if (idx === -1) return;
+            const newIdx = idx + dir;
+            if (newIdx < 0 || newIdx >= ids.length) return;
+            openDetailsById(ids[newIdx]);
         }
 
         function repairOverlayMounts() {
@@ -6629,6 +6712,11 @@
                 setMlFocusMode(false);
                 closeInterpretPanel();
                 closeDetails();
+                // 切回看片台时隐藏模型面板
+                const modelPanel = document.getElementById('clean-model-panel');
+                const mainLayout = document.getElementById('clean-main-layout');
+                if (modelPanel) modelPanel.classList.add('hidden');
+                if (mainLayout) mainLayout.classList.remove('hidden');
                 loadCleanPage();
             } else if (name === 'qa') {
                 if (mainHeader) mainHeader.classList.add('hidden');

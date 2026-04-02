@@ -163,11 +163,15 @@ def _analyze_image_with_cursor(
         device=device or "cpu",
     )
 
+    curvature_um = None
+    if results.get("curvature_nm") is not None:
+        curvature_um = float(results.get("curvature_nm")) * 1000.0
+
     update_values = {
         "diameter": results.get("diameter"),
         "density": results.get("density"),
         "alignment": results.get("alignment"),
-        "curvature": results.get("curvature_nm"), # 存储数值型曲率 (nm^-1) 用于机器学习
+        "curvature": curvature_um,  # 存储数值型曲率 (um^-1) 用于机器学习
         "processed": 1,
     }
     for column in (
@@ -413,6 +417,25 @@ async def update_image(image_id: int, image: ImageDetail):
     conn.close()
     return {"status": "success"}
 
+
+@app.get("/api/images/{image_id}")
+async def get_image_detail(image_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    payload = dict(row)
+    rel_path = os.path.relpath(payload["file_path"], IMAGE_ROOT).replace("\\", "/")
+    payload["url"] = f"/images/{rel_path}"
+    return payload
+
 @app.delete("/api/images/{image_id}")
 async def delete_image(image_id: int):
     conn = sqlite3.connect(DB_PATH)
@@ -527,7 +550,7 @@ from backend.core.database_helpers import resolve_sort
 
 
 _XR_SAMPLE_PATTERN = re.compile(r"([A-Za-z])\s*(\d+)\s*-?\s*([A-Za-z])\s*(\d+)")
-_XR_TARGET_KEYS = ("diameter", "density", "alignment", "curvature", "tortuosity")
+_XR_TARGET_KEYS = ("diameter", "density", "alignment", "curvature", "tortuosity", "waviness_ratio")
 _XR_FEATURE_KEYS = ("actual_temp", "flow_rate", "catalyst_concentration")
 
 
@@ -683,7 +706,7 @@ async def get_xr_simple_model_data(limit: int = 2000):
         SELECT
             id, file_path, sample_id, actual_temp, growth_temp,
             ar_flow, catalyst_weight,
-            diameter, density, alignment, curvature, tortuosity
+            diameter, density, alignment, curvature, tortuosity, waviness_ratio
         FROM images
         WHERE source = 'XR' AND """ + active_clause + """
         ORDER BY id DESC
@@ -721,6 +744,7 @@ async def get_xr_simple_model_data(limit: int = 2000):
             "alignment_actual": _safe_float(db_row["alignment"]),
             "curvature_actual": _safe_float(db_row["curvature"]),
             "tortuosity_actual": _safe_float(db_row["tortuosity"]),
+            "waviness_ratio_actual": _safe_float(db_row["waviness_ratio"]),
         }
         rows.append(row)
 
@@ -807,13 +831,14 @@ def _has_xr_schema(cursor: sqlite3.Cursor) -> bool:
 
 @app.get("/api/images")
 async def get_image_list(
-    source: Optional[str] = None, 
+    source: Optional[str] = None,
     min_temp: Optional[float] = None,
     max_temp: Optional[float] = None,
     processed: Optional[int] = None,
     is_deleted: Optional[int] = None,
     deletion_view: str = "active",
-    limit: int = 15, 
+    search: Optional[str] = None,
+    limit: int = 15,
     offset: int = 0,
     sort_by: str = "id",
     order: str = "desc"
@@ -840,6 +865,10 @@ async def get_image_list(
         if processed is not None:
             where_clauses.append("COALESCE(xi.processed, i.processed, 0) = ?")
             params.append(processed)
+        if search:
+            where_clauses.append("(CAST(i.id AS TEXT) LIKE ? OR i.file_path LIKE ? OR COALESCE(xi.sample_id, i.sample_id) LIKE ? OR COALESCE(xi.position_label, i.position_label) LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like, like, like])
         where_sql = " WHERE " + " AND ".join(where_clauses)
 
         xr_sort_map = {
@@ -940,6 +969,10 @@ async def get_image_list(
     if processed is not None:
         where_clauses.append("processed = ?")
         params.append(processed)
+    if search:
+        where_clauses.append("(CAST(id AS TEXT) LIKE ? OR file_path LIKE ? OR sample_id LIKE ? OR position_label LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like, like, like])
 
     where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
     
@@ -1032,11 +1065,19 @@ async def interpret_image(
     ]}
     params["current_id"] = image_id
 
-    # RAG 检索
-    rag_results = rag_retriever.retrieve_all(
-        features, params,
-        query=f"CNT density {features.get('density')} alignment {features.get('alignment')} diameter {features.get('diameter')}"
+    # RAG 检索 — 构建中英文混合 query 提升中文知识库检索效果
+    _cn_parts = []
+    for _label, _val in [("密度", features.get("density")), ("取向", features.get("alignment")),
+                          ("直径", features.get("diameter")), ("曲率", features.get("curvature")),
+                          ("温度", params.get("growth_temp")), ("Fe厚度", params.get("fe_thickness"))]:
+        if _val is not None:
+            _cn_parts.append(f"{_label}{_val}")
+    _query = "碳纳米管 " + " ".join(_cn_parts) + (
+        f" CNT density {features.get('density')} alignment {features.get('alignment')} "
+        f"diameter {features.get('diameter')}"
     )
+
+    rag_results = rag_retriever.retrieve_all(features, params, query=_query)
 
     interpreter = _get_interpreter(x_provider, x_api_key, x_model)
     temperature = float(x_temperature or 0.5)
@@ -1049,6 +1090,7 @@ async def interpret_image(
                 similar_exps=rag_results["similar_experiments"],
                 pdf_passages=rag_results["pdf_passages"],
                 knowledge_links=rag_results.get("knowledge_links", []),
+                relation_chain=rag_results.get("relation_chain", {}),
                 temperature=temperature,
             )
         )
@@ -1412,6 +1454,96 @@ async def train_ml_models(source: Optional[str] = None):
         return {"status": "success", "message": "模型训练完成"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"训练失败: {e}")
+
+
+# ── 模型报告 API ──────────────────────────────────────────
+
+REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
+
+
+@app.get("/api/model-report/anomaly-review")
+async def get_anomaly_review():
+    """读取 reports/ 下最新的异常复核数据"""
+    import csv as csv_mod
+    if not os.path.isdir(REPORTS_DIR):
+        raise HTTPException(status_code=404, detail="reports 目录不存在")
+
+    # 找到包含 anomaly_review/anomaly_summary.json 的最新子目录
+    best_dir = None
+    best_mtime = 0
+    for entry in os.listdir(REPORTS_DIR):
+        sub = os.path.join(REPORTS_DIR, entry)
+        if not os.path.isdir(sub):
+            continue
+        summary_path = os.path.join(sub, "anomaly_review", "anomaly_summary.json")
+        if os.path.isfile(summary_path):
+            mt = os.path.getmtime(summary_path)
+            if mt > best_mtime:
+                best_mtime = mt
+                best_dir = sub
+
+    if not best_dir:
+        raise HTTPException(status_code=404, detail="未找到异常复核报告")
+
+    # 读取 summary
+    with open(os.path.join(best_dir, "anomaly_review", "anomaly_summary.json"), "r", encoding="utf-8") as f:
+        anomaly_summary = json.load(f)
+
+    # 读取 candidates CSV
+    candidates_csv = os.path.join(best_dir, "anomaly_review", "anomaly_candidates.csv")
+    candidates = []
+    if os.path.isfile(candidates_csv):
+        with open(candidates_csv, "r", encoding="utf-8") as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                candidates.append(row)
+
+    # 过滤掉数据库中已软删除的记录
+    if candidates:
+        image_ids = [int(c["image_id"]) for c in candidates if c.get("image_id")]
+        if image_ids:
+            conn = sqlite3.connect(DB_PATH)
+            try:
+                placeholders = ",".join("?" for _ in image_ids)
+                rows = conn.execute(
+                    f"SELECT id FROM images WHERE id IN ({placeholders}) AND COALESCE(is_deleted, 0) = 1",
+                    image_ids,
+                ).fetchall()
+                deleted_ids = {r[0] for r in rows}
+                candidates = [c for c in candidates if int(c["image_id"]) not in deleted_ids]
+            finally:
+                conn.close()
+
+    # 读取模型 summary
+    model_summary = {}
+    model_summary_path = os.path.join(best_dir, "summary.json")
+    if os.path.isfile(model_summary_path):
+        with open(model_summary_path, "r", encoding="utf-8") as f:
+            model_summary = json.load(f)
+
+    return {
+        "report_dir": os.path.basename(best_dir),
+        "anomaly_summary": anomaly_summary,
+        "candidates": candidates,
+        "model_summary": model_summary,
+    }
+
+
+@app.get("/api/model-report/image/{image_id}")
+async def get_model_report_image(image_id: int):
+    """根据 image_id 查询文件路径，返回图像（兼容 TIFF/PNG）"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT id, file_path, source FROM images WHERE id = ?", (image_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"图像 {image_id} 不存在")
+        fp = row["file_path"]
+        if not fp or not os.path.isfile(fp):
+            raise HTTPException(status_code=404, detail=f"文件不存在: {fp}")
+        return FileResponse(fp)
+    finally:
+        conn.close()
 
 
 @app.get("/api/rag/documents")
@@ -1897,14 +2029,13 @@ def prepare_visualization_image(img_gray: np.ndarray, max_side: int = 1280) -> n
 async def visualize_image_analysis(
     image_id: int,
     device: str = "cpu",
+    backend: str = "auto",
 ):
     """获取图像分析的可视化步骤
 
     Args:
         device: 推理设备，"cpu" 或 "cuda"
-        tile_size: 分块大小
-        overlap: 分块重叠像素
-        seg_threshold: 分割阈值
+        backend: 分割后端 "auto"(默认clDice降级) / "cldice" / "threshold"
     """
     # 查询图像路径
     conn = sqlite3.connect(DB_PATH)
@@ -1933,8 +2064,23 @@ async def visualize_image_analysis(
         raise HTTPException(status_code=400, detail="Failed to read image")
     img = prepare_visualization_image(img, max_side=1280)
 
-    # clDice 分割可视化
-    try:
+    def _run_threshold_viz():
+        visualizer = AlgorithmVisualizer(magnification=mag)
+        visualizer.visualize_extraction(img)
+        steps = visualizer.get_steps()
+        n = len(steps)
+        return {
+            "backend": "threshold",
+            "steps": steps,
+            "total_steps": n,
+            "phases": [
+                {"name": "图像预处理", "steps": [0, 1, 2, 3, 4]},
+                {"name": "骨架与分支", "steps": [5, 6]},
+                {"name": "特征提取", "steps": list(range(7, n))},
+            ],
+        }
+
+    def _run_cldice_viz():
         from backend.core.cntsegnet_visualizer import CNTSegNetVisualizer
         visualizer = CNTSegNetVisualizer(
             magnification=mag,
@@ -1954,24 +2100,25 @@ async def visualize_image_analysis(
                 {"name": "特征提取", "steps": list(range(9, n))},
             ],
         }
+
+    if backend == "threshold":
+        return _run_threshold_viz()
+
+    # cldice 或 auto 模式
+    try:
+        result = _run_cldice_viz()
+        if backend == "auto":
+            return result
+        return result
     except Exception as e:
-        # clDice 失败，降级到传统阈值分割可视化
+        if backend == "cldice":
+            raise HTTPException(status_code=500, detail=f"clDice failed: {str(e)}")
+        # auto 模式：降级到阈值分割
         print(f"clDice visualization failed, falling back to threshold: {e}")
-        visualizer = AlgorithmVisualizer(magnification=mag)
-        visualizer.visualize_extraction(img)
-        steps = visualizer.get_steps()
-        n = len(steps)
-        return {
-            "backend": "threshold_fallback",
-            "steps": steps,
-            "total_steps": n,
-            "phases": [
-                {"name": "图像预处理", "steps": [0, 1, 2, 3, 4]},
-                {"name": "骨架与分支", "steps": [5, 6]},
-                {"name": "特征提取", "steps": list(range(7, n))},
-            ],
-            "metadata": {"fallback_reason": f"clDice failed: {str(e)}"},
-        }
+        result = _run_threshold_viz()
+        result["backend"] = "threshold_fallback"
+        result["metadata"] = {"fallback_reason": f"clDice failed: {str(e)}"}
+        return result
 
 
 def _trace_skeleton(mask, start, end):

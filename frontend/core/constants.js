@@ -43,8 +43,9 @@ export const ML_TARGET_META = {
     diameter: { label: '管径分布', predKey: 'diameter_pred', actualKey: 'diameter_actual' },
     density: { label: '覆盖密度', predKey: 'density_pred', actualKey: 'density_actual' },
     alignment: { label: '取向度', predKey: 'alignment_pred', actualKey: 'alignment_actual' },
-    curvature: { label: '平均曲率', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
+    curvature: { label: '平均曲率 (um^-1)', predKey: 'curvature_pred', actualKey: 'curvature_actual' },
     tortuosity: { label: '波浪度', predKey: 'tortuosity_pred', actualKey: 'tortuosity_actual' },
+    waviness_ratio: { label: '波曲度', predKey: 'waviness_ratio_pred', actualKey: 'waviness_ratio_actual' },
 };
 
 // ML X 轴元数据

@@ -373,11 +373,18 @@ export async function loadData() {
     const sourceFilter = getEl('source-filter');
     const source = sourceFilter?.value || '';
 
+    const searchInput = getEl('search-input');
+    const search = searchInput?.value?.trim() || '';
+
     const offset = getState('data.offset') || 0;
     const limit = getState('data.limit') || 10;
     const currentSort = getState('data.currentSort') || 'id';
     const currentOrder = getState('data.currentOrder') || 'desc';
     const viewMode = getState('data.viewMode') || 'active';
+
+    // 搜索框清除按钮显隐
+    const clearBtn = getEl('search-clear-btn');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !search);
 
     try {
         const data = await api.images.list({
@@ -387,12 +394,15 @@ export async function loadData() {
             order: currentOrder,
             source,
             deletion_view: viewMode,
+            ...(search ? { search } : {}),
         });
 
         const totalItems = data.total || 0;
 
         setState('data.totalItems', totalItems);
         setState('data.currentListItemsById', Object.fromEntries((data.items || []).map(item => [String(item.id), item])));
+        // 同步内联全局变量（双系统兼容）
+        window.currentListItemsById = Object.fromEntries((data.items || []).map(item => [String(item.id), item]));
 
         renderDataTrashToggle();
 
@@ -505,20 +515,16 @@ function renderDataTable(items) {
  * 初始化数据列表模块
  */
 export function initDataList() {
-    // 绑定自定义事件处理
-    window.addEventListener('data-row-click', (e) => {
-        const { openDetailsById } = require('../details/index.js');
-        openDetailsById(e.detail.id);
-    });
+    // 事件监听已在 app.js bindGlobalEvents() 中绑定，此处无需重复
+}
 
-    window.addEventListener('data-checkbox-change', (e) => {
-        toggleDataRowSelection(e.detail.id, e.detail.checked);
-    });
-
-    window.addEventListener('data-details-click', (e) => {
-        const { openDetailsById } = require('../details/index.js');
-        openDetailsById(e.detail.id);
-    });
+/**
+ * 清除搜索框并重新加载
+ */
+export function clearSearch() {
+    const searchInput = getEl('search-input');
+    if (searchInput) searchInput.value = '';
+    return resetAndLoad();
 }
 
 // 导出默认对象
@@ -536,4 +542,5 @@ export default {
     toggleDataTrashView,
     renderDataTrashToggle,
     initDataList,
+    clearSearch,
 };

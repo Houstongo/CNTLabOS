@@ -183,9 +183,9 @@ class FeatureVisualizationAdapter:
         curv_label = curvature_bundle.get('curvature_v3', 'Unknown')
         self.steps.append(encode_step(
             curv_vis, "V3 曲率分析",
-            f"V3曲率={curv_label}  kappa={curvature_bundle.get('curvature_nm_v3', 0):.4f} nm^-1  "
+            f"V3曲率={curv_label}  kappa={curvature_bundle.get('curvature_nm_v3', 0) * 1000.0:.3f} um^-1  "
             f"branches={curvature_bundle.get('curvature_v3_branch_count', 0)}。"
-            f"颜色：绿=直(κ<0.05) 黄=波(0.05≤κ<0.15) 红=卷曲(κ≥0.15)。"))
+            f"颜色：绿=直(κ<0.8) 黄=波(0.8≤κ<4.0) 红=卷曲(κ≥4.0)。"))
 
         # Step 12: 波曲度 v2
         waviness_v2 = self.extractor.calculate_waviness_v2(

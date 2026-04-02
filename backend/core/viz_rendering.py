@@ -212,10 +212,10 @@ def render_curvature_v3(base_bgr: np.ndarray, skel: np.ndarray,
     panel = np.zeros((panel_h, panel_w, 3), dtype=np.uint8)
     panel[:] = (40, 40, 40)
     lines = [
-        f"V3 Curvature: {curv_v3}  kappa={curv_nm_v3:.4f} nm^-1",
-        f"p75_length={curv_nm_p75_len:.4f}  p75_sqrt={curv_nm_p75_sqrt:.4f}",
-        f"mean_length={curv_nm_mean:.4f}  branches={n_branch}",
-        f"green<0.05  yellow<0.15  red>=0.15 nm^-1",
+        f"V3 Curvature: {curv_v3}  kappa={curv_nm_v3 * 1000.0:.3f} um^-1",
+        f"p75_length={curv_nm_p75_len * 1000.0:.3f}  p75_sqrt={curv_nm_p75_sqrt * 1000.0:.3f}",
+        f"mean_length={curv_nm_mean * 1000.0:.3f}  branches={n_branch}",
+        f"green<0.8  yellow<4.0  red>=4.0 um^-1",
     ]
     for i, line in enumerate(lines):
         cv2.putText(panel, line, (8, 20 + i * 22),

@@ -45,6 +45,7 @@ class AIInterpreter:
         similar_exps: list,
         pdf_passages: list,
         knowledge_links: Optional[list] = None,
+        relation_chain: Optional[dict] = None,
     ) -> str:
         lines = ["## 当前实验信息\n"]
 
@@ -113,6 +114,29 @@ class AIInterpreter:
                 if evidence:
                     lines.append(f"   evidence: {evidence[:200]}")
 
+        if relation_chain:
+            chain_parts = []
+            for rel_type, links in relation_chain.items():
+                if not links:
+                    continue
+                chain_parts.append(f"**{rel_type}** ({len(links)}条)")
+                for link in links[:2]:
+                    process = link.get("process_factor") or link.get("source_node") or "-"
+                    morph = link.get("morphology_factor") or link.get("target_node") or "-"
+                    perf = link.get("performance_factor") or ""
+                    direction = link.get("effect_direction") or "-"
+                    evidence = (link.get("evidence_text") or link.get("mechanism_summary") or "")[:150]
+                    entry = f"  {process} → {morph}"
+                    if perf:
+                        entry += f" → {perf}"
+                    entry += f" ({direction})"
+                    if evidence:
+                        entry += f"\n    证据: {evidence}"
+                    chain_parts.append(entry)
+            if chain_parts:
+                lines.append("\n### 知识库关系链")
+                lines.extend(chain_parts)
+
         lines.append(
             """
 ## 输出格式
@@ -139,6 +163,7 @@ class AIInterpreter:
         similar_exps: list,
         pdf_passages: list,
         knowledge_links: Optional[list] = None,
+        relation_chain: Optional[dict] = None,
         temperature: float = 0.5,
     ) -> Generator[str, None, None]:
         user_prompt = self.build_interpret_prompt(
@@ -147,6 +172,7 @@ class AIInterpreter:
             similar_exps,
             pdf_passages,
             knowledge_links=knowledge_links,
+            relation_chain=relation_chain,
         )
 
         stream = self.client.chat.completions.create(

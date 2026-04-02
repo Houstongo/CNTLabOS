@@ -236,8 +236,9 @@ export function renderMlPointDetail(point) {
             <div class="text-slate-500">管径分布(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.diameter_actual, 2)} / ${fmtMl(r.diameter_pred, 2)}</div>
             <div class="text-slate-500">覆盖密度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.density_actual, 2)} / ${fmtMl(r.density_pred, 2)}</div>
             <div class="text-slate-500">取向度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.alignment_actual, 3)} / ${fmtMl(r.alignment_pred, 3)}</div>
-            <div class="text-slate-500">平均曲率(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
+            <div class="text-slate-500">平均曲率 um^-1 (实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.curvature_actual, 3)} / ${fmtMl(r.curvature_pred, 3)}</div>
             <div class="text-slate-500">波浪度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.tortuosity_actual, 3)} / ${fmtMl(r.tortuosity_pred, 3)}</div>
+            <div class="text-slate-500">波曲度(实测/预测)</div><div class="font-bold text-slate-700 text-right">${fmtMl(r.waviness_ratio_actual, 3)} / ${fmtMl(r.waviness_ratio_pred, 3)}</div>
         </div>
     `;
 }
@@ -358,8 +359,9 @@ export function renderMlCorrMatrix(rows) {
         { key: 'diameter_actual', label: '管径分布' },
         { key: 'density_actual', label: '密度' },
         { key: 'alignment_actual', label: '取向度' },
-        { key: 'curvature_actual', label: '曲率' },
-        { key: 'tortuosity_actual', label: '波浪度' }
+        { key: 'curvature_actual', label: '曲率 (um^-1)' },
+        { key: 'tortuosity_actual', label: '波浪度' },
+        { key: 'waviness_ratio_actual', label: '波曲度' }
     ];
 
     const chart = ensureMlChart('corrMatrix', 'ml-chart-corr-matrix');
@@ -479,6 +481,13 @@ export function switchMlSubPage(page) {
     if (selInline && selInline.value !== target) selInline.value = target;
 
     setState('ml.subPage', target);
+
+    // 调用原始 index.html 中的 applyXrMlView 来渲染表格/图表
+    if (target === 'data' && typeof window.applyXrMlView === 'function') {
+        window.applyXrMlView({ skipCharts: true, forceTable: true });
+    } else if (target === 'visual' && typeof window.applyXrMlView === 'function') {
+        window.applyXrMlView({ skipTable: true });
+    }
 
     setTimeout(() => resizeMlCharts(), 0);
 }

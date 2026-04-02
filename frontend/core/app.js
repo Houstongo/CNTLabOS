@@ -3,6 +3,7 @@
 
 import { repairOverlayMounts, getEl } from '../utils/dom.js';
 import { getState } from './store.js';
+import { API_BASE } from './constants.js';
 
 // 等待 DOM 加载完成
 function domReady(callback) {
@@ -63,9 +64,16 @@ function bindGlobalEvents() {
         toggleAlgoPanel();
     });
 
-    window.addEventListener('clean-algo-hide', async () => {
-        const { hideAlgoPanel } = await import('../modules/data-clean/index.js');
-        hideAlgoPanel();
+    // 模型异常点击查看图片
+    window.addEventListener('model-anomaly-select', async (e) => {
+        const { selectModelAnomaly } = await import('../modules/data-clean/index.js');
+        selectModelAnomaly(e.detail.index);
+    });
+
+    // 模型异常软删除
+    window.addEventListener('model-anomaly-delete', async (e) => {
+        const { softDeleteAnomalyItem } = await import('../modules/data-clean/index.js');
+        softDeleteAnomalyItem(e.detail.imageId, e.detail.sampleId);
     });
 
     // RAG 文档删除事件
@@ -110,6 +118,11 @@ async function initApp() {
 window.loadData = async () => {
     const m = await import('../modules/data-list/index.js');
     return m.loadData();
+};
+
+window.resetAndLoad = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.resetAndLoad();
 };
 
 window.toggleSort = async (field) => {
@@ -157,6 +170,11 @@ window.toggleDataTrashView = async () => {
     return m.toggleDataTrashView();
 };
 
+window.clearSearch = async () => {
+    const m = await import('../modules/data-list/index.js');
+    return m.clearSearch();
+};
+
 // ── 详情面板 ──
 
 window.openDetailsById = async (id) => {
@@ -172,6 +190,11 @@ window.closeDetails = async () => {
 window.closeAll = async () => {
     const m = await import('../modules/details/index.js');
     return m.closeAll();
+};
+
+window.navigateDetail = async (dir) => {
+    const m = await import('../modules/details/index.js');
+    m.navigateDetail(dir);
 };
 
 window.reanalyzeImage = async () => {
@@ -306,13 +329,14 @@ window.toggleCleanAlgoPage = () => {
     window.dispatchEvent(new CustomEvent('clean-algo-toggle'));
 };
 
-window.hideCleanAlgoPanel = () => {
-    window.dispatchEvent(new CustomEvent('clean-algo-hide'));
+// 模型异常数据加载（供 inline JS 调用）
+window.loadModelAnomalyData = async () => {
+    const { loadModelAnomalyData } = await import('../modules/data-clean/index.js');
+    return loadModelAnomalyData();
 };
 
-window.switchCleanBackend = async (backend) => {
-    const { showAlgorithmVisualization } = await import('../modules/data-clean/index.js');
-    showAlgorithmVisualization();
+window.switchCleanBackend = async () => {
+    // 空壳兼容
 };
 
 window.expandCleanAlgoPhase = () => {};
@@ -330,17 +354,21 @@ window.switchMlSubPage = async (page) => {
 
 window.selectMlVizTarget = async (target) => {
     const m = await import('../modules/charts/index.js');
-    m.selectMlVizTarget(target);
+    if (m.selectMlVizTarget) { m.selectMlVizTarget(target); return; }
+    // fallback 到 index.html 中的原始实现
+    if (typeof window._origSelectMlVizTarget === 'function') window._origSelectMlVizTarget(target);
 };
 
 window.onMlVizOptionChange = async () => {
     const m = await import('../modules/charts/index.js');
-    m.onMlVizOptionChange();
+    if (m.onMlVizOptionChange) { m.onMlVizOptionChange(); return; }
+    if (typeof window._origOnMlVizOptionChange === 'function') window._origOnMlVizOptionChange();
 };
 
 window.switchMlInfoTab = async (tab) => {
     const m = await import('../modules/charts/index.js');
-    m.switchMlInfoTab(tab);
+    if (m.switchMlInfoTab) { m.switchMlInfoTab(tab); return; }
+    if (typeof window._origSwitchMlInfoTab === 'function') window._origSwitchMlInfoTab(tab);
 };
 
 // ── 启动 ──

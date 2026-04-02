@@ -306,6 +306,14 @@ class SystematicEvaluator:
         cursor = conn.cursor()
         features = result['features']
 
+        curvature_value = features.get('curvature')
+        curvature_nm = features.get('curvature_nm')
+        if curvature_nm is not None:
+            try:
+                curvature_value = float(curvature_nm) * 1000.0
+            except Exception:
+                pass
+
         cursor.execute("""
             UPDATE images
             SET diameter=?, density=?, alignment=?, curvature=?, processed=1
@@ -314,7 +322,7 @@ class SystematicEvaluator:
             features['diameter'],
             features['density'],
             features['alignment'],
-            features['curvature'],
+            curvature_value,
             result['id']
         ))
         conn.commit()

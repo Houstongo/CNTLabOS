@@ -192,6 +192,30 @@ class RAGRetriever:
                     context_parts.append(f"   证据: {evidence[:150]}...")
                 context_parts.append("")
 
+        # 检索关系链
+        relation_chain = self.knowledge_base.get_relation_chain_summary(query, top_k=top_k)
+        chain_has_content = any(links for links in relation_chain.values() if links)
+        if chain_has_content:
+            context_parts.append("### 知识库关系链")
+            for rel_type, links in relation_chain.items():
+                if not links:
+                    continue
+                context_parts.append(f"**{rel_type}** ({len(links)}条)")
+                for link in links[:2]:
+                    process = link.get("process_factor") or link.get("source_node") or "-"
+                    morph = link.get("morphology_factor") or link.get("target_node") or "-"
+                    perf = link.get("performance_factor") or ""
+                    direction = link.get("effect_direction") or "-"
+                    evidence = (link.get("evidence_text") or link.get("mechanism_summary") or "")[:150]
+                    entry = f"  {process} → {morph}"
+                    if perf:
+                        entry += f" → {perf}"
+                    entry += f" ({direction})"
+                    if evidence:
+                        entry += f"\n    证据: {evidence}"
+                    context_parts.append(entry)
+            context_parts.append("")
+
         context_summary = "\n".join(context_parts)
 
         # 统计信息

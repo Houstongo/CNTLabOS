@@ -111,7 +111,7 @@ export const api = {
         delete: (id) => del(`/api/images/${id}`),
         analyze: (id, backend = 'wcntsegnet') => post(`/api/images/${id}/analyze?backend=${encodeURIComponent(backend)}`),
         features: (id, data) => put(`/api/images/${id}/features`, data),
-        visualize: (id, backend = 'wcntsegnet') => get(`/api/images/${id}/visualize`, { backend }),
+        visualize: (id, backend = 'threshold') => get(`/api/images/${id}/visualize`, { backend }),
         interpret: (id, data) => post(`/api/images/${id}/interpret`, data),
         batch: {
             analyze: (imageIds, backend = 'wcntsegnet') => post('/api/images/batch/analyze', { image_ids: imageIds, backend }),

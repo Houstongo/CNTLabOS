@@ -25,6 +25,7 @@ _tmp_unittest/
 tests/_tmp_cnt_paper_repro_data/
 output/
 tmp/
+datasetdivide/
 rag-graph-*.png
 rag-doc-manage-*.png
 *.bak

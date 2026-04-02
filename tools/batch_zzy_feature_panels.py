@@ -45,6 +45,13 @@ from backend.core.batch_processor import (  # noqa: E402
 
 DB_PATH = PROJECT_ROOT / "database" / "cnta_experiments.sqlite"
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "reports"
+REQUIRED_JUNCTION_KEYS = (
+    "junction_count",
+    "junction_ratio",
+    "skeleton_length_px",
+    "skeleton_length_um",
+    "junctions_per_100um",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--speed-profile", default="accurate", choices=["accurate", "fast"])
     p.add_argument("--diameter-method", default="enhanced", choices=["standard", "enhanced"])
     p.add_argument("--device", default="cuda", help="clDice 推理设备: cuda / cpu")
+    p.add_argument("--image-id", type=int, action="append", default=None, help="只处理指定 image_id，可重复传入")
     p.add_argument("--limit", type=int, default=0, help="限制处理数量, 0=全部")
     p.add_argument("--output-dir", type=Path, default=None)
     p.add_argument("--resume", action="store_true", help="跳过已存在的面板")
@@ -68,7 +76,8 @@ def _images_has_column(cursor, col: str) -> bool:
 
 
 def fetch_zzy_images(cursor, only_unprocessed: bool = False,
-                     limit: int = 0, min_mag: int = 0) -> List[dict]:
+                     limit: int = 0, min_mag: int = 0,
+                     image_ids: List[int] | None = None) -> List[dict]:
     where_parts = ["source = 'ZZY'"]
     params: list = []
     if _images_has_column(cursor, "is_deleted"):
@@ -78,6 +87,10 @@ def fetch_zzy_images(cursor, only_unprocessed: bool = False,
     if min_mag > 0:
         where_parts.append("COALESCE(magnification, 0) >= ?")
         params.append(min_mag)
+    if image_ids:
+        placeholders = ",".join("?" for _ in image_ids)
+        where_parts.append(f"id IN ({placeholders})")
+        params.extend(int(v) for v in image_ids)
     where_sql = "WHERE " + " AND ".join(where_parts)
     limit_sql = f"LIMIT {limit}" if limit > 0 else ""
     cursor.execute(
@@ -92,6 +105,62 @@ def fetch_zzy_images(cursor, only_unprocessed: bool = False,
 def read_gray(path: Path) -> Optional[np.ndarray]:
     data = np.fromfile(str(path), dtype=np.uint8)
     return cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+
+
+def compute_junction_metrics(skeleton: np.ndarray, px_per_um: float) -> Dict[str, float]:
+    skeleton_mask = (skeleton > 0).astype(np.uint8)
+    if not np.any(skeleton_mask):
+        return {
+            "junction_count": 0.0,
+            "junction_ratio": 0.0,
+            "skeleton_length_px": 0.0,
+            "skeleton_length_um": 0.0,
+        }
+
+    neighbor_count = FeatureExtractor._neighbor_count_map(skeleton_mask)
+    junction_mask = ((skeleton_mask > 0) & (neighbor_count >= 3)).astype(np.uint8)
+    junction_count = int(np.count_nonzero(junction_mask))
+    skeleton_length_px = float(np.count_nonzero(skeleton_mask))
+    px_per_um = max(float(px_per_um), 1e-6)
+    skeleton_length_um = skeleton_length_px / px_per_um
+    junction_ratio = float(junction_count / skeleton_length_px) if skeleton_length_px > 0 else 0.0
+    return {
+        "junction_count": float(junction_count),
+        "junction_ratio": junction_ratio,
+        "skeleton_length_px": skeleton_length_px,
+        "skeleton_length_um": skeleton_length_um,
+    }
+
+
+def augment_features_with_junction_metrics(
+    extractor: FeatureExtractor,
+    mask: np.ndarray,
+    features: Dict[str, Any],
+) -> Dict[str, Any]:
+    _, skeleton = extractor.calculate_diameter((mask > 0).astype(np.uint8) * 255)
+    junction_metrics = compute_junction_metrics(skeleton, extractor.px_per_um)
+    features = dict(features)
+    features.update(
+        {
+            "junction_count": int(round(junction_metrics["junction_count"])),
+            "junction_ratio": round(junction_metrics["junction_ratio"], 6),
+            "skeleton_length_px": round(junction_metrics["skeleton_length_px"], 3),
+            "skeleton_length_um": round(junction_metrics["skeleton_length_um"], 6),
+            "junctions_per_100um": round(
+                (
+                    junction_metrics["junction_count"]
+                    / max(junction_metrics["skeleton_length_um"], 1e-6)
+                )
+                * 100.0,
+                6,
+            ),
+        }
+    )
+    return features
+
+
+def has_junction_metrics(features: Dict[str, Any]) -> bool:
+    return all(key in features for key in REQUIRED_JUNCTION_KEYS)
 
 
 # ── 面板渲染 ────────────────────────────────────────────────────────────────
@@ -165,6 +234,14 @@ def render_panel(image_gray: np.ndarray, features: dict,
     lines.append(f"wavelength_nm (v2)   {fmt(features.get('waviness_wavelength_nm_v2'), 2)}")
     lines.append(f"waviness_branches    {features.get('waviness_branches_v2', 'N/A')}")
     lines.append(f"tortuosity_v2        {fmt(features.get('tortuosity_v2'), 3)}")
+    lines.append("")
+
+    lines.append("=== Junction Metrics ===")
+    lines.append(f"junction_count       {fmt(features.get('junction_count'), 0)}")
+    lines.append(f"junction_ratio       {fmt(features.get('junction_ratio'), 6)}")
+    lines.append(f"skeleton_length_px   {fmt(features.get('skeleton_length_px'), 3)}")
+    lines.append(f"skeleton_length_um   {fmt(features.get('skeleton_length_um'), 6)}")
+    lines.append(f"junctions_per_100um  {fmt(features.get('junctions_per_100um'), 6)}")
 
     # 骨架清理信息
     lines.append("")
@@ -198,7 +275,8 @@ def main() -> None:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     rows = fetch_zzy_images(cursor, only_unprocessed=args.only_unprocessed,
-                            limit=args.limit, min_mag=args.min_mag)
+                            limit=args.limit, min_mag=args.min_mag,
+                            image_ids=args.image_id)
     conn.close()
 
     if not rows:
@@ -232,10 +310,12 @@ def main() -> None:
         # resume
         if args.resume and panel_path.exists() and json_path.exists():
             features = json.loads(json_path.read_text(encoding="utf-8"))
-            print("  [SKIP-resume]")
-            summary_rows.append({"file_name": file_name, "status": "resume", **features})
-            skip += 1
-            continue
+            if has_junction_metrics(features):
+                print("  [SKIP-resume]")
+                summary_rows.append({"file_name": file_name, "status": "resume", **features})
+                skip += 1
+                continue
+            print("  [REBUILD-missing junction metrics]", end="", flush=True)
 
         if not file_path.exists():
             print(f"  [SKIP-file missing]")
@@ -257,6 +337,7 @@ def main() -> None:
             roi = extractor.extract_roi(img_gray)
             mask = segmenter.predict_mask(roi)
             features = extractor.extract_all(img_gray, external_binary_mask=mask)
+            features = augment_features_with_junction_metrics(extractor, mask, features)
         except Exception as e:
             print(f"  [ERROR-{e}]")
             error += 1

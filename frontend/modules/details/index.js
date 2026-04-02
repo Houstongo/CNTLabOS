@@ -9,6 +9,16 @@ import { formatNumber, formatTemp, formatPosition, formatMagnification, formatTi
 import { aiStorage } from '../../config/local-storage.js';
 import * as Viz from '../visualization/index.js';
 
+function formatDiameterDisplay(features) {
+    if (features?.diameter_mean != null) {
+        return `${formatNumber(features.diameter_mean, 1)}±${features.diameter_std != null ? formatNumber(features.diameter_std, 1) : '--'}`;
+    }
+    if (features?.diameter != null) {
+        return formatNumber(features.diameter, 1);
+    }
+    return '--';
+}
+
 /**
  * 打开详情面板
  */
@@ -17,6 +27,8 @@ export async function openDetails(item) {
     const isSameImage = currentItem && currentItem.id === item.id;
 
     setState('currentItem', item);
+    // 同步内联全局变量（双系统兼容）
+    window.currentItem = item;
 
     const fileName = item.file_path.split('\\').pop();
     const isTif = item.url.toLowerCase().endsWith('.tif') || item.url.toLowerCase().endsWith('.tiff');
@@ -32,13 +44,12 @@ export async function openDetails(item) {
     getEl('d-pos-cm').innerText = item.membrane_pos_cm != null ? formatPosition(item.membrane_pos_cm) : '--';
 
     // 特征值
-    getEl('f-dia').innerText = item.diameter_mean != null
-        ? `${formatNumber(item.diameter_mean, 1)}±${item.diameter_std != null ? formatNumber(item.diameter_std, 1) : '--'}`
-        : '--';
+    getEl('f-dia').innerText = formatDiameterDisplay(item);
     getEl('f-ali').innerText = item.alignment != null ? formatNumber(item.alignment, 3) : '--';
     getEl('f-den').innerText = item.density != null ? formatNumber(item.density, 2) : '--';
     getEl('f-cur').innerText = (item.curvature != null && !isNaN(item.curvature)) ? formatNumber(item.curvature, 3) : (item.curvature ?? '--');
     getEl('f-tor').innerText = (item.tortuosity != null && !isNaN(item.tortuosity)) ? formatNumber(item.tortuosity, 3) : (item.tortuosity ?? '--');
+    getEl('f-wav').innerText = (item.waviness_ratio != null && !isNaN(item.waviness_ratio)) ? formatNumber(item.waviness_ratio, 3) : (item.waviness_ratio ?? '--');
 
     // 状态
     const statusEl = getEl('d-status');
@@ -60,6 +71,7 @@ export async function openDetails(item) {
 
     getEl('details-panel').classList.add('open');
     emit(Events.DETAILS_OPENED, { itemId: item.id });
+    updateDetailNavButtons();
 }
 
 /**
@@ -67,12 +79,19 @@ export async function openDetails(item) {
  */
 export async function openDetailsById(id) {
     const currentListItemsById = getState('data.currentListItemsById') || {};
-    const item = currentListItemsById[String(id)];
-    if (!item) {
+    const fallbackItem = currentListItemsById[String(id)];
+    try {
+        const freshItem = await api.images.get(id);
+        openDetails(freshItem);
+        return;
+    } catch (err) {
+        console.warn('读取最新详情失败，回退使用列表缓存:', id, err);
+    }
+    if (!fallbackItem) {
         console.warn('找不到对应记录:', id);
         return;
     }
-    openDetails(item);
+    openDetails(fallbackItem);
 }
 
 /**
@@ -128,9 +147,7 @@ export async function reanalyzeImage() {
         const data = await api.images.analyze(currentItem.id);
         if (data.status === 'success') {
             const r = data.results;
-            getEl('f-dia').innerText = r.diameter_mean != null
-                ? `${formatNumber(r.diameter_mean, 1)}±${r.diameter_std != null ? formatNumber(r.diameter_std, 1) : '--'}`
-                : '--';
+            getEl('f-dia').innerText = formatDiameterDisplay(r);
             getEl('f-ali').innerText = r.alignment != null ? formatNumber(r.alignment, 3) : '--';
             getEl('f-den').innerText = r.density != null ? formatNumber(r.density, 2) : '--';
             getEl('f-cur').innerText = r.curvature ?? '--';
@@ -283,6 +300,52 @@ export function closeAll() {
     closeDetails();
 }
 
+/**
+ * 获取当前列表 ID 数组（兼容 Store + 内联全局变量）
+ */
+function _getVisibleIds() {
+    const storeMap = getState('data.currentListItemsById') || {};
+    if (Object.keys(storeMap).length > 0) return Object.keys(storeMap).map(Number);
+    // fallback: 内联全局变量
+    if (window.currentListItemsById && Object.keys(window.currentListItemsById).length > 0) {
+        return Object.keys(window.currentListItemsById).map(Number);
+    }
+    return [];
+}
+
+/**
+ * 详情面板上下页导航
+ */
+export function navigateDetail(dir) {
+    const currentItem = getState('currentItem') || window.currentItem;
+    if (!currentItem) return;
+
+    const ids = _getVisibleIds();
+    const idx = ids.indexOf(Number(currentItem.id));
+    if (idx === -1) return;
+
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= ids.length) return;
+
+    openDetailsById(ids[newIdx]);
+}
+
+/**
+ * 更新详情面板导航按钮状态
+ */
+export function updateDetailNavButtons() {
+    const currentItem = getState('currentItem') || window.currentItem;
+    if (!currentItem) return;
+
+    const ids = _getVisibleIds();
+    const idx = ids.indexOf(Number(currentItem.id));
+
+    const prevBtn = getEl('detail-prev-btn');
+    const nextBtn = getEl('detail-next-btn');
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx < 0 || idx >= ids.length - 1;
+}
+
 // 导出默认对象
 export default {
     openDetails,
@@ -297,4 +360,6 @@ export default {
     nextStep,
     goToStep,
     closeAll,
+    navigateDetail,
+    updateDetailNavButtons,
 };

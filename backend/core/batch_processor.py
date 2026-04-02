@@ -604,11 +604,15 @@ def batch_process(
                 )
                 elapsed_s = round(time.perf_counter() - started_at, 3)
 
+            curvature_um = None
+            if res.get("curvature_nm") is not None:
+                curvature_um = float(res.get("curvature_nm")) * 1000.0
+
             update_values = {
                 "diameter": res["diameter"],
                 "density": res["density"],
                 "alignment": res["alignment"],
-                "curvature": res.get("curvature_nm"),  # 使用数值而非标签
+                "curvature": curvature_um,  # 使用数值型曲率（um^-1）
                 "processed": 1,
             }
             for column in optional_columns:

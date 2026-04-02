@@ -3,8 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import multiprocessing as mp
+import os
 import sqlite3
 import sys
+import tempfile
+import time
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -73,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--timeout-s", type=float, default=100.0)
     return parser.parse_args()
 
 
@@ -248,7 +254,6 @@ def aggregate_branch_curvature_nm(
         return 0.0
     return float(np.average(np.asarray(branch_curvatures, dtype=float), weights=np.asarray(weights, dtype=float)))
 
-
 def cache_branch_measurements(
     extractor: FeatureExtractor,
     branches: List[Dict[str, Any]],
@@ -270,6 +275,7 @@ def cache_branch_measurements(
                 trimmed_mean = float(np.mean(curvature_nm))
             branch["_curvature_stats_nm"] = {
                 "median": float(np.median(curvature_nm)),
+                "p70": float(np.percentile(curvature_nm, 70)),
                 "p75": float(np.percentile(curvature_nm, extractor.V3_BRANCH_QUANTILE)),
                 "mean": float(np.mean(curvature_nm)),
                 "trimmed_mean": trimmed_mean,
@@ -313,6 +319,31 @@ def classify_v3_curvature(curvature_nm: float) -> str:
     if curvature_nm < 4e-3:
         return "Wavy"
     return "Coiled"
+
+
+def compute_junction_metrics(skeleton: np.ndarray, px_per_um: float) -> Dict[str, float]:
+    skeleton_mask = (skeleton > 0).astype(np.uint8)
+    if not np.any(skeleton_mask):
+        return {
+            "junction_count": 0.0,
+            "junction_ratio": 0.0,
+            "skeleton_length_px": 0.0,
+            "skeleton_length_um": 0.0,
+        }
+
+    neighbor_count = FeatureExtractor._neighbor_count_map(skeleton_mask)
+    junction_mask = ((skeleton_mask > 0) & (neighbor_count >= 3)).astype(np.uint8)
+    junction_count = int(np.count_nonzero(junction_mask))
+    skeleton_length_px = float(np.count_nonzero(skeleton_mask))
+    px_per_um = max(float(px_per_um), 1e-6)
+    skeleton_length_um = skeleton_length_px / px_per_um
+    junction_ratio = float(junction_count / skeleton_length_px) if skeleton_length_px > 0 else 0.0
+    return {
+        "junction_count": float(junction_count),
+        "junction_ratio": junction_ratio,
+        "skeleton_length_px": skeleton_length_px,
+        "skeleton_length_um": skeleton_length_um,
+    }
 
 
 def load_model(spec: ModelSpec, device: torch.device) -> tuple[ResNet34UNet, dict]:
@@ -456,9 +487,15 @@ def flatten_summary_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "magnification": record["magnification"],
         "panel_path": record["panel_path"],
         "mask_path": record["mask_path"],
+        "original_path": record.get("original_path"),
+        "l2_overlay_path": record.get("l2_overlay_path"),
         "patch_count": record["patch_count"],
         "threshold": record["threshold"],
         "density": record["density"],
+        "junction_count": record.get("junction_count"),
+        "junction_ratio": record.get("junction_ratio"),
+        "skeleton_length_px": record.get("skeleton_length_px"),
+        "skeleton_length_um": record.get("skeleton_length_um"),
         "alignment": record["alignment"],
         "alignment_raw": record["alignment_raw"],
         "mean_phi_deg": record["mean_phi_deg"],
@@ -474,6 +511,10 @@ def flatten_summary_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "diameter_p50_nm": record["diameter_stats_nm"]["p50"],
         "diameter_p75_nm": record["diameter_stats_nm"]["p75"],
         "diameter_max_nm": record["diameter_stats_nm"]["max"],
+        "status": record.get("status", "success"),
+        "elapsed_s": record.get("elapsed_s"),
+        "last_stage": record.get("last_stage"),
+        "error": record.get("error"),
     }
     for label, threshold_data in record["thresholds"].items():
         prefix = label.lower()
@@ -488,10 +529,14 @@ def flatten_summary_record(record: Dict[str, Any]) -> Dict[str, Any]:
         flat[f"{prefix}_diameter_p30_nm"] = threshold_data["diameter_stats_nm"]["p30"]
         flat[f"{prefix}_diameter_p50_nm"] = threshold_data["diameter_stats_nm"]["p50"]
         flat[f"{prefix}_diameter_p75_nm"] = threshold_data["diameter_stats_nm"]["p75"]
+        flat[f"{prefix}_curvature_p70_sqrt_length_nm"] = threshold_data.get("curvature_nm_v3_p70_sqrt_length")
+        flat[f"{prefix}_curvature_p70_length_nm"] = threshold_data.get("curvature_nm_v3_p70_length")
         flat[f"{prefix}_curvature_sqrt_length_nm"] = threshold_data["curvature_nm_v3_sqrt_length"]
         flat[f"{prefix}_curvature_length_nm"] = threshold_data["curvature_nm_v3_length"]
         flat[f"{prefix}_curvature_mean_sqrt_length_nm"] = threshold_data.get("curvature_nm_v3_mean_sqrt_length")
         flat[f"{prefix}_curvature_mean_length_nm"] = threshold_data.get("curvature_nm_v3_mean_length")
+        flat[f"{prefix}_curvature_trimmed_mean_sqrt_length_nm"] = threshold_data.get("curvature_nm_v3_trimmed_mean_sqrt_length")
+        flat[f"{prefix}_curvature_trimmed_mean_length_nm"] = threshold_data.get("curvature_nm_v3_trimmed_mean_length")
     return flat
 
 
@@ -523,8 +568,12 @@ def build_standard_summary_sections(record: Dict[str, Any]) -> List[Dict[str, An
                 f"sample_id: {record['sample_id']}",
                 f"magnification: {record['magnification']}x",
                 f"model/device: {MODEL_LABEL} / {record.get('runtime_device', 'unknown')}",
+                f"status/elapsed: {record.get('status', 'success')} / {format_value(record.get('elapsed_s'), 2)} s",
                 f"patches/threshold: {record['patch_count']} / {format_value(record['threshold'], 2)}",
                 f"density: {format_value(record['density'], 2)} %",
+                "junction pts/ratio: "
+                f"{format_value(record.get('junction_count'), 0)} / "
+                f"{format_value(record.get('junction_ratio'), 4)}",
                 f"alignment: {format_value(record['alignment'], 4)}",
                 f"mean_phi_deg: {format_value(record['mean_phi_deg'], 2)}",
                 f"diameter: {format_value(record['diameter_nm'], 4)}",
@@ -536,33 +585,38 @@ def build_standard_summary_sections(record: Dict[str, Any]) -> List[Dict[str, An
             ],
         }
     ]
-
-    for label, _ in THRESHOLDS:
-        profile = record["thresholds"][label]
-        sections.append(
-            {
-                "title": f"{label}  |  len={format_value(profile['min_length_factor'], 1)}",
-                "color": matplotlib.colors.to_hex(THRESHOLD_COLORS[label]),
-                "lines": [
-                    f"branches: {profile['branch_count']}  label: {profile['curvature_label']}",
-                    "p75 sqrt/len: "
-                    f"{format_value(profile['curvature_nm_v3_sqrt_length'], 6)} / "
-                    f"{format_value(profile['curvature_nm_v3_length'], 6)}",
-                    "mean sqrt/len: "
-                    f"{format_value(profile.get('curvature_nm_v3_mean_sqrt_length'), 6)} / "
-                    f"{format_value(profile.get('curvature_nm_v3_mean_length'), 6)}",
-                    "waviness/tort: "
-                    f"{format_value(profile['waviness_ratio_v2'], 6)} / "
-                    f"{format_value(profile['tortuosity_v2'], 6)}",
-                    "diam p30/p50/p75: "
-                    f"{format_value(profile['diameter_stats_nm']['p30'], 4)} / "
-                    f"{format_value(profile['diameter_stats_nm']['p50'], 4)} / "
-                    f"{format_value(profile['diameter_stats_nm']['p75'], 4)}",
-                    "curv pts/diam pts: "
-                    f"{profile['curvature_point_count']} / {profile['diameter_point_count']}",
-                ],
-            }
-        )
+    label = REFERENCE_THRESHOLD_LABEL
+    profile = record["thresholds"][label]
+    sections.append(
+        {
+            "title": f"{label}  |  len={format_value(profile['min_length_factor'], 1)}",
+            "color": matplotlib.colors.to_hex(THRESHOLD_COLORS[label]),
+            "lines": [
+                f"branches: {profile['branch_count']}  label: {profile['curvature_label']}",
+                "p70 sqrt/len: "
+                f"{format_value(profile.get('curvature_nm_v3_p70_sqrt_length'), 6)} / "
+                f"{format_value(profile.get('curvature_nm_v3_p70_length'), 6)}",
+                "p75 sqrt/len: "
+                f"{format_value(profile['curvature_nm_v3_sqrt_length'], 6)} / "
+                f"{format_value(profile['curvature_nm_v3_length'], 6)}",
+                "mean sqrt/len: "
+                f"{format_value(profile.get('curvature_nm_v3_mean_sqrt_length'), 6)} / "
+                f"{format_value(profile.get('curvature_nm_v3_mean_length'), 6)}",
+                "trim sqrt/len: "
+                f"{format_value(profile.get('curvature_nm_v3_trimmed_mean_sqrt_length'), 6)} / "
+                f"{format_value(profile.get('curvature_nm_v3_trimmed_mean_length'), 6)}",
+                "waviness/tort: "
+                f"{format_value(profile['waviness_ratio_v2'], 6)} / "
+                f"{format_value(profile['tortuosity_v2'], 6)}",
+                "diam p30/p50/p75: "
+                f"{format_value(profile['diameter_stats_nm']['p30'], 4)} / "
+                f"{format_value(profile['diameter_stats_nm']['p50'], 4)} / "
+                f"{format_value(profile['diameter_stats_nm']['p75'], 4)}",
+                "curv pts/diam pts: "
+                f"{profile['curvature_point_count']} / {profile['diameter_point_count']}",
+            ],
+        }
+    )
     return sections
 
 
@@ -582,6 +636,7 @@ def analyze_threshold_profiles(
     diameter_nm, skeleton = extractor.calculate_diameter(mask)
     distance_map = cv2.distanceTransform((mask > 0).astype(np.uint8), cv2.DIST_L2, 5)
     base_components = extractor._collect_components(skeleton)
+    junction_metrics = compute_junction_metrics(skeleton, extractor.px_per_um)
     alignment_metrics = extractor.calculate_hof_skeleton_adaptive(
         skeleton,
         processed=processed,
@@ -620,10 +675,14 @@ def analyze_threshold_profiles(
         )
         curvature_distribution_nm = sample_branch_curvatures_nm(extractor, branches)
         diameter_distribution_nm = sample_branch_diameters_nm(extractor, distance_map, branches)
+        curvature_nm_v3_p70_sqrt_length = aggregate_branch_curvature_nm(extractor, branches, "p70", "sqrt_length")
+        curvature_nm_v3_p70_length = aggregate_branch_curvature_nm(extractor, branches, "p70", "length")
         curvature_nm_v3_sqrt_length = aggregate_branch_curvature_nm(extractor, branches, "p75", "sqrt_length")
         curvature_nm_v3_length = aggregate_branch_curvature_nm(extractor, branches, "p75", "length")
         curvature_nm_v3_mean_sqrt_length = aggregate_branch_curvature_nm(extractor, branches, "mean", "sqrt_length")
         curvature_nm_v3_mean_length = aggregate_branch_curvature_nm(extractor, branches, "mean", "length")
+        curvature_nm_v3_trimmed_mean_sqrt_length = aggregate_branch_curvature_nm(extractor, branches, "trimmed_mean", "sqrt_length")
+        curvature_nm_v3_trimmed_mean_length = aggregate_branch_curvature_nm(extractor, branches, "trimmed_mean", "length")
         curvature_nm_v3 = float(curvature_nm_v3_sqrt_length)
         curvature_label = classify_v3_curvature(curvature_nm_v3) if branches else "Unknown"
         waviness_v2 = aggregate_cached_waviness(branches)
@@ -633,10 +692,14 @@ def analyze_threshold_profiles(
             "branches": branches,
             "curvature_label": curvature_label,
             "curvature_nm_v3": float(curvature_nm_v3),
+            "curvature_nm_v3_p70_sqrt_length": float(curvature_nm_v3_p70_sqrt_length),
+            "curvature_nm_v3_p70_length": float(curvature_nm_v3_p70_length),
             "curvature_nm_v3_sqrt_length": float(curvature_nm_v3_sqrt_length),
             "curvature_nm_v3_length": float(curvature_nm_v3_length),
             "curvature_nm_v3_mean_sqrt_length": float(curvature_nm_v3_mean_sqrt_length),
             "curvature_nm_v3_mean_length": float(curvature_nm_v3_mean_length),
+            "curvature_nm_v3_trimmed_mean_sqrt_length": float(curvature_nm_v3_trimmed_mean_sqrt_length),
+            "curvature_nm_v3_trimmed_mean_length": float(curvature_nm_v3_trimmed_mean_length),
             "waviness_ratio_v2": float(waviness_v2["waviness_ratio_v2"]) if waviness_v2["waviness_ratio_v2"] is not None else None,
             "tortuosity_v2": float(waviness_v2["tortuosity_v2"]),
             "curvature_distribution_um": curvature_distribution_nm * 1000.0,
@@ -648,10 +711,14 @@ def analyze_threshold_profiles(
                 f"threshold_{label}_ready",
                 {
                     "branch_count": len(branches),
+                    "curvature_p70_sqrt_length_nm": round(curvature_nm_v3_p70_sqrt_length, 6),
+                    "curvature_p70_length_nm": round(curvature_nm_v3_p70_length, 6),
                     "curvature_sqrt_length_nm": round(curvature_nm_v3_sqrt_length, 6),
                     "curvature_length_nm": round(curvature_nm_v3_length, 6),
                     "curvature_mean_sqrt_length_nm": round(curvature_nm_v3_mean_sqrt_length, 6),
                     "curvature_mean_length_nm": round(curvature_nm_v3_mean_length, 6),
+                    "curvature_trimmed_mean_sqrt_length_nm": round(curvature_nm_v3_trimmed_mean_sqrt_length, 6),
+                    "curvature_trimmed_mean_length_nm": round(curvature_nm_v3_trimmed_mean_length, 6),
                 },
             )
 
@@ -660,6 +727,10 @@ def analyze_threshold_profiles(
         "diameter_nm": float(diameter_nm) if diameter_nm is not None else None,
         "diameter_p30_nm": diameter_p30_nm,
         "diameter_stats_nm": diameter_stats_nm,
+        "junction_count": float(junction_metrics["junction_count"]),
+        "junction_ratio": float(junction_metrics["junction_ratio"]),
+        "skeleton_length_px": float(junction_metrics["skeleton_length_px"]),
+        "skeleton_length_um": float(junction_metrics["skeleton_length_um"]),
         "alignment": float(alignment_metrics["alignment"]),
         "alignment_raw": float(alignment_metrics["alignment_raw"]),
         "mean_phi_deg": float(alignment_metrics["mean_phi_deg"]),
@@ -677,9 +748,9 @@ def render_panel(
     record: Dict[str, Any],
     threshold_profiles: Dict[str, Any],
 ) -> None:
-    threshold_entries = list(threshold_profiles.items())
-    fig = plt.figure(figsize=(18, 12), dpi=170, constrained_layout=True)
-    grid = fig.add_gridspec(3, 3, width_ratios=[1.05, 1.05, 1.15], height_ratios=[1.0, 1.0, 1.0])
+    l2_profile = threshold_profiles[REFERENCE_THRESHOLD_LABEL]
+    fig = plt.figure(figsize=(20, 6.8), dpi=170, constrained_layout=True)
+    grid = fig.add_gridspec(1, 4, width_ratios=[1.0, 1.0, 1.05, 1.2])
 
     ax_original = fig.add_subplot(grid[0, 0])
     ax_original.imshow(roi, cmap="gray")
@@ -691,7 +762,17 @@ def render_panel(
     ax_mask.set_title(f"{MODEL_LABEL} Mask", fontsize=14)
     ax_mask.axis("off")
 
-    ax_summary = fig.add_subplot(grid[:, 2])
+    ax_overlay = fig.add_subplot(grid[0, 2])
+    overlay = draw_branch_overlay(mask, l2_profile["branches"], THRESHOLD_COLORS[REFERENCE_THRESHOLD_LABEL])
+    ax_overlay.imshow(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
+    ax_overlay.set_title(
+        f"{REFERENCE_THRESHOLD_LABEL} Overlay (len={l2_profile['min_length_factor']:.1f}, n={l2_profile['branch_count']})\n"
+        f"curv s/l={l2_profile['curvature_nm_v3_sqrt_length']:.6f} / {l2_profile['curvature_nm_v3_length']:.6f}",
+        fontsize=13,
+    )
+    ax_overlay.axis("off")
+
+    ax_summary = fig.add_subplot(grid[0, 3])
     ax_summary.set_facecolor("white")
     ax_summary.axis("off")
     y = 0.985
@@ -722,27 +803,7 @@ def render_panel(
             y -= 0.032
         y -= 0.018
 
-    overlay_positions = {
-        "L1": (1, 0),
-        "L2": (1, 1),
-        "L3": (2, 0),
-        "L4": (2, 1),
-    }
-
-    for label, profile in threshold_entries:
-        color = THRESHOLD_COLORS[label]
-        row_idx, col_idx = overlay_positions[label]
-        ax_overlay = fig.add_subplot(grid[row_idx, col_idx])
-        overlay = draw_branch_overlay(mask, profile["branches"], color)
-        ax_overlay.imshow(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
-        ax_overlay.set_title(
-            f"{label} Overlay (len={profile['min_length_factor']:.1f}, n={profile['branch_count']})\n"
-            f"curv s/l={profile['curvature_nm_v3_sqrt_length']:.6f} / {profile['curvature_nm_v3_length']:.6f}",
-            fontsize=11,
-        )
-        ax_overlay.axis("off")
-
-    fig.suptitle(f"{MODEL_LABEL}  |  XR Standard Method  |  V3 + Length Threshold L1-L4", fontsize=18)
+    fig.suptitle(f"{MODEL_LABEL}  |  XR Standard Method  |  Simplified Review Panel (L2 Focus)", fontsize=18)
     fig.savefig(output_path, bbox_inches="tight")
     plt.close(fig)
 
@@ -760,6 +821,15 @@ def load_completed_records(out_dir: Path) -> List[Dict[str, Any]]:
     return records
 
 
+def load_completed_record(features_path: Path) -> Dict[str, Any] | None:
+    if not features_path.exists():
+        return None
+    try:
+        return json.loads(features_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def write_summary_files(out_dir: Path, records: List[Dict[str, Any]]) -> None:
     summary_json = out_dir / "summary.json"
     summary_csv = out_dir / "summary.csv"
@@ -768,7 +838,10 @@ def write_summary_files(out_dir: Path, records: List[Dict[str, Any]]) -> None:
 
     panel_names = set()
     for record in records:
-        src = Path(record["panel_path"])
+        panel_path = record.get("panel_path")
+        if not panel_path:
+            continue
+        src = Path(panel_path)
         if not src.exists():
             continue
         panel_name = src.name
@@ -795,7 +868,166 @@ def write_summary_files(out_dir: Path, records: List[Dict[str, Any]]) -> None:
             writer.writerows(flat_rows)
 
 
-def process_one(
+def _worker_process_one(
+    row: Dict[str, Any],
+    config_path: str,
+    checkpoint_path: str,
+    device_name: str,
+    batch_size: int | None,
+    out_dir: str,
+    skip_existing: bool,
+    result_file: str,
+) -> None:
+    payload: Dict[str, Any]
+    try:
+        device = torch.device(device_name)
+        model, config = load_model(ModelSpec(label=MODEL_LABEL, config_path=Path(config_path), checkpoint_path=Path(checkpoint_path)), device)
+        result = process_one_inner(
+            row=row,
+            model=model,
+            config=config,
+            device=device,
+            batch_size=batch_size,
+            out_dir=Path(out_dir),
+            skip_existing=skip_existing,
+        )
+        payload = {"type": "result", "result": result}
+    except Exception as exc:
+        payload = {
+            "type": "error",
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+    try:
+        with open(result_file, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def run_process_one_with_timeout(
+    row: Dict[str, Any],
+    device: torch.device,
+    batch_size: int | None,
+    out_dir: Path,
+    skip_existing: bool,
+    timeout_s: float,
+) -> Dict[str, Any] | None:
+    manifest = make_manifest_row(row)
+    item_dir = out_dir / "items" / manifest["image_slug"]
+    ensure_dir(item_dir)
+    features_path = item_dir / "features.json"
+    panel_path = item_dir / "panel.png"
+
+    if skip_existing and features_path.exists() and panel_path.exists():
+        return load_completed_record(features_path)
+
+    tmp_dir = tempfile.mkdtemp(prefix="xr_review_timeout_")
+    result_file = os.path.join(tmp_dir, "result.json")
+    ctx = mp.get_context("spawn")
+    started_at = time.perf_counter()
+    process = ctx.Process(
+        target=_worker_process_one,
+        args=(
+            row,
+            str(EXPC_SPEC.config_path),
+            str(EXPC_SPEC.checkpoint_path),
+            str(device),
+            batch_size,
+            str(out_dir),
+            skip_existing,
+            result_file,
+        ),
+    )
+    process.start()
+    last_stage = "spawn"
+    progress_path = item_dir / "progress.json"
+
+    while True:
+        process.join(timeout=0.2)
+        elapsed_s = time.perf_counter() - started_at
+        if progress_path.exists():
+            try:
+                progress_payload = json.loads(progress_path.read_text(encoding="utf-8"))
+                last_stage = progress_payload.get("stage") or last_stage
+            except Exception:
+                pass
+        if timeout_s is not None and elapsed_s > timeout_s:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+            timeout_record = {
+                **manifest,
+                "model_label": MODEL_LABEL,
+            "panel_path": str(panel_path),
+            "mask_path": str(item_dir / "mask.png"),
+            "original_path": str(item_dir / "original.png"),
+            "l2_overlay_path": str(item_dir / "l2_overlay.png"),
+            "runtime_device": device.type,
+            "patch_count": 0,
+            "threshold": None,
+                "density": None,
+                "alignment": None,
+                "alignment_raw": None,
+                "mean_phi_deg": None,
+                "mean_phi_raw_deg": None,
+                "hof_method": None,
+                "diameter_nm": None,
+                "diameter_p30_nm": None,
+                "diameter_stats_nm": {"mean": None, "std": None, "min": None, "p25": None, "p30": None, "p50": None, "p75": None, "max": None},
+                "thresholds": {},
+                "timings": {"elapsed_s": round(elapsed_s, 3)},
+                "status": "timeout_skip",
+                "elapsed_s": round(elapsed_s, 3),
+                "last_stage": last_stage,
+                "error": f"Timed out after {timeout_s:.1f}s",
+            }
+            features_path.write_text(json.dumps(timeout_record, ensure_ascii=False, indent=2), encoding="utf-8")
+            return timeout_record
+        if process.is_alive():
+            continue
+        if os.path.exists(result_file):
+            payload = json.loads(Path(result_file).read_text(encoding="utf-8"))
+            if payload.get("type") == "result":
+                result = payload.get("result")
+                if result is not None:
+                    result["status"] = result.get("status", "success")
+                    result["elapsed_s"] = round(time.perf_counter() - started_at, 3)
+                    result["last_stage"] = last_stage
+                    features_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+                return result
+            error_record = {
+                **manifest,
+                "model_label": MODEL_LABEL,
+                "panel_path": str(panel_path),
+                "mask_path": str(item_dir / "mask.png"),
+                "original_path": str(item_dir / "original.png"),
+                "l2_overlay_path": str(item_dir / "l2_overlay.png"),
+                "runtime_device": device.type,
+                "patch_count": 0,
+                "threshold": None,
+                "density": None,
+                "alignment": None,
+                "alignment_raw": None,
+                "mean_phi_deg": None,
+                "mean_phi_raw_deg": None,
+                "hof_method": None,
+                "diameter_nm": None,
+                "diameter_p30_nm": None,
+                "diameter_stats_nm": {"mean": None, "std": None, "min": None, "p25": None, "p30": None, "p50": None, "p75": None, "max": None},
+                "thresholds": {},
+                "timings": {"elapsed_s": round(time.perf_counter() - started_at, 3)},
+                "status": "error",
+                "elapsed_s": round(time.perf_counter() - started_at, 3),
+                "last_stage": last_stage,
+                "error": payload.get("error"),
+            }
+            features_path.write_text(json.dumps(error_record, ensure_ascii=False, indent=2), encoding="utf-8")
+            return error_record
+        return None
+
+
+def process_one_inner(
     row: Dict[str, Any],
     model: ResNet34UNet,
     config: Dict[str, Any],
@@ -810,6 +1042,8 @@ def process_one(
     features_path = item_dir / "features.json"
     panel_path = item_dir / "panel.png"
     mask_path = item_dir / "mask.png"
+    original_path = item_dir / "original.png"
+    l2_overlay_path = item_dir / "l2_overlay.png"
     progress_path = item_dir / "progress.json"
 
     if skip_existing and features_path.exists() and panel_path.exists():
@@ -834,6 +1068,8 @@ def process_one(
     image_gray = read_gray_image(image_path)
     extractor = FeatureExtractor(magnification=manifest["magnification"], speed_profile="accurate")
     roi = extractor.extract_roi(image_gray)
+    write_png(original_path, roi.astype(np.uint8))
+    write_progress("original_saved", {"original_path": str(original_path)})
 
     infer_started = datetime.now().timestamp()
     write_progress("predicting_mask")
@@ -867,10 +1103,16 @@ def process_one(
         "model_label": MODEL_LABEL,
         "panel_path": str(panel_path),
         "mask_path": str(mask_path),
+        "original_path": str(original_path),
+        "l2_overlay_path": str(l2_overlay_path),
         "runtime_device": device.type,
         "patch_count": int(patch_count),
         "threshold": float(config["inference"].get("threshold", 0.7)),
         "density": round(analysis["density"], 4),
+        "junction_count": int(round(analysis["junction_count"])),
+        "junction_ratio": round(analysis["junction_ratio"], 6),
+        "skeleton_length_px": round(analysis["skeleton_length_px"], 3),
+        "skeleton_length_um": round(analysis["skeleton_length_um"], 6),
         "alignment": round(analysis["alignment"], 6),
         "alignment_raw": round(analysis["alignment_raw"], 6),
         "mean_phi_deg": round(analysis["mean_phi_deg"], 4),
@@ -881,6 +1123,7 @@ def process_one(
         "diameter_stats_nm": {k: (round(v, 4) if v is not None else None) for k, v in analysis["diameter_stats_nm"].items()},
         "thresholds": {},
         "timings": timings,
+        "status": "success",
     }
 
     for label, profile in analysis["thresholds"].items():
@@ -889,10 +1132,14 @@ def process_one(
             "branch_count": int(profile["branch_count"]),
             "curvature_label": profile["curvature_label"],
             "curvature_nm_v3": round(profile["curvature_nm_v3"], 6),
+            "curvature_nm_v3_p70_sqrt_length": round(profile["curvature_nm_v3_p70_sqrt_length"], 6),
+            "curvature_nm_v3_p70_length": round(profile["curvature_nm_v3_p70_length"], 6),
             "curvature_nm_v3_sqrt_length": round(profile["curvature_nm_v3_sqrt_length"], 6),
             "curvature_nm_v3_length": round(profile["curvature_nm_v3_length"], 6),
             "curvature_nm_v3_mean_sqrt_length": round(profile["curvature_nm_v3_mean_sqrt_length"], 6),
             "curvature_nm_v3_mean_length": round(profile["curvature_nm_v3_mean_length"], 6),
+            "curvature_nm_v3_trimmed_mean_sqrt_length": round(profile["curvature_nm_v3_trimmed_mean_sqrt_length"], 6),
+            "curvature_nm_v3_trimmed_mean_length": round(profile["curvature_nm_v3_trimmed_mean_length"], 6),
             "waviness_ratio_v2": round(profile["waviness_ratio_v2"], 6) if profile["waviness_ratio_v2"] is not None else None,
             "tortuosity_v2": round(profile["tortuosity_v2"], 6),
             "curvature_point_count": int(profile["curvature_distribution_um"].size),
@@ -902,6 +1149,14 @@ def process_one(
 
     features_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     write_progress("features_saved")
+
+    l2_overlay = draw_branch_overlay(
+        mask.astype(np.uint8),
+        analysis["thresholds"][REFERENCE_THRESHOLD_LABEL]["branches"],
+        THRESHOLD_COLORS[REFERENCE_THRESHOLD_LABEL],
+    )
+    write_png(l2_overlay_path, l2_overlay.astype(np.uint8))
+    write_progress("l2_overlay_saved", {"l2_overlay_path": str(l2_overlay_path)})
 
     render_started = datetime.now().timestamp()
     render_panel(panel_path, roi, mask.astype(np.uint8), record, analysis["thresholds"])
@@ -926,20 +1181,18 @@ def main() -> None:
     write_manifest(manifest_rows, out_dir / "manifest.csv")
 
     device = torch.device(args.device if args.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu"))
-    model, config = load_model(EXPC_SPEC, device)
 
     completed_records = load_completed_records(out_dir)
     completed_by_id = {int(record["image_id"]): record for record in completed_records}
 
     for row in rows:
-        processed = process_one(
+        processed = run_process_one_with_timeout(
             row=row,
-            model=model,
-            config=config,
             device=device,
             batch_size=args.batch_size,
             out_dir=out_dir,
             skip_existing=args.skip_existing,
+            timeout_s=args.timeout_s,
         )
         if processed is not None:
             completed_by_id[int(row["id"])] = processed
