@@ -348,6 +348,23 @@ window.hideCleanStepDetailPanel = () => {};
 // ── ML 图表 ──
 
 window.switchMlSubPage = async (page) => {
+    // predict 子页面直接处理，避免模块缓存导致旧版不识别 'predict'
+    if (page === 'predict') {
+        const visual = document.getElementById('ml-subpage-visual');
+        const data = document.getElementById('ml-subpage-data');
+        const predict = document.getElementById('ml-subpage-predict');
+        const selTop = document.getElementById('ml-subpage-switch-top');
+        const selInline = document.getElementById('ml-subpage-switch');
+
+        if (visual) visual.classList.add('hidden');
+        if (data) data.classList.add('hidden');
+        if (predict) predict.classList.remove('hidden');
+        if (selTop && selTop.value !== 'predict') selTop.value = 'predict';
+        if (selInline && selInline.value !== 'predict') selInline.value = 'predict';
+
+        if (typeof window.loadPredictHistory === 'function') window.loadPredictHistory();
+        return;
+    }
     const m = await import('../modules/charts/index.js');
     m.switchMlSubPage(page);
 };

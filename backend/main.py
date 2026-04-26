@@ -4,7 +4,7 @@ import re
 import sqlite3
 import numpy as np
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
@@ -368,24 +368,113 @@ class ImageDetail(BaseModel):
     processed: Optional[int] = 0
 
 @app.post("/api/images")
-async def create_image(image: ImageDetail):
+async def create_image(
+    file_path: Optional[str] = Form(None),
+    source: Optional[str] = Form(None),
+    sample_id: Optional[str] = Form(None),
+    membrane_id: Optional[int] = Form(None),
+    growth_temp: Optional[float] = Form(None),
+    growth_time: Optional[float] = Form(None),
+    ar_flow: Optional[float] = Form(None),
+    h2_flow: Optional[float] = Form(None),
+    c2h4_flow: Optional[float] = Form(None),
+    al2o3_power: Optional[float] = Form(None),
+    al2o3_thickness: Optional[float] = Form(None),
+    fe_power: Optional[float] = Form(None),
+    fe_thickness: Optional[float] = Form(None),
+    anneal_temp: Optional[float] = Form(None),
+    anneal_time: Optional[float] = Form(None),
+    position_label: Optional[str] = Form(None),
+    magnification: Optional[int] = Form(None),
+    horizontal_pos: Optional[str] = Form(None),
+    vertical_pos: Optional[int] = Form(None),
+    repeat_id: Optional[int] = Form(None),
+    catalyst_weight: Optional[float] = Form(None),
+    actual_temp: Optional[float] = Form(None),
+    membrane_pos_cm: Optional[float] = Form(None),
+    diameter: Optional[float] = Form(None),
+    density: Optional[float] = Form(None),
+    alignment: Optional[float] = Form(None),
+    curvature: Optional[Any] = Form(None),
+    tortuosity: Optional[float] = Form(None),
+    processed: Optional[int] = Form(0),
+    image: Optional[UploadFile] = File(None)
+):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    data = calibrator.calibrate(image.dict())
-    
+
+    # Create image detail dict
+    data = {
+        'file_path': file_path,
+        'source': source,
+        'sample_id': sample_id,
+        'membrane_id': membrane_id,
+        'growth_temp': growth_temp,
+        'growth_time': growth_time,
+        'ar_flow': ar_flow,
+        'h2_flow': h2_flow,
+        'c2h4_flow': c2h4_flow,
+        'al2o3_power': al2o3_power,
+        'al2o3_thickness': al2o3_thickness,
+        'fe_power': fe_power,
+        'fe_thickness': fe_thickness,
+        'anneal_temp': anneal_temp,
+        'anneal_time': anneal_time,
+        'position_label': position_label,
+        'magnification': magnification,
+        'horizontal_pos': horizontal_pos,
+        'vertical_pos': vertical_pos,
+        'repeat_id': repeat_id,
+        'catalyst_weight': catalyst_weight,
+        'actual_temp': actual_temp,
+        'membrane_pos_cm': membrane_pos_cm,
+        'diameter': diameter,
+        'density': density,
+        'alignment': alignment,
+        'curvature': curvature,
+        'tortuosity': tortuosity,
+        'processed': processed,
+    }
+
+    data = calibrator.calibrate(data)
+
+    # Handle file upload
+    if image and image.filename:
+        file_ext = os.path.splitext(image.filename)[1].lower()
+        if file_ext not in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+
+        # Determine target directory based on source
+        source_dir = source if source in ['XR', 'ZZY'] else 'Other'
+        target_dir = os.path.join('d:\\CNTDATA', source_dir)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Generate filename if sample_id not provided
+        if not sample_id:
+            sample_id = f"CUSTOM_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Build file path
+        target_path = os.path.join(target_dir, f"{sample_id}{file_ext}")
+        with open(target_path, 'wb') as f:
+            f.write(await image.read())
+        data['file_path'] = target_path
+        data['source'] = source_dir
+
     fields = []
     values = []
     placeholders = []
-    
+
     for k, v in data.items():
         if v is not None:
             fields.append(k)
             values.append(v)
             placeholders.append("?")
-            
+
     if not fields:
+        conn.close()
         raise HTTPException(status_code=400, detail="No data provided")
-        
+
     query = f"INSERT INTO images ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
     cursor.execute(query, values)
     new_id = cursor.lastrowid
@@ -394,22 +483,119 @@ async def create_image(image: ImageDetail):
     return {"status": "success", "id": new_id}
 
 @app.put("/api/images/{image_id}")
-async def update_image(image_id: int, image: ImageDetail):
+async def update_image(
+    image_id: int,
+    file_path: Optional[str] = Form(None),
+    source: Optional[str] = Form(None),
+    sample_id: Optional[str] = Form(None),
+    membrane_id: Optional[int] = Form(None),
+    growth_temp: Optional[float] = Form(None),
+    growth_time: Optional[float] = Form(None),
+    ar_flow: Optional[float] = Form(None),
+    h2_flow: Optional[float] = Form(None),
+    c2h4_flow: Optional[float] = Form(None),
+    al2o3_power: Optional[float] = Form(None),
+    al2o3_thickness: Optional[float] = Form(None),
+    fe_power: Optional[float] = Form(None),
+    fe_thickness: Optional[float] = Form(None),
+    anneal_temp: Optional[float] = Form(None),
+    anneal_time: Optional[float] = Form(None),
+    position_label: Optional[str] = Form(None),
+    magnification: Optional[int] = Form(None),
+    horizontal_pos: Optional[str] = Form(None),
+    vertical_pos: Optional[int] = Form(None),
+    repeat_id: Optional[int] = Form(None),
+    catalyst_weight: Optional[float] = Form(None),
+    actual_temp: Optional[float] = Form(None),
+    membrane_pos_cm: Optional[float] = Form(None),
+    diameter: Optional[float] = Form(None),
+    density: Optional[float] = Form(None),
+    alignment: Optional[float] = Form(None),
+    curvature: Optional[Any] = Form(None),
+    tortuosity: Optional[float] = Form(None),
+    processed: Optional[int] = Form(None),
+    image: Optional[UploadFile] = File(None)
+):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    data = calibrator.calibrate(image.dict())
-    
+
+    # Create image detail dict
+    data = {
+        'file_path': file_path,
+        'source': source,
+        'sample_id': sample_id,
+        'membrane_id': membrane_id,
+        'growth_temp': growth_temp,
+        'growth_time': growth_time,
+        'ar_flow': ar_flow,
+        'h2_flow': h2_flow,
+        'c2h4_flow': c2h4_flow,
+        'al2o3_power': al2o3_power,
+        'al2o3_thickness': al2o3_thickness,
+        'fe_power': fe_power,
+        'fe_thickness': fe_thickness,
+        'anneal_temp': anneal_temp,
+        'anneal_time': anneal_time,
+        'position_label': position_label,
+        'magnification': magnification,
+        'horizontal_pos': horizontal_pos,
+        'vertical_pos': vertical_pos,
+        'repeat_id': repeat_id,
+        'catalyst_weight': catalyst_weight,
+        'actual_temp': actual_temp,
+        'membrane_pos_cm': membrane_pos_cm,
+        'diameter': diameter,
+        'density': density,
+        'alignment': alignment,
+        'curvature': curvature,
+        'tortuosity': tortuosity,
+        'processed': processed,
+    }
+
+    data = calibrator.calibrate(data)
+
+    # Handle file upload
+    if image and image.filename:
+        file_ext = os.path.splitext(image.filename)[1].lower()
+        if file_ext not in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+
+        # Determine target directory based on source or existing record
+        cursor.execute("SELECT source FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        if row:
+            existing_source = row[0]
+        else:
+            existing_source = None
+
+        source_dir = source if source in ['XR', 'ZZY'] else (existing_source if existing_source in ['XR', 'ZZY'] else 'Other')
+        target_dir = os.path.join('d:\\CNTDATA', source_dir)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Generate filename if sample_id not provided
+        if not sample_id:
+            sample_id = f"CUSTOM_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Build file path
+        target_path = os.path.join(target_dir, f"{sample_id}{file_ext}")
+        with open(target_path, 'wb') as f:
+            f.write(await image.read())
+        data['file_path'] = target_path
+        data['source'] = source_dir
+
     updates = []
     values = []
-    
+
     for k, v in data.items():
         if v is not None:
             updates.append(f"{k} = ?")
             values.append(v)
-            
+
     if not updates:
+        conn.close()
         raise HTTPException(status_code=400, detail="No data provided")
-        
+
     values.append(image_id)
     query = f"UPDATE images SET {', '.join(updates)} WHERE id = ?"
     cursor.execute(query, values)

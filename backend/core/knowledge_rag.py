@@ -76,11 +76,11 @@ class RAGRetriever:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     """
-                    SELECT id, sample_id, source, growth_temp, growth_time,
+                    SELECT id, sample_id, source, growth_temp, actual_temp, growth_time,
                            ar_flow, h2_flow, c2h4_flow,
                            fe_thickness, al2o3_thickness,
                            diameter, density, alignment, curvature,
-                           position_label
+                           position_label, membrane_pos_cm
                     FROM images
                     WHERE processed = 1
                       AND id != ?
@@ -100,14 +100,24 @@ class RAGRetriever:
         def score(row):
             total = 0.0
             growth_temp = params.get("growth_temp")
+            actual_temp = params.get("actual_temp")
             fe_thickness = params.get("fe_thickness")
             ar_flow = params.get("ar_flow")
+            inlet_distance = params.get("inlet_distance_cm") or params.get("membrane_pos_cm")
+            try:
+                inlet_distance = float(inlet_distance) if inlet_distance is not None else None
+            except (TypeError, ValueError):
+                inlet_distance = None
             if growth_temp and row["growth_temp"]:
                 total += abs(growth_temp - row["growth_temp"]) / max(growth_temp, 1) * 2.0
+            if actual_temp and row["actual_temp"]:
+                total += abs(actual_temp - row["actual_temp"]) / max(actual_temp, 1) * 2.0
             if fe_thickness and row["fe_thickness"]:
                 total += abs(fe_thickness - row["fe_thickness"]) / max(fe_thickness, 1) * 1.5
             if ar_flow and row["ar_flow"]:
                 total += abs(ar_flow - row["ar_flow"]) / max(ar_flow, 1)
+            if inlet_distance is not None and row["membrane_pos_cm"] is not None:
+                total += abs(inlet_distance - float(row["membrane_pos_cm"])) / 41.2
             return total
 
         return [dict(row) for row in sorted(rows, key=score)[:top_k]]

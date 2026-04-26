@@ -21,7 +21,7 @@ function getMlYValue(row, target, yMode) {
 /**
  * 确保图表实例存在
  */
-function ensureMlChart(key, domId) {
+export function ensureMlChart(key, domId) {
     if (!window.echarts) return null;
     const dom = getEl(domId);
     if (!dom) return null;
@@ -469,14 +469,16 @@ export function resizeMlCharts() {
  * 切换 ML 子页面
  */
 export function switchMlSubPage(page) {
-    const target = page === 'data' ? 'data' : 'visual';
+    const target = (page === 'data') ? 'data' : (page === 'predict') ? 'predict' : 'visual';
     const visual = getEl('ml-subpage-visual');
     const data = getEl('ml-subpage-data');
+    const predict = getEl('ml-subpage-predict');
     const selTop = getEl('ml-subpage-switch-top');
     const selInline = getEl('ml-subpage-switch');
 
     if (visual) visual.classList.toggle('hidden', target !== 'visual');
     if (data) data.classList.toggle('hidden', target !== 'data');
+    if (predict) predict.classList.toggle('hidden', target !== 'predict');
     if (selTop && selTop.value !== target) selTop.value = target;
     if (selInline && selInline.value !== target) selInline.value = target;
 
@@ -487,6 +489,8 @@ export function switchMlSubPage(page) {
         window.applyXrMlView({ skipCharts: true, forceTable: true });
     } else if (target === 'visual' && typeof window.applyXrMlView === 'function') {
         window.applyXrMlView({ skipTable: true });
+    } else if (target === 'predict') {
+        if (typeof window.loadPredictHistory === 'function') window.loadPredictHistory();
     }
 
     setTimeout(() => resizeMlCharts(), 0);

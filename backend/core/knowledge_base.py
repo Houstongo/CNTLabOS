@@ -536,6 +536,7 @@ class KnowledgeBaseService:
                 CREATE TABLE IF NOT EXISTS kb_links (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     doc_id INTEGER REFERENCES kb_documents(id) ON DELETE CASCADE,
+                    chunk_id INTEGER REFERENCES kb_chunks(id) ON DELETE CASCADE,
                     relation_type TEXT,
                     source_node TEXT,
                     target_node TEXT,
@@ -653,6 +654,8 @@ class KnowledgeBaseService:
             conn.execute("ALTER TABLE kb_links ADD COLUMN source_node TEXT")
         if "target_node" not in existing:
             conn.execute("ALTER TABLE kb_links ADD COLUMN target_node TEXT")
+        if "chunk_id" not in existing:
+            conn.execute("ALTER TABLE kb_links ADD COLUMN chunk_id INTEGER")
         if "performance_factor" not in existing:
             conn.execute("ALTER TABLE kb_links ADD COLUMN performance_factor TEXT")
         if "confidence" not in existing:
@@ -2135,34 +2138,58 @@ class KnowledgeBaseService:
 
             link_count = 0
             doc_set = set()
+            seen_signatures: Set[Tuple[object, ...]] = set()
             for row in chunk_rows:
                 doc_id = int(row["doc_id"])
                 chunk_id = int(row["chunk_id"])
                 doc_set.add(doc_id)
                 for relation in self._extract_relations_from_chunk(row["text"] or ""):
-                    cursor.execute(
-                        """
-                        INSERT INTO kb_links (
-                            doc_id, chunk_id, relation_type, source_node, target_node,
-                            process_factor, morphology_factor, performance_factor,
-                            effect_direction, confidence, mechanism_summary, evidence_text
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            doc_id,
-                            chunk_id,
-                            relation.get("relation_type"),
-                            relation.get("source_node"),
-                            relation.get("target_node"),
-                            relation.get("process_factor"),
-                            relation.get("morphology_factor"),
-                            relation.get("performance_factor"),
-                            relation.get("effect_direction"),
-                            relation.get("confidence") if relation.get("confidence") is not None else 0.5,
-                            relation.get("mechanism_summary"),
-                            relation.get("evidence_text") if relation.get("evidence_text") is not None else "",
-                        ),
+                    inserted = self._insert_link_row(
+                        cursor,
+                        doc_id=doc_id,
+                        chunk_id=chunk_id,
+                        relation=relation,
+                        seen_signatures=seen_signatures,
                     )
+                    if inserted:
+                        link_count += 1
+
+            if doc_ids:
+                placeholders = ",".join("?" for _ in doc_ids)
+                msfu_rows = cursor.execute(
+                    f"""
+                    SELECT *
+                    FROM kb_msfu
+                    WHERE doc_id IN ({placeholders})
+                    ORDER BY doc_id, chunk_id, id
+                    """,
+                    tuple(doc_ids),
+                ).fetchall()
+            else:
+                msfu_rows = cursor.execute(
+                    """
+                    SELECT *
+                    FROM kb_msfu
+                    ORDER BY doc_id, chunk_id, id
+                    """
+                ).fetchall()
+
+            for row in msfu_rows:
+                relation = self._build_link_relation_from_msfu(dict(row))
+                if not relation:
+                    continue
+                doc_id = int(row["doc_id"]) if row["doc_id"] is not None else 0
+                chunk_id = int(row["chunk_id"]) if row["chunk_id"] is not None else None
+                if doc_id:
+                    doc_set.add(doc_id)
+                inserted = self._insert_link_row(
+                    cursor,
+                    doc_id=doc_id,
+                    chunk_id=chunk_id,
+                    relation=relation,
+                    seen_signatures=seen_signatures,
+                )
+                if inserted:
                     link_count += 1
 
             conn.commit()
@@ -2173,6 +2200,141 @@ class KnowledgeBaseService:
         finally:
             conn.close()
             self._invalidate_semantic_cache()
+
+    @staticmethod
+    def _link_signature(doc_id: int, chunk_id: Optional[int], relation: Dict[str, object]) -> Tuple[object, ...]:
+        return (
+            int(doc_id or 0),
+            int(chunk_id) if chunk_id is not None else None,
+            relation.get("relation_type") or "",
+            relation.get("source_node") or "",
+            relation.get("target_node") or "",
+            relation.get("effect_direction") or "",
+        )
+
+    def _insert_link_row(
+        self,
+        cursor,
+        doc_id: int,
+        chunk_id: Optional[int],
+        relation: Dict[str, object],
+        seen_signatures: Set[Tuple[object, ...]],
+    ) -> bool:
+        relation_type = relation.get("relation_type")
+        source_node = relation.get("source_node")
+        target_node = relation.get("target_node")
+        if not relation_type or not source_node or not target_node or not doc_id:
+            return False
+
+        signature = self._link_signature(doc_id, chunk_id, relation)
+        if signature in seen_signatures:
+            return False
+        seen_signatures.add(signature)
+
+        cursor.execute(
+            """
+            INSERT INTO kb_links (
+                doc_id, chunk_id, relation_type, source_node, target_node,
+                process_factor, morphology_factor, performance_factor,
+                effect_direction, confidence, mechanism_summary, evidence_text
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                doc_id,
+                chunk_id,
+                relation_type,
+                source_node,
+                target_node,
+                relation.get("process_factor"),
+                relation.get("morphology_factor"),
+                relation.get("performance_factor"),
+                relation.get("effect_direction"),
+                relation.get("confidence") if relation.get("confidence") is not None else 0.5,
+                relation.get("mechanism_summary"),
+                relation.get("evidence_text") if relation.get("evidence_text") is not None else "",
+            ),
+        )
+        return True
+
+    def _build_link_relation_from_msfu(self, row: Dict[str, object]) -> Optional[Dict[str, object]]:
+        source_node = self._normalize_entity_node(row.get("source_entity"))
+        target_node = self._normalize_entity_node(row.get("target_entity"))
+        if not source_node or not target_node:
+            return None
+
+        relation_type = self._infer_relation_type_from_nodes(source_node, target_node)
+        if not relation_type:
+            return None
+
+        process_factor = self._normalize_factor_value(row.get("process_factor"))
+        morphology_factor = self._normalize_factor_value(row.get("morphology_factor"))
+        performance_factor = self._normalize_factor_value(row.get("performance_factor"))
+
+        return {
+            "relation_type": relation_type,
+            "source_node": source_node,
+            "target_node": target_node,
+            "process_factor": process_factor,
+            "morphology_factor": morphology_factor,
+            "performance_factor": performance_factor,
+            "effect_direction": self._normalize_effect_direction(
+                row.get("effect_direction") or row.get("direction")
+            ),
+            "confidence": row.get("confidence") if row.get("confidence") is not None else 0.5,
+            "mechanism_summary": row.get("mechanism_summary") or row.get("content"),
+            "evidence_text": row.get("evidence_text") or row.get("content") or "",
+        }
+
+    @classmethod
+    def _normalize_factor_value(cls, factor: Optional[str]) -> Optional[str]:
+        if factor is None:
+            return None
+        value = str(factor).strip()
+        if not value:
+            return None
+        return cls._translate_factor_to_chinese(value)
+
+    @classmethod
+    def _normalize_entity_node(cls, entity: Optional[str]) -> str:
+        raw = str(entity or "").strip()
+        if not raw:
+            return ""
+        if ":" not in raw:
+            return cls._translate_factor_to_chinese(raw)
+        entity_type, label = raw.split(":", 1)
+        entity_type = cls._translate_entity_type_to_chinese(entity_type.strip())
+        label = cls._translate_factor_to_chinese(label.strip())
+        return f"{entity_type}:{label}" if label else entity_type
+
+    @staticmethod
+    def _infer_relation_type_from_nodes(source_node: str, target_node: str) -> Optional[str]:
+        source_type = source_node.split(":", 1)[0]
+        target_type = target_node.split(":", 1)[0]
+        relation_map = {
+            ("工艺", "形貌"): "工艺→形貌",
+            ("形貌", "性能"): "形貌→性能",
+            ("工艺", "性能"): "工艺→性能",
+            ("工艺", "机理"): "工艺→机理",
+            ("机理", "形貌"): "机理→形貌",
+            ("机理", "证据"): "机理证据",
+        }
+        return relation_map.get((source_type, target_type))
+
+    @staticmethod
+    def _normalize_effect_direction(direction: Optional[str]) -> Optional[str]:
+        raw = str(direction or "").strip().lower()
+        if not raw:
+            return None
+        mapping = {
+            "positive": "increase",
+            "negative": "decrease",
+            "neutral": "unknown",
+            "促进": "increase",
+            "抑制": "decrease",
+            "增加": "increase",
+            "减少": "decrease",
+        }
+        return mapping.get(raw, raw)
 
     def _load_link_rows(self) -> List[Dict[str, object]]:
         conn = self._connect()
@@ -2194,6 +2356,7 @@ class KnowledgeBaseService:
 
     def search_links(self, query: str, top_k: int = 5) -> List[Dict[str, object]]:
         query_tokens = self._expand_link_query_tokens(query)
+        raw_query = str(query or "").strip().lower()
 
         all_rows = self._load_link_rows()
 
@@ -2227,7 +2390,8 @@ class KnowledgeBaseService:
 
             relation_boost = self._score_link_against_query_profile(row_dict, profile)
             confidence = float(row_dict.get("confidence") or 0.0)
-            final_score = float(token_hits) + relation_boost + confidence * 0.35
+            exact_match_boost = self._score_exact_link_match(row_dict, raw_query)
+            final_score = float(token_hits) + relation_boost + confidence * 0.35 + exact_match_boost
             enriched = {**row_dict, "_match_score": round(final_score, 4)}
             scored.append((final_score, enriched))
 
@@ -2261,53 +2425,79 @@ class KnowledgeBaseService:
             tokens.update({"mechanism", "mechanism_summary", "evidence", "literature"})
         return tokens
 
+    @staticmethod
+    def _score_exact_link_match(row_dict: Dict[str, object], raw_query: str) -> float:
+        if not raw_query:
+            return 0.0
+
+        boost = 0.0
+        exact_fields = (
+            str(row_dict.get("process_factor") or "").lower(),
+            str(row_dict.get("morphology_factor") or "").lower(),
+            str(row_dict.get("performance_factor") or "").lower(),
+            str(row_dict.get("source_node") or "").lower(),
+            str(row_dict.get("target_node") or "").lower(),
+        )
+
+        for field in exact_fields:
+            if not field:
+                continue
+            if field == raw_query or field.endswith(f":{raw_query}"):
+                boost += 4.0
+            elif raw_query in field:
+                boost += 1.2
+
+        evidence_text = " ".join(
+            str(row_dict.get(key) or "").lower()
+            for key in ("mechanism_summary", "evidence_text", "title", "theme")
+        )
+        if raw_query and raw_query in evidence_text:
+            boost += 0.8
+
+        return boost
+
+    # chain 统一使用英文键（前端依赖英文键）
+    _CHAIN_EN_KEYS = {
+        "process_to_morphology": "工艺→形貌",
+        "morphology_to_performance": "形貌→性能",
+        "process_to_performance": "工艺→性能",
+        "process_to_mechanism": "工艺→机理",
+        "mechanism_to_morphology": "机理→形貌",
+        "mechanism_evidence": "机理证据",
+    }
+
     def get_relation_chain_summary(self, query: str, top_k: int = 20) -> Dict[str, List[Dict[str, object]]]:
-        grouped = {
-            "工艺→形貌": [],
-            "形貌→性能": [],
-            "工艺→性能": [],
-            "工艺→机理": [],
-            "机理→形貌": [],
-            "机理证据": [],
-        }
+        # 中文键用于查库，英文键用于返回前端
+        cn_to_en = {v: k for k, v in self._CHAIN_EN_KEYS.items()}
 
         # 空 query：按类型均匀取 top_k 条，展示全量概览
         if not query or not query.strip():
+            result = {k: [] for k in self._CHAIN_EN_KEYS}
             conn = self._connect()
             try:
-                for rel_type in grouped:
+                for en_key, cn_key in self._CHAIN_EN_KEYS.items():
                     rows = conn.execute(
                         "SELECT * FROM kb_links WHERE relation_type = ? ORDER BY confidence DESC LIMIT ?",
-                        (rel_type, top_k),
+                        (cn_key, top_k),
                     ).fetchall()
                     conn.row_factory = sqlite3.Row
-                    # Re-query with Row factory
                     rows = conn.execute(
                         "SELECT * FROM kb_links WHERE relation_type = ? ORDER BY confidence DESC LIMIT ?",
-                        (rel_type, top_k),
+                        (cn_key, top_k),
                     ).fetchall()
-                    grouped[rel_type] = [dict(r) for r in rows]
+                    result[en_key] = [dict(r) for r in rows]
             finally:
                 conn.close()
-            return grouped
+            return result
 
         links = self.search_links(query, top_k=top_k)
-        grouped = {
-            "工艺→形貌": [],
-            "形貌→性能": [],
-            "工艺→性能": [],
-            "工艺→机理": [],
-            "机理→形貌": [],
-            "机理证据": [],
-        }
+        result = {k: [] for k in self._CHAIN_EN_KEYS}
         for row in links:
             rel_type = str(row.get("relation_type") or "")
-            # 兼容旧的英文键值，统一转为中文
-            if rel_type in RELATION_TYPE_MAPPING and rel_type not in grouped:
-                rel_type = RELATION_TYPE_MAPPING[rel_type]
-            if rel_type in grouped:
-                grouped[rel_type].append(row)
-        return grouped
+            en_key = cn_to_en.get(rel_type)
+            if en_key and en_key in result:
+                result[en_key].append(row)
+        return result
 
     @staticmethod
     def _node_suffix(node_id: str) -> str:

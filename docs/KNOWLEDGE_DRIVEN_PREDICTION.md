@@ -64,7 +64,7 @@ xr_params = {
     'source': 'XR',
     'actual_temp': 750,      # 实际温度 ℃
     'growth_time': 3,         # 生长时间 h
-    'membrane_pos_cm': 18.0, # 位置 cm
+    'inlet_distance_cm': 18.0, # 距进气口距离 cm；兼容旧字段 membrane_pos_cm
 }
 
 # 预测密度

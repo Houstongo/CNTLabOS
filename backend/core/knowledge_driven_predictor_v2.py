@@ -170,7 +170,9 @@ class KnowledgeDrivenPredictor:
 
         if source == "XR":
             catalyst_weight = self._to_float(params.get("catalyst_weight"), default=1.0)
-            membrane_pos = self._to_float(params.get("membrane_pos_cm"), default=18.0)
+            membrane_pos = self._to_float(params.get("inlet_distance_cm"))
+            if membrane_pos is None:
+                membrane_pos = self._to_float(params.get("membrane_pos_cm"), default=18.0)
             features.update(
                 {
                     "actual_temp": temp,
@@ -430,6 +432,8 @@ class KnowledgeDrivenPredictor:
             used = 0
             for col in process_cols:
                 param_value = self._to_float(params.get(col))
+                if col == "membrane_pos_cm" and param_value is None:
+                    param_value = self._to_float(params.get("inlet_distance_cm"))
                 row_value = self._to_float(row.get(col))
                 if param_value is None or row_value is None:
                     continue

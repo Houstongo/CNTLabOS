@@ -39,8 +39,14 @@ class QueryConstraint:
     max_hops: int = 3
     min_confidence: float = 0.4
 
-    def matches(self, msfu: MSFU) -> bool:
-        """检查MSFU是否满足约束"""
+    def matches(self, msfu: MSFU, relaxed_entities: bool = False) -> bool:
+        """
+        检查MSFU是否满足约束
+
+        Args:
+            msfu: 待检查的MSFU
+            relaxed_entities: 是否放宽实体约束（用于路径扩展中的中间节点）
+        """
         # 检查方向约束
         if self.direction and msfu.assertion.direction != self.direction:
             return False
@@ -54,7 +60,7 @@ class QueryConstraint:
             return False
 
         # 检查实体约束（至少匹配一个）
-        if self.entities:
+        if self.entities and not relaxed_entities:
             src_ok = any(e in msfu.assertion.source_entity.lower() for e in self.entities)
             tgt_ok = any(e in msfu.assertion.target_entity.lower() for e in self.entities)
             if not (src_ok or tgt_ok):
@@ -203,34 +209,39 @@ class TCCERRetriever:
         return constraint
 
     def _extract_entities(self, text: str) -> Set[str]:
-        """从文本中提取实体"""
+        """从文本中提取实体（匹配数据库中文格式）"""
         entities = set()
 
-        # 匹配因子模式
-        factor_patterns = {
-            "growth_temp": r"(?:生长|growth)\s*(?:温度|temperature)",
-            "growth_time": r"(?:生长|growth)\s*(?:时间|time)",
-            "anneal_temp": r"(?:退火|anneal)\s*(?:温度|temperature)",
-            "ar_flow": r"(?:Ar|氩)\s*(?:流量|flow)",
-            "h2_flow": r"(?:H2|氢)\s*(?:流量|flow)",
-            "fe_thickness": r"(?:Fe|铁)\s*(?:厚度|thickness)",
-            "al2o3_thickness": r"(?:Al2O3|氧化铝)\s*(?:厚度|thickness)",
-            "density": r"(?:密度|density)",
-            "alignment": r"(?:取向|alignment)",
-            "diameter": r"(?:直径|diameter)",
-            "conductivity": r"(?:电导|conductiv)",
-            "resistivity": r"(?:电阻率|resistiv)",
+        # 匹配因子模式（中文实体名称，匹配数据库格式）
+        entity_patterns = {
+            # 工艺参数
+            "工艺:生长温度": r"(?:生长|growth)\s*(?:温度|temperature)",
+            "工艺:生长时间": r"(?:生长|growth)\s*(?:时间|time)",
+            "工艺:退火温度": r"(?:退火|anneal)\s*(?:温度|temperature)",
+            "工艺:退火时间": r"(?:退火|anneal)\s*(?:时间|time)",
+            "工艺:Ar流量": r"(?:Ar|氩)\s*(?:流量|flow)",
+            "工艺:H2流量": r"(?:H2|氢)\s*(?:流量|flow)",
+            "工艺:Fe功率": r"(?:Fe|铁)\s*(?:功率|power)",
+            "工艺:铁催化剂厚度": r"(?:Fe|铁)\s*(?:催化剂|)\s*(?:厚度|thickness)",
+            "工艺:Al2O3厚度": r"(?:Al2O3|氧化铝)\s*(?:厚度|thickness)",
+            # 形貌特征
+            "形貌:密度": r"(?:密度|density)",
+            "形貌:取向度": r"(?:取向|alignment)",
+            "形貌:管径": r"(?:直径|diameter)",
+            "形貌:波曲度": r"(?:波曲|waviness|curvature)",
+            "形貌:迂曲度": r"(?:迂曲|tortuosity)",
+            # 性能
+            "性能:电导率": r"(?:电导|conductiv)",
+            "性能:电阻率": r"(?:电阻率|resistiv)",
+            # 机理
+            "机理:催化剂失活": r"(?:催化剂|catalyst)\s*(?:失活|deactivation)",
+            "机理:催化剂团聚": r"(?:催化剂|catalyst)\s*(?:团聚|aggregation|ripening)",
+            "机理:扩散": r"(?:扩散|diffusion)",
         }
 
-        for entity_type, pattern in factor_patterns.items():
+        for entity_name, pattern in entity_patterns.items():
             if re.search(pattern, text, re.IGNORECASE):
-                # 确定实体类别
-                if entity_type in ["growth_temp", "growth_time", "anneal_temp", "ar_flow", "h2_flow", "fe_thickness", "al2o3_thickness"]:
-                    entities.add(f"process:{entity_type}")
-                elif entity_type in ["density", "alignment", "diameter"]:
-                    entities.add(f"morphology:{entity_type}")
-                elif entity_type in ["conductivity", "resistivity"]:
-                    entities.add(f"performance:{entity_type}")
+                entities.add(entity_name)
 
         return entities
 
@@ -246,30 +257,26 @@ class TCCERRetriever:
         return None
 
     def _select_relation_types(self, text: str, task_name: Optional[str] = None) -> Set[str]:
-        """选择关系类型"""
+        """选择关系类型（使用中文匹配数据库格式）"""
         relation_types = set()
 
-        # 默认关系类型
+        # 中文关系类型（匹配数据库存储格式）
         if "影响" in text or "affect" in text.lower():
-            relation_types.add(RelationType.AFFECTS.value)
+            relation_types.add("影响")
         if "导致" in text or "cause" in text.lower():
-            relation_types.add(RelationType.CAUSES.value)
+            relation_types.add("导致")
         if "促进" in text or "promote" in text.lower():
-            relation_types.add(RelationType.PROMOTES.value)
+            relation_types.add("促进")
         if "抑制" in text or "inhibit" in text.lower():
-            relation_types.add(RelationType.INHIBITS.value)
+            relation_types.add("抑制")
+        if "增大" in text or "increase" in text.lower():
+            relation_types.add("增大")
 
         # 任务特定偏好
         if task_name == "process_analysis":
-            relation_types.update([
-                RelationType.CAUSES.value,
-                RelationType.AFFECTS.value,
-            ])
+            relation_types.update(["导致", "影响", "促进", "抑制", "增大"])
         elif task_name == "morphology_interpretation":
-            relation_types.update([
-                RelationType.INCREASES.value,
-                RelationType.DECREASES.value,
-            ])
+            relation_types.update(["导致", "影响", "促进", "抑制", "增大"])
 
         return relation_types
 
@@ -517,7 +524,8 @@ class TCCERRetriever:
                     if "doc_title_full" in row_dict and row_dict["doc_title_full"]:
                         row_dict["doc_title"] = row_dict["doc_title_full"]
                     result = MSFU.from_db_row(row_dict)
-                    if constraint.matches(result):
+                    # 使用 relaxed_entities=True 放宽实体约束，允许中间节点
+                    if constraint.matches(result, relaxed_entities=True):
                         results.append(result)
 
         finally:
@@ -709,8 +717,8 @@ class TCCERRetriever:
         msfus = self.hybrid_recall(constraint)
         msfu_count = len(msfus)
 
-        # 3. 约束扩展
-        paths = self.constrained_expansion(msfus[:20], constraint)
+        # 3. 约束扩展（使用前 50 个 MSFU 以获得更丰富的路径）
+        paths = self.constrained_expansion(msfus[:50], constraint)
 
         # 4. 路径评分
         scored_paths = self.score_paths(paths, constraint)

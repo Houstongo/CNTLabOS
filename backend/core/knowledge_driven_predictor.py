@@ -116,8 +116,8 @@ class KnowledgeDrivenPredictor:
         # 还原氛围：H2/Ar比
         features['reduction_ratio'] = h2 / ar if ar > 0 else 0
 
-        # 温度梯度（XR特有）
-        pos = params.get('membrane_pos_cm')
+        # 温度梯度/进气口轴向距离（XR特有）
+        pos = params.get('inlet_distance_cm') or params.get('membrane_pos_cm')
         if pos:
             features['position_normalized'] = pos / 36.0
 

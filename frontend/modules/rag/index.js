@@ -5,6 +5,7 @@ import { api } from '../../utils/api.js';
 import { getState, setState } from '../../core/store.js';
 import { emit, Events } from '../../core/events.js';
 import { API_BASE } from '../../core/constants.js';
+import { ensureMlChart } from '../charts/index.js';
 
 // RAG 关系类型标签
 const RAG_RELATION_TYPE_LABELS = {
@@ -141,9 +142,9 @@ export function ragFactorLabel(value) {
  */
 function nodeCategoryById(nodeId) {
     const id = String(nodeId || '');
-    if (id.startsWith('process:')) return 0;
-    if (id.startsWith('morphology:')) return 1;
-    if (id.startsWith('performance:')) return 2;
+    if (id.startsWith('process:') || id.startsWith('工艺:')) return 0;
+    if (id.startsWith('morphology:') || id.startsWith('形貌:')) return 1;
+    if (id.startsWith('performance:') || id.startsWith('性能:')) return 2;
     return 3;
 }
 

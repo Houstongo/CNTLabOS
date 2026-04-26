@@ -18,6 +18,7 @@ const html = fs.readFileSync(indexPath, 'utf8');
   'rag-overview-more-m2p',
   'rag-overview-more-p2p',
   'rag-overview-more-mech',
+  'rag-search-fallback',
   'rag-graph-filter-all',
   'rag-graph-filter-process_to_morphology',
   'rag-graph-filter-morphology_to_performance',
@@ -47,6 +48,8 @@ assert.match(html, /function renderRagGraphFilterCounts\(chain\)/);
 assert.match(html, /function formatRagNodeLabel\(nodeId,\s*withCategory = true\)/);
 assert.match(html, /function ragNodeShortLabel\(nodeId\)/);
 assert.match(html, /function effectDirectionLabel\(value\)/);
+assert.match(html, /function renderRagSearchFallback\(items,\s*query\)/);
+assert.match(html, /renderRagSearchFallback\(ragState\.currentItems,\s*query\)/);
 assert.match(html, /const displayName = d\.title \|\| d\.filename \|\| \(\(d\.file_path \|\| ''\)\.split\(/);
 assert.match(html, /formatRagNodeLabel\(it\.source_node\)\} → \$\{formatRagNodeLabel\(it\.target_node\)\}/);
 assert.match(html, /name: ragNodeShortLabel\(source\)/);

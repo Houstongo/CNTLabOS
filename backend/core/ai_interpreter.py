@@ -10,6 +10,7 @@ PROVIDER_CONFIGS = {
     "glm": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",
         "default_model": "glm-4-flash",
+        "models": ["glm-4-flash", "glm-4-plus", "glm-4", "glm-5.1", "glm-5.1-plus"],
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
@@ -55,7 +56,8 @@ class AIInterpreter:
             "source": "数据源",
             "growth_temp": "设定温度(℃)",
             "actual_temp": "实际生长温度(℃)",
-            "membrane_pos_cm": "炉管位置(cm)",
+            "membrane_pos_cm": "距进气口距离(cm)",
+            "inlet_distance_cm": "距进气口距离(cm)",
             "growth_time": "生长时间(h)",
             "anneal_temp": "退火温度(℃)",
             "anneal_time": "退火时间(h)",

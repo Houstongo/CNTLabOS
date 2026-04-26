@@ -114,8 +114,12 @@ export function showPage(name, el) {
     const mainHeader = getEl('main-header');
     const dataPage = getEl('data-page');
     const mlPage = getEl('ml-page');
+    const predictPage = getEl('predict-page');
+    const knowledgePage = getEl('knowledge-page');
     const cleanPage = getEl('clean-page');
     const ragPage = getEl('rag-page');
+    const tccerPage = getEl('tccer-page');
+    const qaPage = getEl('qa-page');
     const mlSubSwitchTop = getEl('ml-subpage-switch-top');
     const sourceFilter = getEl('source-filter');
 
@@ -125,21 +129,60 @@ export function showPage(name, el) {
 
     // 根据页面名称显示对应内容
     switch (name) {
-        case 'rag':
+        case 'predict':
             if (dataPage) dataPage.classList.add('hidden');
             if (mlPage) mlPage.classList.add('hidden');
+            if (predictPage) predictPage.classList.remove('hidden');
+            if (knowledgePage) knowledgePage.classList.add('hidden');
             if (cleanPage) cleanPage.classList.add('hidden');
-            if (ragPage) ragPage.classList.remove('hidden');
+            if (ragPage) ragPage.classList.add('hidden');
+            if (tccerPage) tccerPage.classList.add('hidden');
+            if (qaPage) qaPage.classList.add('hidden');
             if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
+            if (sourceFilter) sourceFilter.classList.add('hidden');
             setMlFocusMode(false);
-            setRagHeaderMode(true);
+            setRagHeaderMode(false);
             break;
+
+        case 'knowledge':
+            if (dataPage) dataPage.classList.add('hidden');
+            if (mlPage) mlPage.classList.add('hidden');
+            if (predictPage) predictPage.classList.add('hidden');
+            if (knowledgePage) knowledgePage.classList.remove('hidden');
+            if (cleanPage) cleanPage.classList.add('hidden');
+            if (ragPage) ragPage.classList.add('hidden');
+            if (tccerPage) tccerPage.classList.add('hidden');
+            if (qaPage) qaPage.classList.add('hidden');
+            if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
+            if (sourceFilter) sourceFilter.classList.add('hidden');
+            setMlFocusMode(false);
+            setRagHeaderMode(false);
+            break;
+
+        case 'rag':
+            // 已弃用，重定向到 knowledge 页面
+            showPage('knowledge', el);
+            return;
+
+        case 'tccer':
+            // 已弃用，重定向到 knowledge 页面
+            showPage('knowledge', el);
+            return;
+
+        case 'qa':
+            // 已弃用，重定向到 knowledge 页面
+            showPage('knowledge', el);
+            return;
 
         case 'ml':
             if (dataPage) dataPage.classList.add('hidden');
             if (mlPage) mlPage.classList.remove('hidden');
+            if (predictPage) predictPage.classList.add('hidden');
+            if (knowledgePage) knowledgePage.classList.add('hidden');
             if (cleanPage) cleanPage.classList.add('hidden');
             if (ragPage) ragPage.classList.add('hidden');
+            if (tccerPage) tccerPage.classList.add('hidden');
+            if (qaPage) qaPage.classList.add('hidden');
             if (mlSubSwitchTop) mlSubSwitchTop.classList.remove('hidden');
             if (sourceFilter) sourceFilter.classList.add('hidden');
             setMlFocusMode(true);
@@ -149,8 +192,12 @@ export function showPage(name, el) {
         case 'clean':
             if (dataPage) dataPage.classList.add('hidden');
             if (mlPage) mlPage.classList.add('hidden');
+            if (predictPage) predictPage.classList.add('hidden');
+            if (knowledgePage) knowledgePage.classList.add('hidden');
             if (cleanPage) cleanPage.classList.remove('hidden');
             if (ragPage) ragPage.classList.add('hidden');
+            if (tccerPage) tccerPage.classList.add('hidden');
+            if (qaPage) qaPage.classList.add('hidden');
             if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
             if (sourceFilter) sourceFilter.classList.add('hidden');
             setMlFocusMode(false);
@@ -161,8 +208,12 @@ export function showPage(name, el) {
         default:
             if (dataPage) dataPage.classList.remove('hidden');
             if (mlPage) mlPage.classList.add('hidden');
+            if (predictPage) predictPage.classList.add('hidden');
+            if (knowledgePage) knowledgePage.classList.add('hidden');
             if (cleanPage) cleanPage.classList.add('hidden');
             if (ragPage) ragPage.classList.add('hidden');
+            if (tccerPage) tccerPage.classList.add('hidden');
+            if (qaPage) qaPage.classList.add('hidden');
             if (mlSubSwitchTop) mlSubSwitchTop.classList.add('hidden');
             if (sourceFilter) sourceFilter.classList.remove('hidden');
             setMlFocusMode(false);

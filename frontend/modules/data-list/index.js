@@ -7,6 +7,19 @@ import { emit, Events } from '../../core/events.js';
 import { formatNumber } from '../../utils/format.js';
 import { API_BASE } from '../../core/constants.js';
 
+function formatAnnealTimeMinutes(value) {
+    if (value === null || value === undefined || value === '') return '--';
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return String(value);
+
+    // 历史数据里有一部分以小时存储（如 0.6667），展示层统一转成分钟；
+    // 已经是 15/30/45 这类分钟值的，直接保留。
+    const minutes = numeric <= 5 ? numeric * 60 : numeric;
+    const rounded = Math.round(minutes * 100) / 100;
+    return Number.isInteger(rounded) ? String(rounded) : formatNumber(rounded, 2);
+}
+
 /**
  * 切换排序
  */
@@ -493,7 +506,7 @@ function renderDataTable(items) {
                 <div class="text-center text-slate-700 font-bold text-[13px]">${item.c2h4_flow ?? '--'}<span class="text-[8px] text-slate-300 ml-0.5">s</span></div>
                 <div class="text-center">
                     <div class="font-black text-slate-700 text-[13px]">${item.anneal_temp || '--'}<sub class="text-[9px]">C</sub></div>
-                    <div class="text-[9px] text-slate-400 font-bold">${item.anneal_time || '--'}m</div>
+                    <div class="text-[9px] text-slate-400 font-bold">${formatAnnealTimeMinutes(item.anneal_time)}min</div>
                 </div>
                 <div class="text-center font-black text-blue-700 bg-blue-50/50 py-1 rounded mx-1 text-[13px]">${item.growth_temp || '--'}<sub class="text-[9px]">C</sub></div>
                 <div class="text-center font-black text-blue-500 text-[13px]">${item.growth_time ? formatNumber(item.growth_time, 1) : '--'}<span class="text-[9px] ml-0.5">h</span></div>
